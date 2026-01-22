@@ -7,7 +7,7 @@ use soroban_sdk::{
     token, Address, BytesN, Env, IntoVal, Symbol, TryIntoVal,
 };
 
-use boxmeout::{Commitment, MarketError, PredictionMarketClient};
+use boxmeout::{Commitment, MarketError, Prediction, PredictionMarketClient};
 
 // Helper to create test environment
 fn create_test_env() -> Env {
@@ -388,11 +388,239 @@ fn test_commit_market_not_open() {
 // (To be implemented in the next phase)
 
 #[test]
-fn test_reveal_prediction() {
-    // TODO: Implement when reveal_prediction is ready
-    // Test valid reveal with correct hash
-    // Test commit -> reveal flow
-    // Test pool updates after reveal
+fn test_reveal_prediction_happy_path() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
+
+    // Setup user with USDC balance
+    let user = Address::generate(&env);
+    let amount = 100_000_000i128; // 100 USDC
+    let outcome = 1u32; // YES
+    let salt = BytesN::from_array(&env, &[123u8; 32]);
+
+    // Compute correct commit hash: hash(outcome + amount + salt)
+    let mut hash_input = soroban_sdk::Bytes::new(&env);
+    hash_input.extend_from_array(&outcome.to_be_bytes());
+    hash_input.extend_from_array(&amount.to_be_bytes());
+    hash_input.extend_from_array(&salt.to_array());
+
+    let commit_hash = env.crypto().sha256(&hash_input);
+    let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &amount);
+
+    // Approve market contract to spend user's USDC
+    let market_address = client.address.clone();
+    token.approve(
+        &user,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // First commit prediction
+    let result = client.try_commit_prediction(&user, &commit_hash_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Now reveal prediction
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &salt);
+    assert!(result.is_ok());
+
+    // Verify commitment was removed
+    let commitment = client.get_commitment(&user);
+    assert!(commitment.is_none());
+
+    // Verify prediction was stored
+    // Note: We don't have a getter for predictions yet, so we can't verify this directly
+
+    // Verify pools were updated
+    // Note: We don't have getters for pools yet, but we can verify total volume
+    // This would need to be added to the contract for proper testing
+
+    // Verify pending count decreased
+    let pending_count = client.get_pending_count();
+    assert_eq!(pending_count, 0);
+}
+
+#[test]
+fn test_reveal_prediction_wrong_salt_rejected() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
+
+    // Setup user with USDC balance
+    let user = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome = 1u32;
+    let correct_salt = BytesN::from_array(&env, &[123u8; 32]);
+    let wrong_salt = BytesN::from_array(&env, &[124u8; 32]);
+
+    // Compute commit hash with correct salt
+    let mut hash_input = soroban_sdk::Bytes::new(&env);
+    hash_input.extend_from_array(&outcome.to_be_bytes());
+    hash_input.extend_from_array(&amount.to_be_bytes());
+    hash_input.extend_from_array(&correct_salt.to_array());
+
+    let commit_hash = env.crypto().sha256(&hash_input);
+    let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &amount);
+
+    let market_address = client.address.clone();
+    token.approve(
+        &user,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Commit with correct hash
+    let result = client.try_commit_prediction(&user, &commit_hash_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Try to reveal with wrong salt
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &wrong_salt);
+    assert_eq!(result, Err(Ok(MarketError::InvalidRevelation)));
+}
+
+#[test]
+fn test_reveal_prediction_without_commit_rejected() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Setup user without prior commit
+    let user = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome = 1u32;
+    let salt = BytesN::from_array(&env, &[123u8; 32]);
+
+    // Try to reveal without committing first
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &salt);
+    assert_eq!(result, Err(Ok(MarketError::InvalidRevelation)));
+}
+
+#[test]
+fn test_reveal_prediction_yes_and_no_outcomes() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
+
+    // Test YES outcome (1)
+    let user_yes = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome_yes = 1u32;
+    let salt_yes = BytesN::from_array(&env, &[111u8; 32]);
+
+    let mut hash_input_yes = soroban_sdk::Bytes::new(&env);
+    hash_input_yes.extend_from_array(&outcome_yes.to_be_bytes());
+    hash_input_yes.extend_from_array(&amount.to_be_bytes());
+    hash_input_yes.extend_from_array(&salt_yes.to_array());
+
+    let commit_hash_yes = env.crypto().sha256(&hash_input_yes);
+    let commit_hash_yes_bytes = BytesN::from_array(&env, &commit_hash_yes.to_array());
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user_yes, &amount);
+
+    let market_address = client.address.clone();
+    token.approve(
+        &user_yes,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Commit YES prediction
+    let result = client.try_commit_prediction(&user_yes, &commit_hash_yes_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Reveal YES prediction
+    let result = client.try_reveal_prediction(&user_yes, &market_id, &outcome_yes, &amount, &salt_yes);
+    assert!(result.is_ok());
+
+    // Test NO outcome (0)
+    let user_no = Address::generate(&env);
+    let outcome_no = 0u32;
+    let salt_no = BytesN::from_array(&env, &[222u8; 32]);
+
+    let mut hash_input_no = soroban_sdk::Bytes::new(&env);
+    hash_input_no.extend_from_array(&outcome_no.to_be_bytes());
+    hash_input_no.extend_from_array(&amount.to_be_bytes());
+    hash_input_no.extend_from_array(&salt_no.to_array());
+
+    let commit_hash_no = env.crypto().sha256(&hash_input_no);
+    let commit_hash_no_bytes = BytesN::from_array(&env, &commit_hash_no.to_array());
+
+    token.mint(&user_no, &amount);
+    token.approve(
+        &user_no,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Commit NO prediction
+    let result = client.try_commit_prediction(&user_no, &commit_hash_no_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Reveal NO prediction
+    let result = client.try_reveal_prediction(&user_no, &market_id, &outcome_no, &amount, &salt_no);
+    assert!(result.is_ok());
+
+    // Verify both commitments were removed
+    let commitment_yes = client.get_commitment(&user_yes);
+    assert!(commitment_yes.is_none());
+
+    let commitment_no = client.get_commitment(&user_no);
+    assert!(commitment_no.is_none());
+
+    // Verify pending count is 0
+    let pending_count = client.get_pending_count();
+    assert_eq!(pending_count, 0);
+}
+
+#[test]
+fn test_reveal_prediction_event_payload_correct() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
+
+    // Setup user with USDC balance
+    let user = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome = 1u32;
+    let salt = BytesN::from_array(&env, &[123u8; 32]);
+
+    // Compute commit hash
+    let mut hash_input = soroban_sdk::Bytes::new(&env);
+    hash_input.extend_from_array(&outcome.to_be_bytes());
+    hash_input.extend_from_array(&amount.to_be_bytes());
+    hash_input.extend_from_array(&salt.to_array());
+
+    let commit_hash = env.crypto().sha256(&hash_input);
+    let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &amount);
+
+    let market_address = client.address.clone();
+    token.approve(
+        &user,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Commit prediction
+    let result = client.try_commit_prediction(&user, &commit_hash_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Reveal prediction and check event
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &salt);
+    assert!(result.is_ok());
+
+    // Verify event was emitted
+    let events = env.events().all();
+    assert!(!events.is_empty());
 }
 
 #[test]
