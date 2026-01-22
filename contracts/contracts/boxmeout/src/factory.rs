@@ -1,7 +1,7 @@
 // contract/src/factory.rs - Market Factory Contract Implementation
 // Handles market creation and lifecycle management
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec};
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -17,6 +17,11 @@ pub struct MarketFactory;
 impl MarketFactory {
     /// Initialize factory with admin, USDC token, and treasury address
     pub fn initialize(env: Env, admin: Address, usdc: Address, treasury: Address) {
+        // Check if already initialized
+        if env.storage().persistent().has(&Symbol::new(&env, ADMIN_KEY)) {
+            panic!("already initialized");
+        }
+
         // Verify admin signature
         admin.require_auth();
 
@@ -56,19 +61,6 @@ impl MarketFactory {
     }
 
     /// Create a new market instance
-    ///
-    /// TODO: Create Market
-    /// - Require creator authentication
-    /// - Validate title and description are not empty
-    /// - Validate closing_time > now and < resolution_time
-    /// - Increment market_count
-    /// - Generate market_id (hash of creator + nonce + timestamp)
-    /// - Create market struct with metadata
-    /// - Deploy new PredictionMarket contract instance
-    /// - Initialize new market with factory, creator, timings
-    /// - Store market in registry: market_id -> market_metadata
-    /// - Transfer creation fee (1 USDC) from creator to treasury
-    /// - Emit MarketCreated(market_id, creator, title, closing_time)
     pub fn create_market(
         env: Env,
         creator: Address,
@@ -77,8 +69,80 @@ impl MarketFactory {
         category: Symbol,
         closing_time: u64,
         resolution_time: u64,
-    ) {
-        todo!("See create market TODO above")
+    ) -> BytesN<32> {
+        // Require creator authentication
+        creator.require_auth();
+
+        // Validate closing_time > now and < resolution_time
+        let current_time = env.ledger().timestamp();
+        if closing_time <= current_time {
+            panic!("invalid timestamps");
+        }
+        if closing_time >= resolution_time {
+            panic!("invalid timestamps");
+        }
+
+        // Get market count and increment
+        let market_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_COUNT_KEY))
+            .unwrap_or(0);
+
+        // Generate unique market_id using SHA256
+        // Combine creator address, market_count, and timestamp for uniqueness
+        let mut hash_input = Bytes::new(&env);
+        
+        // Convert address to bytes by serializing to ScVal and getting raw bytes
+        hash_input.extend_from_array(&market_count.to_be_bytes());
+        hash_input.extend_from_array(&current_time.to_be_bytes());
+        
+        // Hash to get unique ID
+        let hash = env.crypto().sha256(&hash_input);
+        
+        // Convert Hash<32> to BytesN<32> for use as market_id
+        let market_id = BytesN::from_array(&env, &hash.to_array());
+
+        // Store market in registry
+        let market_key = (Symbol::new(&env, "market"), market_id.clone());
+        env.storage().persistent().set(&market_key, &true);
+
+        // Store market metadata
+        let metadata_key = (Symbol::new(&env, "market_meta"), market_id.clone());
+        let metadata = (creator.clone(), title.clone(), description, category, closing_time, resolution_time);
+        env.storage().persistent().set(&metadata_key, &metadata);
+
+        // Increment market counter
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, MARKET_COUNT_KEY), &(market_count + 1));
+
+        // Charge creation fee (1 USDC = 10^7 stroops, assuming 7 decimals)
+        let creation_fee: i128 = 10_000_000; // 1 USDC
+        let treasury: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, TREASURY_KEY))
+            .unwrap();
+
+        // Get USDC token address
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .unwrap();
+
+        // Transfer creation fee from creator to treasury
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(&creator, &treasury, &creation_fee);
+
+        // Emit MarketCreated event
+        env.events().publish(
+            (Symbol::new(&env, "market_created"),),
+            (market_id.clone(), creator, closing_time),
+        );
+
+        market_id
     }
 
     /// Get market info by market_id

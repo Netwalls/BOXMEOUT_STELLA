@@ -64,8 +64,8 @@ impl OracleManager {
             panic!("Maximum oracle limit reached");
         }
 
-        // Create storage key for this oracle
-        let oracle_key = Symbol::new(&env, "oracle");
+        // Create storage key for this oracle using the oracle address
+        let oracle_key = (Symbol::new(&env, "oracle"), oracle.clone());
 
         // Check if oracle already registered
         let is_registered: bool = env.storage().persistent().has(&oracle_key);
@@ -75,20 +75,20 @@ impl OracleManager {
         }
 
         // Store oracle metadata
-        env.storage().persistent().set(&oracle_key, &oracle);
+        env.storage().persistent().set(&oracle_key, &true);
 
         // Store oracle name
-        let oracle_name_key = Symbol::new(&env, "oracle_name");
+        let oracle_name_key = (Symbol::new(&env, "oracle_name"), oracle.clone());
         env.storage()
             .persistent()
             .set(&oracle_name_key, &oracle_name);
 
         // Initialize oracle's accuracy score at 100%
-        let accuracy_key = Symbol::new(&env, "oracle_accuracy");
+        let accuracy_key = (Symbol::new(&env, "oracle_accuracy"), oracle.clone());
         env.storage().persistent().set(&accuracy_key, &100u32);
 
         // Store registration timestamp
-        let timestamp_key = Symbol::new(&env, "oracle_timestamp");
+        let timestamp_key = (Symbol::new(&env, "oracle_timestamp"), oracle.clone());
         env.storage()
             .persistent()
             .set(&timestamp_key, &env.ledger().timestamp());

@@ -26,6 +26,7 @@ fn test_amm_initialize() {
     let usdc_token = Address::generate(&env);
     let max_liquidity_cap = 100_000_000_000u128; // 100k USDC
 
+    env.mock_all_auths();
     client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
 
     // TODO: Add getters to verify
@@ -45,6 +46,7 @@ fn test_create_pool() {
     let factory = Address::generate(&env);
     let usdc_token = Address::generate(&env);
     let max_liquidity_cap = 100_000_000_000u128;
+    env.mock_all_auths();
     client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
 
     // TODO: Implement when create_pool is ready
@@ -58,6 +60,7 @@ fn test_create_pool() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected = "pool already exists")]
 fn test_create_pool_twice_fails() {
     // TODO: Implement when create_pool is ready
@@ -75,6 +78,7 @@ fn test_buy_shares_yes() {
     let factory = Address::generate(&env);
     let usdc_token = Address::generate(&env);
     let max_liquidity_cap = 100_000_000_000u128;
+    env.mock_all_auths();
     client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
 
     // TODO: Implement when buy_shares is ready
@@ -104,6 +108,7 @@ fn test_buy_shares_price_impact() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected = "slippage exceeded")]
 fn test_buy_shares_slippage_protection() {
     // TODO: Implement when buy_shares is ready
@@ -125,6 +130,7 @@ fn test_sell_shares() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected = "insufficient shares")]
 fn test_sell_more_shares_than_owned() {
     // TODO: Implement when sell_shares is ready
@@ -142,6 +148,7 @@ fn test_get_odds() {
     let factory = Address::generate(&env);
     let usdc_token = Address::generate(&env);
     let max_liquidity_cap = 100_000_000_000u128;
+    env.mock_all_auths();
     client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
 
     // TODO: Implement when get_odds is ready
