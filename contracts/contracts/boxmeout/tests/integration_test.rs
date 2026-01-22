@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo},
+    testutils::{Address as _, Events, Ledger, LedgerInfo},
     Address, BytesN, Env, Symbol,
 };
 
@@ -202,6 +202,135 @@ fn test_multiple_markets() {
     // Users trade on both markets
     // Resolve both markets
     // Verify independent operation
+}
+
+/// Integration test: Commit-reveal flow with pool updates
+#[test]
+fn test_commit_reveal_flow_with_pool_updates() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Step 1: Deploy contracts
+    let factory_id = env.register_contract(None, MarketFactory);
+    let treasury_id = env.register_contract(None, Treasury);
+    let oracle_id = env.register_contract(None, OracleManager);
+
+    let factory_client = MarketFactoryClient::new(&env, &factory_id);
+    let treasury_client = TreasuryClient::new(&env, &treasury_id);
+    let oracle_client = OracleManagerClient::new(&env, &oracle_id);
+
+    // Create addresses
+    let admin = Address::generate(&env);
+    let usdc_id = env.register_stellar_asset_contract(admin.clone());
+
+    // Initialize contracts
+    factory_client.initialize(&admin, &usdc_id, &treasury_id);
+    treasury_client.initialize(&admin, &usdc_id, &factory_id);
+    oracle_client.initialize(&admin, &2u32);
+
+    // Step 2: Create a market
+    let market_id = factory_client.create_market(
+        &admin,
+        &Symbol::new(&env, "Boxing Match"),
+        &Symbol::new(&env, "Will Fighter A win?"),
+        &Symbol::new(&env, "Sports"),
+        &1000, // closing_time
+        &2000, // resolution_time
+    );
+
+    // Deploy and initialize the market contract
+    let market_contract_id = env.register_contract(None, PredictionMarket);
+    let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+
+    // Initialize the market contract with the market_id from factory
+    market_client.initialize(
+        &market_id,
+        &admin,
+        &factory_id,
+        &usdc_id,
+        &oracle_id,
+        &1000, // closing_time
+        &2000, // resolution_time
+    );
+
+    // Step 3: Multiple users commit predictions
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+
+    let amount1 = 100_000_000i128; // 100 USDC
+    let amount2 = 200_000_000i128; // 200 USDC
+    let amount3 = 150_000_000i128; // 150 USDC
+
+    // User 1: YES prediction
+    let outcome1 = 1u32;
+    let salt1 = BytesN::from_array(&env, &[111u8; 32]);
+    let mut hash_input1 = soroban_sdk::Bytes::new(&env);
+    hash_input1.extend_from_array(&outcome1.to_be_bytes());
+    hash_input1.extend_from_array(&amount1.to_be_bytes());
+    hash_input1.extend_from_array(&salt1.to_array());
+    let commit_hash1 = BytesN::from_array(&env, &env.crypto().sha256(&hash_input1).to_array());
+
+    // User 2: NO prediction
+    let outcome2 = 0u32;
+    let salt2 = BytesN::from_array(&env, &[222u8; 32]);
+    let mut hash_input2 = soroban_sdk::Bytes::new(&env);
+    hash_input2.extend_from_array(&outcome2.to_be_bytes());
+    hash_input2.extend_from_array(&amount2.to_be_bytes());
+    hash_input2.extend_from_array(&salt2.to_array());
+    let commit_hash2 = BytesN::from_array(&env, &env.crypto().sha256(&hash_input2).to_array());
+
+    // User 3: YES prediction
+    let outcome3 = 1u32;
+    let salt3 = BytesN::from_array(&env, &[200u8; 32]);
+    let mut hash_input3 = soroban_sdk::Bytes::new(&env);
+    hash_input3.extend_from_array(&outcome3.to_be_bytes());
+    hash_input3.extend_from_array(&amount3.to_be_bytes());
+    hash_input3.extend_from_array(&salt3.to_array());
+    let commit_hash3 = BytesN::from_array(&env, &env.crypto().sha256(&hash_input3).to_array());
+
+    // Mint USDC and commit predictions
+    let usdc_client = soroban_sdk::token::StellarAssetClient::new(&env, &usdc_id);
+    usdc_client.mint(&user1, &amount1);
+    usdc_client.mint(&user2, &amount2);
+    usdc_client.mint(&user3, &amount3);
+
+    // Approve spending
+    usdc_client.approve(&user1, &market_contract_id, &amount1, &(env.ledger().sequence() + 100));
+    usdc_client.approve(&user2, &market_contract_id, &amount2, &(env.ledger().sequence() + 100));
+    usdc_client.approve(&user3, &market_contract_id, &amount3, &(env.ledger().sequence() + 100));
+
+    market_client.commit_prediction(&user1, &commit_hash1, &amount1);
+    market_client.commit_prediction(&user2, &commit_hash2, &amount2);
+    market_client.commit_prediction(&user3, &commit_hash3, &amount3);
+
+    // Verify pending count
+    assert_eq!(market_client.get_pending_count(), 3);
+
+    // Step 4: Users reveal predictions
+    market_client.reveal_prediction(&user1, &market_id, &outcome1, &amount1, &salt1);
+    market_client.reveal_prediction(&user2, &market_id, &outcome2, &amount2, &salt2);
+    market_client.reveal_prediction(&user3, &market_id, &outcome3, &amount3, &salt3);
+
+    // Step 5: Verify pool updates and state changes
+    // Note: We can't directly access pool values without getters, but we can verify:
+    // - All commitments are cleared
+    // - Pending count is 0
+    // - Events were emitted
+
+    assert_eq!(market_client.get_pending_count(), 0);
+
+    // Verify commitments are cleared
+    assert!(market_client.get_commitment(&user1).is_none());
+    assert!(market_client.get_commitment(&user2).is_none());
+    assert!(market_client.get_commitment(&user3).is_none());
+
+    // Verify events were emitted
+    let events = env.events().all();
+    assert!(!events.is_empty());
+
+    // Verify that we have at least 3 events (3 commit + 3 reveal events)
+    assert!(events.len() >= 6);
 }
 
 /// Integration test: Edge cases and error handling
