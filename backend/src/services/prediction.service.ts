@@ -183,10 +183,7 @@ export class PredictionService {
         throw new Error('User not found');
       }
 
-      await userRepo.updateBalance(
-        userId,
-        Number(user.usdcBalance) + winnings
-      );
+      await userRepo.updateBalance(userId, Number(user.usdcBalance) + winnings);
 
       return { winnings };
     });

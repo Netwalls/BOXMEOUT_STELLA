@@ -92,7 +92,7 @@
                   "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
                 },
                 {
-                  "u32": 1
+                  "u32": 0
                 },
                 {
                   "u128": "100"
@@ -545,7 +545,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u128": "1100"
+                  "u128": "909"
                 }
               }
             },
@@ -590,7 +590,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u128": "909"
+                  "u128": "1100"
                 }
               }
             },
@@ -646,7 +646,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                     },
                     {
-                      "u32": 1
+                      "u32": 0
                     },
                     {
                       "u128": "91"
@@ -721,7 +721,7 @@
             "key": {
               "vec": [
                 {
-                  "symbol": "user_shares_yes"
+                  "symbol": "user_shares_no"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
@@ -744,7 +744,7 @@
                 "key": {
                   "vec": [
                     {
-                      "symbol": "user_shares_yes"
+                      "symbol": "user_shares_no"
                     },
                     {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"

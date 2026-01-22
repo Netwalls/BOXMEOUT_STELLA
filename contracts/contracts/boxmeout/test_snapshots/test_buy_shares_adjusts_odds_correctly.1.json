@@ -76,6 +76,7 @@
       ]
     ],
     [],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
@@ -95,7 +96,7 @@
                   "u32": 1
                 },
                 {
-                  "u128": "100"
+                  "u128": "200"
                 },
                 {
                   "u128": "1"
@@ -117,7 +118,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                     },
                     {
-                      "i128": "100"
+                      "i128": "200"
                     }
                   ]
                 }
@@ -128,7 +129,6 @@
         }
       ]
     ],
-    [],
     []
   ],
   "ledger": {
@@ -500,7 +500,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u128": "999900"
+                  "u128": "999600"
                 }
               }
             },
@@ -545,7 +545,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u128": "1100"
+                  "u128": "1200"
                 }
               }
             },
@@ -590,7 +590,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u128": "909"
+                  "u128": "833"
                 }
               }
             },
@@ -649,10 +649,10 @@
                       "u32": 1
                     },
                     {
-                      "u128": "91"
+                      "u128": "167"
                     },
                     {
-                      "u128": "100"
+                      "u128": "200"
                     },
                     {
                       "u128": "0"
@@ -756,7 +756,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u128": "91"
+                  "u128": "167"
                 }
               }
             },
@@ -938,7 +938,7 @@
                         "symbol": "amount"
                       },
                       "val": {
-                        "i128": "100"
+                        "i128": "200"
                       }
                     },
                     {
@@ -1008,7 +1008,7 @@
                         "symbol": "amount"
                       },
                       "val": {
-                        "i128": "999900"
+                        "i128": "999800"
                       }
                     },
                     {

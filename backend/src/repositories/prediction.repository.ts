@@ -171,10 +171,18 @@ export class PredictionRepository extends BaseRepository<Prediction> {
         where: { marketId, status: PredictionStatus.REVEALED },
       }),
       this.prisma.prediction.count({
-        where: { marketId, status: PredictionStatus.REVEALED, predictedOutcome: 1 },
+        where: {
+          marketId,
+          status: PredictionStatus.REVEALED,
+          predictedOutcome: 1,
+        },
       }),
       this.prisma.prediction.count({
-        where: { marketId, status: PredictionStatus.REVEALED, predictedOutcome: 0 },
+        where: {
+          marketId,
+          status: PredictionStatus.REVEALED,
+          predictedOutcome: 0,
+        },
       }),
       this.prisma.prediction.aggregate({
         where: { marketId, status: PredictionStatus.REVEALED },

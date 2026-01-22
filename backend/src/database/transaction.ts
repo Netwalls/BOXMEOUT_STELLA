@@ -34,7 +34,9 @@ export async function executeTransactionWithRetry<T>(
 
       if (attempt < maxRetries) {
         // Exponential backoff
-        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 100));
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, attempt) * 100)
+        );
       }
     }
   }

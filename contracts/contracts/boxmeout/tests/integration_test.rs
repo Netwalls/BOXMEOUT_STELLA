@@ -6,9 +6,8 @@ use soroban_sdk::{
 };
 
 use boxmeout::{
-    AMMContract, AMMContractClient, FactoryContract, FactoryContractClient, MarketContract,
-    MarketContractClient, OracleContract, OracleContractClient, TreasuryContract,
-    TreasuryContractClient,
+    AMM, AMMClient, MarketFactory, MarketFactoryClient, PredictionMarket,
+    PredictionMarketClient, OracleManager, OracleManagerClient, Treasury, TreasuryClient,
 };
 
 /// Integration test: Complete user flow from market creation to resolution
@@ -18,15 +17,15 @@ fn test_complete_prediction_flow() {
     env.mock_all_auths();
 
     // Step 1: Deploy all contracts
-    let factory_id = env.register_contract(None, FactoryContract);
-    let treasury_id = env.register_contract(None, TreasuryContract);
-    let oracle_id = env.register_contract(None, OracleContract);
-    let amm_id = env.register_contract(None, AMMContract);
+    let factory_id = env.register_contract(None, MarketFactory);
+    let treasury_id = env.register_contract(None, Treasury);
+    let oracle_id = env.register_contract(None, OracleManager);
+    let amm_id = env.register_contract(None, AMM);
 
-    let factory_client = FactoryContractClient::new(&env, &factory_id);
-    let treasury_client = TreasuryContractClient::new(&env, &treasury_id);
-    let oracle_client = OracleContractClient::new(&env, &oracle_id);
-    let amm_client = AMMContractClient::new(&env, &amm_id);
+    let factory_client = MarketFactoryClient::new(&env, &factory_id);
+    let treasury_client = TreasuryClient::new(&env, &treasury_id);
+    let oracle_client = OracleManagerClient::new(&env, &oracle_id);
+    let amm_client = AMMClient::new(&env, &amm_id);
 
     // Create addresses
     let admin = Address::generate(&env);
@@ -121,11 +120,11 @@ fn test_market_creation_and_trading() {
     env.mock_all_auths();
 
     // Deploy contracts
-    let factory_id = env.register_contract(None, FactoryContract);
-    let amm_id = env.register_contract(None, AMMContract);
+    let factory_id = env.register_contract(None, MarketFactory);
+    let amm_id = env.register_contract(None, AMM);
 
-    let factory_client = FactoryContractClient::new(&env, &factory_id);
-    let amm_client = AMMContractClient::new(&env, &amm_id);
+    let factory_client = MarketFactoryClient::new(&env, &factory_id);
+    let amm_client = AMMClient::new(&env, &amm_id);
 
     let admin = Address::generate(&env);
     let usdc_token = Address::generate(&env);
@@ -150,8 +149,8 @@ fn test_oracle_consensus_flow() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let oracle_id = env.register_contract(None, OracleContract);
-    let oracle_client = OracleContractClient::new(&env, &oracle_id);
+    let oracle_id = env.register_contract(None, OracleManager);
+    let oracle_client = OracleManagerClient::new(&env, &oracle_id);
 
     let admin = Address::generate(&env);
     oracle_client.initialize(&admin, &2u32);
@@ -177,8 +176,8 @@ fn test_fee_collection_and_distribution() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let treasury_id = env.register_contract(None, TreasuryContract);
-    let treasury_client = TreasuryContractClient::new(&env, &treasury_id);
+    let treasury_id = env.register_contract(None, Treasury);
+    let treasury_client = TreasuryClient::new(&env, &treasury_id);
 
     let admin = Address::generate(&env);
     let usdc_token = Address::generate(&env);

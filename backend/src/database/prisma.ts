@@ -6,14 +6,18 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 // Use test database URL if in test environment
-const databaseUrl = process.env.NODE_ENV === 'test' 
-  ? (process.env.DATABASE_URL_TEST || process.env.DATABASE_URL)
-  : process.env.DATABASE_URL;
+const databaseUrl =
+  process.env.NODE_ENV === 'test'
+    ? process.env.DATABASE_URL_TEST || process.env.DATABASE_URL
+    : process.env.DATABASE_URL;
 
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
     datasources: {
       db: {
         url: databaseUrl,

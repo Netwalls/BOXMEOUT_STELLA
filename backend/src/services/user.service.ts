@@ -24,7 +24,9 @@ export class UserService {
     }
 
     // Check if username already exists
-    const existingUsername = await this.userRepository.findByUsername(data.username);
+    const existingUsername = await this.userRepository.findByUsername(
+      data.username
+    );
     if (existingUsername) {
       throw new Error('Username already taken');
     }
@@ -114,7 +116,8 @@ export class UserService {
 
   async connectWallet(userId: string, walletAddress: string) {
     // Check if wallet already connected to another user
-    const existing = await this.userRepository.findByWalletAddress(walletAddress);
+    const existing =
+      await this.userRepository.findByWalletAddress(walletAddress);
     if (existing && existing.id !== userId) {
       throw new Error('Wallet already connected to another account');
     }
@@ -122,8 +125,16 @@ export class UserService {
     return await this.userRepository.updateWalletAddress(userId, walletAddress);
   }
 
-  async updateBalance(userId: string, usdcBalance?: number, xlmBalance?: number) {
-    return await this.userRepository.updateBalance(userId, usdcBalance, xlmBalance);
+  async updateBalance(
+    userId: string,
+    usdcBalance?: number,
+    xlmBalance?: number
+  ) {
+    return await this.userRepository.updateBalance(
+      userId,
+      usdcBalance,
+      xlmBalance
+    );
   }
 
   async calculateAndUpdateTier(userId: string) {

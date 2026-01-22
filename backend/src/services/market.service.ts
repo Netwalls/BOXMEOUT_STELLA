@@ -51,9 +51,8 @@ export class MarketService {
     }
 
     // Get prediction statistics
-    const predictionStats = await this.predictionRepository.getMarketPredictionStats(
-      marketId
-    );
+    const predictionStats =
+      await this.predictionRepository.getMarketPredictionStats(marketId);
 
     return {
       ...market,
@@ -103,7 +102,11 @@ export class MarketService {
     );
   }
 
-  async resolveMarket(marketId: string, winningOutcome: number, resolutionSource: string) {
+  async resolveMarket(
+    marketId: string,
+    winningOutcome: number,
+    resolutionSource: string
+  ) {
     const market = await this.marketRepository.findById(marketId);
     if (!market) {
       throw new Error('Market not found');
@@ -135,14 +138,15 @@ export class MarketService {
   }
 
   private async settlePredictions(marketId: string, winningOutcome: number) {
-    const predictions = await this.predictionRepository.findMarketPredictions(marketId);
+    const predictions =
+      await this.predictionRepository.findMarketPredictions(marketId);
 
     await executeTransaction(async (tx) => {
       const predictionRepo = new PredictionRepository(tx);
 
       for (const prediction of predictions) {
         const isWinner = prediction.predictedOutcome === winningOutcome;
-        
+
         // Calculate PnL (simplified - actual calculation would involve odds)
         const pnlUsd = isWinner
           ? Number(prediction.amountUsdc) * 0.9 // 90% return (10% fee)
@@ -182,7 +186,11 @@ export class MarketService {
     skip?: number,
     take?: number
   ) {
-    return await this.marketRepository.getMarketsByCategory(category, skip, take);
+    return await this.marketRepository.getMarketsByCategory(
+      category,
+      skip,
+      take
+    );
   }
 
   async getMarketsByCreator(creatorId: string) {
@@ -190,7 +198,10 @@ export class MarketService {
   }
 
   async updateMarketVolume(marketId: string, volumeChange: number) {
-    return await this.marketRepository.updateMarketVolume(marketId, volumeChange);
+    return await this.marketRepository.updateMarketVolume(
+      marketId,
+      volumeChange
+    );
   }
 
   async getMarketStatistics() {
