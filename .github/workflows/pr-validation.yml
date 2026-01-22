@@ -1,0 +1,46 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Check PR title
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            
+            // Check for conventional commits
+            const conventionalPattern = /^(feat|fix|docs|style|refactor|perf|test|chore|ci)(\(.+\))?!?: .+/;
+            
+            if (!conventionalPattern.test(title)) {
+              core.setFailed('PR title must follow Conventional Commits format: type(scope): description');
+            }
+      
+      - name: Check for breaking changes
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (pr.title.includes('!:')) {
+              core.warning('This PR contains breaking changes');
+            }
+      
+      - name: Require description
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr.body || pr.body.trim().length === 0) {
+              core.setFailed('PR description cannot be empty');
+            }

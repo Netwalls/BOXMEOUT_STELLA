@@ -1,0 +1,50 @@
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Check backend dependencies
+        run: |
+          cd backend
+          npm audit --audit-level=moderate
+        continue-on-error: true
+      
+      - name: Check frontend dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=moderate
+        continue-on-error: true
+  
+  rustaudit:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      
+      - name: Run cargo-audit
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

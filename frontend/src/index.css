@@ -1,0 +1,288 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap');
+
+:root {
+  /* Brand Colors */
+  --color-bg-main: #0a0b14;
+  /* Deep Midnight */
+  --color-bg-card: #141625;
+  --color-bg-card-hover: #1f2236;
+
+  --color-primary: #00f3ff;
+  /* Electric Blue */
+  --color-secondary: #00ff9d;
+  /* Neon Green */
+  --color-accent: #ff0055;
+  /* Hot Pink (KO) */
+
+  --color-text-main: #ffffff;
+  --color-text-muted: #8899ac;
+
+  --color-border: rgba(255, 255, 255, 0.1);
+
+  /* Spacing */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.5rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 3rem;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-full: 9999px;
+
+  /* Fonts */
+  --font-main: 'Outfit', system-ui, sans-serif;
+  --font-arcade: 'Courier New', monospace;
+  /* Fallback, would ideally utilize a pixel font */
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: #000;
+  color: var(--color-text-main);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow: auto;
+  /* Allow scrolling */
+  overflow-x: hidden;
+}
+
+/* CRT Screen Effect */
+.arcade-screen {
+  position: relative;
+  min-height: 100vh;
+  /* Ensure it covers full height */
+  overflow-x: hidden;
+  background: var(--color-bg-main);
+  animation: flicker 0.15s infinite;
+}
+
+/* Scanlines */
+.arcade-screen::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 1000;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+
+/* Screen Vignette */
+.arcade-screen::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.6) 100%);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+@keyframes flicker {
+  0% {
+    opacity: 0.99;
+  }
+
+  5% {
+    opacity: 0.95;
+  }
+
+  10% {
+    opacity: 0.99;
+  }
+
+  100% {
+    opacity: 0.99;
+  }
+}
+
+/* Animations */
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 5px currentColor);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 15px currentColor);
+  }
+}
+
+@keyframes shake-charge {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  25% {
+    transform: translate(-2px, 2px) rotate(-1deg);
+  }
+
+  50% {
+    transform: translate(2px, -2px) rotate(1deg);
+  }
+
+  75% {
+    transform: translate(-2px, -2px) rotate(-1deg);
+  }
+
+  100% {
+    transform: translate(2px, 2px) rotate(1deg);
+  }
+}
+
+@keyframes punch-impact {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(0.9);
+  }
+
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes float-damage {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-50px) scale(1.5);
+  }
+}
+
+.shake-intense {
+  animation: shake-charge 0.1s infinite;
+}
+
+.damage-number {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: yellow;
+  font-size: 2rem;
+  font-weight: 900;
+  text-shadow: 2px 2px 0 red;
+  pointer-events: none;
+  animation: float-damage 1s ease-out forwards;
+  z-index: 100;
+}
+
+.blink {
+  animation: blink-animation 1s steps(2, start) infinite;
+}
+
+@keyframes blink-animation {
+  to {
+    visibility: hidden;
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: var(--font-main);
+  border: none;
+  background: none;
+}
+
+/* Utilities */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-sm);
+}
+
+.title-gradient {
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-bg-main);
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(0, 243, 255, 0.5);
+}
+
+.btn-accent {
+  background: var(--color-accent);
+  color: white;
+  box-shadow: 0 0 15px rgba(255, 0, 85, 0.3);
+}
+
+.btn-accent:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(255, 0, 85, 0.5);
+}
+
+.glass-panel {
+  background: rgba(20, 22, 37, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* Animations */
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}

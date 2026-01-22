@@ -1,0 +1,47 @@
+{
+  "name": "boxmeout-backend",
+  "version": "1.0.0",
+  "description": "BoxMeOut Stella - Prediction Market Backend API",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test": "vitest",
+    "test:integration": "vitest --config vitest.integration.config.ts"
+  },
+  "keywords": ["stellar", "soroban", "prediction-market", "blockchain"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0",
+    "dotenv": "^16.4.7",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/morgan": "^1.9.9",
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.7",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

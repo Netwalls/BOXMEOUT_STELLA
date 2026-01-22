@@ -1,0 +1,93 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+      
+      - name: Run ESLint
+        run: |
+          cd backend
+          npm run lint --if-present
+        continue-on-error: true
+  
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+      
+      - name: Run tests
+        run: |
+          cd backend
+          npm test --if-present
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/boxmeout_test
+          REDIS_URL: redis://localhost:6379
+        continue-on-error: true
+      
+      - name: Build backend
+        run: |
+          cd backend
+          npm run build --if-present
+        continue-on-error: true
