@@ -14,6 +14,8 @@ mod factory;
 mod market;
 mod oracle;
 mod treasury;
+#[cfg(test)]
+mod test_treasury;
 pub mod helpers;
 
 // Export all contracts - needed for integration tests
