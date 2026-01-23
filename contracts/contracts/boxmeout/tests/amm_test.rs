@@ -3,11 +3,11 @@
 use soroban_sdk::{
     testutils::{Address as _, Events},
     token::{StellarAssetClient, TokenClient},
-    Address, BytesN, Env, Symbol, IntoVal
+    Address, BytesN, Env, IntoVal, Symbol,
 };
 
-use boxmeout::{AMM, AMMClient};
 use boxmeout::helpers::*;
+use boxmeout::{AMMClient, AMM};
 
 const POOL_YES_RESERVE: &str = "pool_yes_reserve";
 const POOL_NO_RESERVE: &str = "pool_no_reserve";
@@ -44,10 +44,9 @@ fn setup_mock_pool(
     no_reserve: u128,
 ) {
     env.as_contract(amm_id, || {
-        env.storage().persistent().set(
-            &(Symbol::new(env, POOL_EXISTS), market_id.clone()),
-            &true,
-        );
+        env.storage()
+            .persistent()
+            .set(&(Symbol::new(env, POOL_EXISTS), market_id.clone()), &true);
         env.storage().persistent().set(
             &(Symbol::new(env, POOL_YES_RESERVE), market_id.clone()),
             &yes_reserve,
@@ -83,9 +82,17 @@ fn get_user_shares_from_storage(
 ) -> u128 {
     env.as_contract(amm_id, || {
         let key = if outcome == 1 {
-            (Symbol::new(env, USER_SHARES_YES), user.clone(), market_id.clone())
+            (
+                Symbol::new(env, USER_SHARES_YES),
+                user.clone(),
+                market_id.clone(),
+            )
         } else {
-            (Symbol::new(env, USER_SHARES_NO), user.clone(), market_id.clone())
+            (
+                Symbol::new(env, USER_SHARES_NO),
+                user.clone(),
+                market_id.clone(),
+            )
         };
         env.storage().persistent().get(&key).unwrap_or(0)
     })
@@ -171,7 +178,7 @@ fn test_create_pool_twice_fails() {
     token_client.mint(&creator, &(initial_liquidity as i128 * 2)); // Mint enough for 2 attempts
 
     client.create_pool(&creator, &market_id, &initial_liquidity);
-    
+
     // Try to create pool again - should panic
     client.create_pool(&creator, &market_id, &initial_liquidity);
 }
@@ -205,17 +212,26 @@ fn test_buy_shares_yes() {
     assert!(shares_received > 0, "Should receive shares");
 
     // Verify reserves updated correctly
-    let (yes_reserve, no_reserve) = env.as_contract(&amm_id, || {get_pool_reserves(&env, &market_id)});
+    let (yes_reserve, no_reserve) =
+        env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
 
     // YES reserve should decrease (shares taken out)
-    assert!(yes_reserve < 1000, "YES reserve should decrease after buying YES");
+    assert!(
+        yes_reserve < 1000,
+        "YES reserve should decrease after buying YES"
+    );
     // NO reserve should increase (USDC added, minus fee)
-    assert!(no_reserve > 1000, "NO reserve should increase after buying YES");
+    assert!(
+        no_reserve > 1000,
+        "NO reserve should increase after buying YES"
+    );
 
     // Verify user shares credited
     let user_shares = get_user_shares_from_storage(&env, &amm_id, &buyer, &market_id, outcome);
-    assert_eq!(user_shares, shares_received, "User shares should match returned value");
-
+    assert_eq!(
+        user_shares, shares_received,
+        "User shares should match returned value"
+    );
 }
 
 #[test]
@@ -244,12 +260,19 @@ fn test_buy_shares_no() {
 
     assert!(shares_received > 0, "Should receive shares");
 
-    let (yes_reserve, no_reserve) = env.as_contract(&amm_id, || {get_pool_reserves(&env, &market_id)});
+    let (yes_reserve, no_reserve) =
+        env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
 
     // NO reserve should decrease (shares taken out)
-    assert!(no_reserve < 1000, "NO reserve should decrease after buying NO");
+    assert!(
+        no_reserve < 1000,
+        "NO reserve should decrease after buying NO"
+    );
     // YES reserve should increase (USDC added)
-    assert!(yes_reserve > 1000, "YES reserve should increase after buying NO");
+    assert!(
+        yes_reserve > 1000,
+        "YES reserve should increase after buying NO"
+    );
 
     // Verify user shares credited for NO outcome
     let user_shares = get_user_shares_from_storage(&env, &amm_id, &buyer, &market_id, outcome);
@@ -274,14 +297,15 @@ fn test_buy_shares_adjusts_odds_correctly() {
     setup_mock_pool(&env, &amm_id, &market_id, 1000, 1000);
 
     // Get initial odds (50/50)
-    let (initial_yes, initial_no) = env.as_contract(&amm_id, || {get_pool_reserves(&env, &market_id)});
+    let (initial_yes, initial_no) =
+        env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
     let initial_yes_odds = initial_yes * 100 / (initial_yes + initial_no);
     assert_eq!(initial_yes_odds, 50, "Initial YES odds should be 50%");
 
     // Buy YES shares - should increase YES odds
     client.buy_shares(&buyer, &market_id, &1u32, &200u128, &1u128);
 
-    let (new_yes, new_no) = env.as_contract(&amm_id, || {get_pool_reserves(&env, &market_id)});
+    let (new_yes, new_no) = env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
 
     // After buying YES: YES reserve decreases, NO reserve increases
     // This means YES is now more scarce = higher implied probability
@@ -293,7 +317,10 @@ fn test_buy_shares_adjusts_odds_correctly() {
     // Price of YES increases (less YES available relative to NO)
     let yes_price_before = initial_no * 1000 / initial_yes; // Price in terms of NO
     let yes_price_after = new_no * 1000 / new_yes;
-    assert!(yes_price_after > yes_price_before, "YES should become more expensive after buying YES");
+    assert!(
+        yes_price_after > yes_price_before,
+        "YES should become more expensive after buying YES"
+    );
 }
 
 #[test]
@@ -383,7 +410,7 @@ fn test_buy_shares_fee_deducted_correctly() {
 
     // Fee = 1000 * 20 / 10000 = 2 (0.2%)
     // Amount after fee = 998
-    let (_, no_reserve) = env.as_contract(&amm_id, || {get_pool_reserves(&env, &market_id)});
+    let (_, no_reserve) = env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
 
     // NO reserve should increase by 998 (amount after fee), not 1000
     assert_eq!(
@@ -414,7 +441,8 @@ fn test_buy_shares_reserves_and_k_updated() {
 
     client.buy_shares(&buyer, &market_id, &1u32, &100u128, &1u128);
 
-    let (yes_reserve, no_reserve) = env.as_contract(&amm_id, || {get_pool_reserves(&env, &market_id)});
+    let (yes_reserve, no_reserve) =
+        env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
     let new_k = get_pool_k(&env, &amm_id, &market_id);
 
     // Verify k is stored correctly as product of reserves
@@ -542,8 +570,9 @@ fn test_cpmm_invariant() {
     client.buy_shares(&buyer, &market_id, &0u32, &300u128, &1u128);
     client.buy_shares(&buyer, &market_id, &1u32, &200u128, &1u128);
 
-    let (yes_reserve, no_reserve) = env.as_contract(&amm_id, || {get_pool_reserves(&env, &market_id)});
-    let stored_k = env.as_contract(&amm_id, || {get_pool_k(&env, &amm_id, &market_id)});
+    let (yes_reserve, no_reserve) =
+        env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    let stored_k = env.as_contract(&amm_id, || get_pool_k(&env, &amm_id, &market_id));
 
     // Verify k is correctly stored as product of reserves
     assert_eq!(
@@ -562,20 +591,128 @@ fn test_sell_shares() {
     let env = create_test_env();
     let amm_id = register_amm(&env);
     let client = AMMClient::new(&env, &amm_id);
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let admin = Address::generate(&env);
+    let factory = Address::generate(&env);
+    let buyer = Address::generate(&env);
 
-    // TODO: Implement when sell_shares is ready
-    // Create pool
-    // Buy shares
-    // Sell shares back
-    // Verify payout calculation
+    // Setup: Initialize and Pool
+    let usdc_token = setup_usdc_token(&env, &buyer, 1_000_000);
+    client.initialize(&admin, &factory, &usdc_token, &100_000_000_000u128);
+    setup_mock_pool(&env, &amm_id, &market_id, 1000, 1000);
+
+    // Mint USDC to AMM contract to fund payouts
+    let token_client = StellarAssetClient::new(&env, &usdc_token);
+    token_client.mint(&amm_id, &100_000_000);
+
+    // 1. Buy shares first to get some balance
+    // Buy 100 shares of YES
+    // Manual setup of user shares in storage since we are mocking pool state
+    // But buy_shares updates storage. Let's use buy_shares to be realistic or just set storage.
+    // Using buy_shares requires paying USDC.
+    // Let's just mock user share balance for simplicity and focus on sell logic.
+    env.as_contract(&amm_id, || {
+        let key = (
+            Symbol::new(&env, USER_SHARES_YES),
+            buyer.clone(),
+            market_id.clone(),
+        );
+        env.storage().persistent().set(&key, &100u128);
+    });
+
+    // 2. Sell 50 shares of YES
+    // Expect:
+    // Reserves: YES += 50, NO -= payout
+    // Payout logic:
+    //   input=50 YES.
+    //   new_yes = 1000 + 50 = 1050
+    //   new_no = k / 1050 = 1,000,000 / 1050 = 952
+    //   payout = 1000 - 952 = 48
+    //   fee = 48 * 0.2% = 0
+    //   net = 48
+
+    // Note: integer division 1000000/1050 = 952.38 -> 952
+    // 1000 - 952 = 48
+
+    let payout = client.sell_shares(&buyer, &market_id, &1u32, &50u128, &1u128);
+
+    // Verify payout
+    assert_eq!(payout, 48, "Payout should be 48 USDC");
+
+    // Verify reserves updated
+    let (yes_reserve, no_reserve) =
+        env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    assert_eq!(yes_reserve, 1050, "YES reserve should increase by 50");
+    assert_eq!(no_reserve, 952, "NO reserve should decrease by 48");
+
+    // Verify user shares burned
+    let user_shares = get_user_shares_from_storage(&env, &amm_id, &buyer, &market_id, 1u32);
+    assert_eq!(user_shares, 50, "User should have 50 shares left");
 }
 
 #[test]
-#[ignore]
-#[should_panic(expected = "insufficient shares")]
+#[should_panic(expected = "Slippage exceeded")]
+fn test_sell_shares_slippage() {
+    let env = create_test_env();
+    let amm_id = register_amm(&env);
+    let client = AMMClient::new(&env, &amm_id);
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let admin = Address::generate(&env);
+    let factory = Address::generate(&env);
+    let seller = Address::generate(&env);
+
+    let usdc_token = setup_usdc_token(&env, &seller, 1_000_000); // Seller needs USDC? No, seller needs shares but contract needs USDC to pay
+                                                                 // Contract needs USDC to pay seller.
+                                                                 // In setup_mock_pool, we don't mint USDC to contract.
+                                                                 // Real create_pool transfers USDC to contract.
+                                                                 // Let's mint USDC to contract address for payout.
+    let token_client = StellarAssetClient::new(&env, &usdc_token);
+    token_client.mint(&amm_id, &10000i128);
+
+    client.initialize(&admin, &factory, &usdc_token, &100_000_000_000u128);
+    setup_mock_pool(&env, &amm_id, &market_id, 1000, 1000);
+
+    // Give seller shares
+    env.as_contract(&amm_id, || {
+        let key = (
+            Symbol::new(&env, USER_SHARES_YES),
+            seller.clone(),
+            market_id.clone(),
+        );
+        env.storage().persistent().set(&key, &100u128);
+    });
+
+    // Sell 50 shares, expect ~48 payout. Ask for 50 min.
+    client.sell_shares(&seller, &market_id, &1u32, &50u128, &50u128);
+}
+
+#[test]
+#[should_panic(expected = "Insufficient shares balance")]
 fn test_sell_more_shares_than_owned() {
-    // TODO: Implement when sell_shares is ready
-    // Try to sell more shares than user owns
+    let env = create_test_env();
+    let amm_id = register_amm(&env);
+    let client = AMMClient::new(&env, &amm_id);
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let admin = Address::generate(&env);
+    let factory = Address::generate(&env);
+    let seller = Address::generate(&env);
+
+    let usdc_token = setup_usdc_token(&env, &seller, 0);
+    client.initialize(&admin, &factory, &usdc_token, &100_000_000_000u128);
+    setup_mock_pool(&env, &amm_id, &market_id, 1000, 1000);
+
+    // Give seller 10 shares
+    env.as_contract(&amm_id, || {
+        let key = (
+            Symbol::new(&env, USER_SHARES_YES),
+            seller.clone(),
+            market_id.clone(),
+        );
+        env.storage().persistent().set(&key, &10u128);
+    });
+
+    // Try to sell 20
+    client.sell_shares(&seller, &market_id, &1u32, &20u128, &1u128);
 }
 
 #[test]
@@ -860,7 +997,7 @@ fn test_remove_liquidity_proportional_calculation() {
     // With 50/50 split, should get back approximately equal amounts
     // yes_amount + no_amount should equal tokens_to_remove
     assert_eq!(yes_amount + no_amount, tokens_to_remove);
-    
+
     // In a 50/50 pool, yes and no should be roughly equal
     let diff = if yes_amount > no_amount {
         yes_amount - no_amount
@@ -904,7 +1041,10 @@ fn test_remove_liquidity_event_emitted() {
 
     // Verify LiquidityRemoved event was emitted
     let events = env.events().all();
-    assert!(events.len() >= 1, "LiquidityRemoved event should be emitted");
+    assert!(
+        events.len() >= 1,
+        "LiquidityRemoved event should be emitted"
+    );
 }
 
 #[test]

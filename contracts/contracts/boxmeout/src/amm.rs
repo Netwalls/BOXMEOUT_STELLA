@@ -5,7 +5,6 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, V
 
 use crate::{amm, helpers::*};
 
-
 // Storage keys
 const ADMIN_KEY: &str = "admin";
 const FACTORY_KEY: &str = "factory";
@@ -131,13 +130,19 @@ impl AMM {
         let no_reserve_key = (Symbol::new(&env, POOL_NO_RESERVE_PREFIX), &market_id);
         let k_key = (Symbol::new(&env, POOL_K_PREFIX), &market_id);
         let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_PREFIX), &market_id);
-        let lp_balance_key = (Symbol::new(&env, POOL_LP_TOKENS_PREFIX), &market_id, &creator);
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_PREFIX),
+            &market_id,
+            &creator,
+        );
 
         // Store reserves
-        env.storage().persistent().set(&yes_reserve_key, &yes_reserve);
+        env.storage()
+            .persistent()
+            .set(&yes_reserve_key, &yes_reserve);
         env.storage().persistent().set(&no_reserve_key, &no_reserve);
         env.storage().persistent().set(&k_key, &k);
-        
+
         // Mark pool as existing
         env.storage().persistent().set(&pool_exists_key, &true);
 
@@ -154,11 +159,15 @@ impl AMM {
             .expect("usdc token not set");
 
         let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(&creator, &env.current_contract_address(), &(initial_liquidity as i128));
+        token_client.transfer(
+            &creator,
+            &env.current_contract_address(),
+            &(initial_liquidity as i128),
+        );
 
         // Calculate initial odds (50/50)
         let yes_odds = 5000u32; // 50.00%
-        let no_odds = 5000u32;  // 50.00%
+        let no_odds = 5000u32; // 50.00%
 
         // Emit PoolCreated event
         env.events().publish(
@@ -215,7 +224,10 @@ impl AMM {
         let shares_out = calculate_shares_out(yes_reserve, no_reserve, outcome, amount_after_fee);
 
         if shares_out < min_shares {
-            panic!("Slippage exceeded: would receive {} shares, minimum is {}", shares_out, min_shares);
+            panic!(
+                "Slippage exceeded: would receive {} shares, minimum is {}",
+                shares_out, min_shares
+            );
         }
 
         let usdc_address: Address = env
@@ -239,7 +251,13 @@ impl AMM {
 
         let current_shares = get_user_shares(&env, &buyer, &market_id, outcome);
 
-        set_user_shares(&env, &buyer, &market_id, outcome, current_shares + shares_out);
+        set_user_shares(
+            &env,
+            &buyer,
+            &market_id,
+            outcome,
+            current_shares + shares_out,
+        );
 
         let trade_index = increment_trade_count(&env, &market_id);
         let trade_key = (Symbol::new(&env, "trade"), market_id.clone(), trade_index);
@@ -257,14 +275,7 @@ impl AMM {
 
         env.events().publish(
             (Symbol::new(&env, "BuyShares"),),
-            (
-                buyer,
-                market_id,
-                outcome,
-                shares_out,
-                amount,
-                fee,
-            ),
+            (buyer, market_id, outcome, shares_out, amount, fee),
         );
 
         shares_out
@@ -293,7 +304,98 @@ impl AMM {
         shares: u128,
         min_payout: u128,
     ) -> u128 {
-        todo!("See sell shares TODO above")
+        seller.require_auth();
+
+        if outcome > 1 {
+            panic!("Invalid outcome: must be 0 (NO) or 1 (YES)");
+        }
+        if shares == 0 {
+            panic!("Shares execution amount must be positive");
+        }
+
+        if !pool_exists(&env, &market_id) {
+            panic!("Liquidity pool does not exist");
+        }
+
+        // Check user balance
+        let user_shares = get_user_shares(&env, &seller, &market_id, outcome);
+        if user_shares < shares {
+            panic!("Insufficient shares balance");
+        }
+
+        let (yes_reserve, no_reserve) = get_pool_reserves(&env, &market_id);
+
+        // Calculate raw payout using reverse CPMM
+        let payout = calculate_payout(yes_reserve, no_reserve, outcome, shares);
+
+        // Apply fee (0.2%)
+        let trading_fee_bps: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, TRADING_FEE_KEY))
+            .unwrap_or(20);
+
+        let fee = payout * (trading_fee_bps as u128) / 10_000;
+        let payout_after_fee = payout - fee;
+
+        // Check slippage
+        if payout_after_fee < min_payout {
+            panic!(
+                "Slippage exceeded: would receive {} USDC, minimum is {}",
+                payout_after_fee, min_payout
+            );
+        }
+
+        // Update reserves
+        // If selling YES: YES reserve increases by shares, NO reserve decreases by payout
+        let (new_yes_reserve, new_no_reserve) = if outcome == 1 {
+            (yes_reserve + shares, no_reserve - payout)
+        } else {
+            // If selling NO: NO reserve increases by shares, YES reserve decreases by payout
+            (yes_reserve - payout, no_reserve + shares)
+        };
+
+        set_pool_reserves(&env, &market_id, new_yes_reserve, new_no_reserve);
+
+        // Burn user shares
+        set_user_shares(&env, &seller, &market_id, outcome, user_shares - shares);
+
+        // Transfer USDC to seller
+        let usdc_address: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not configured");
+        let usdc_client = soroban_sdk::token::Client::new(&env, &usdc_address);
+
+        usdc_client.transfer(
+            &env.current_contract_address(),
+            &seller,
+            &(payout_after_fee as i128),
+        );
+
+        // Record trade
+        let trade_index = increment_trade_count(&env, &market_id);
+        let trade_key = (Symbol::new(&env, "trade"), market_id.clone(), trade_index);
+        env.storage().persistent().set(
+            &trade_key,
+            &(
+                seller.clone(),
+                outcome,
+                shares,           // shares sold
+                payout_after_fee, // amount received
+                fee,
+                env.ledger().timestamp(),
+            ),
+        );
+
+        // Emit SellShares event
+        env.events().publish(
+            (Symbol::new(&env, "SellShares"),),
+            (seller, market_id, outcome, shares, payout_after_fee, fee),
+        );
+
+        payout_after_fee
     }
 
     /// Calculate current odds for an outcome
@@ -350,7 +452,11 @@ impl AMM {
         let no_reserve_key = (Symbol::new(&env, POOL_NO_RESERVE_PREFIX), &market_id);
         let k_key = (Symbol::new(&env, POOL_K_PREFIX), &market_id);
         let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_PREFIX), &market_id);
-        let lp_balance_key = (Symbol::new(&env, POOL_LP_TOKENS_PREFIX), &market_id, &lp_provider);
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_PREFIX),
+            &market_id,
+            &lp_provider,
+        );
 
         // Get current reserves
         let yes_reserve: u128 = env
@@ -406,22 +512,26 @@ impl AMM {
         }
 
         // Store updated reserves and k
-        env.storage().persistent().set(&yes_reserve_key, &new_yes_reserve);
-        env.storage().persistent().set(&no_reserve_key, &new_no_reserve);
+        env.storage()
+            .persistent()
+            .set(&yes_reserve_key, &new_yes_reserve);
+        env.storage()
+            .persistent()
+            .set(&no_reserve_key, &new_no_reserve);
         env.storage().persistent().set(&k_key, &new_k);
 
         // Update LP token supply
         let new_lp_supply = current_lp_supply + lp_tokens_to_mint;
-        env.storage().persistent().set(&lp_supply_key, &new_lp_supply);
+        env.storage()
+            .persistent()
+            .set(&lp_supply_key, &new_lp_supply);
 
         // Update LP provider's balance
-        let current_lp_balance: u128 = env
-            .storage()
-            .persistent()
-            .get(&lp_balance_key)
-            .unwrap_or(0);
+        let current_lp_balance: u128 = env.storage().persistent().get(&lp_balance_key).unwrap_or(0);
         let new_lp_balance = current_lp_balance + lp_tokens_to_mint;
-        env.storage().persistent().set(&lp_balance_key, &new_lp_balance);
+        env.storage()
+            .persistent()
+            .set(&lp_balance_key, &new_lp_balance);
 
         // Transfer USDC from LP provider to contract
         let usdc_token: Address = env
@@ -475,14 +585,14 @@ impl AMM {
         let no_reserve_key = (Symbol::new(&env, POOL_NO_RESERVE_PREFIX), &market_id);
         let k_key = (Symbol::new(&env, POOL_K_PREFIX), &market_id);
         let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_PREFIX), &market_id);
-        let lp_balance_key = (Symbol::new(&env, POOL_LP_TOKENS_PREFIX), &market_id, &lp_provider);
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_PREFIX),
+            &market_id,
+            &lp_provider,
+        );
 
         // Get LP provider's current balance
-        let lp_balance: u128 = env
-            .storage()
-            .persistent()
-            .get(&lp_balance_key)
-            .unwrap_or(0);
+        let lp_balance: u128 = env.storage().persistent().get(&lp_balance_key).unwrap_or(0);
 
         // Validate user has enough LP tokens
         if lp_balance < lp_tokens {
@@ -530,8 +640,12 @@ impl AMM {
         let new_k = new_yes_reserve * new_no_reserve;
 
         // Store updated reserves and k
-        env.storage().persistent().set(&yes_reserve_key, &new_yes_reserve);
-        env.storage().persistent().set(&no_reserve_key, &new_no_reserve);
+        env.storage()
+            .persistent()
+            .set(&yes_reserve_key, &new_yes_reserve);
+        env.storage()
+            .persistent()
+            .set(&no_reserve_key, &new_no_reserve);
         env.storage().persistent().set(&k_key, &new_k);
 
         // Burn LP tokens from provider
@@ -539,12 +653,16 @@ impl AMM {
         if new_lp_balance == 0 {
             env.storage().persistent().remove(&lp_balance_key);
         } else {
-            env.storage().persistent().set(&lp_balance_key, &new_lp_balance);
+            env.storage()
+                .persistent()
+                .set(&lp_balance_key, &new_lp_balance);
         }
 
         // Update LP token supply
         let new_lp_supply = current_lp_supply - lp_tokens;
-        env.storage().persistent().set(&lp_supply_key, &new_lp_supply);
+        env.storage()
+            .persistent()
+            .set(&lp_supply_key, &new_lp_supply);
 
         // Transfer USDC back to user (YES and NO reserves are in USDC)
         // The user receives their proportional share of the pool's liquidity
