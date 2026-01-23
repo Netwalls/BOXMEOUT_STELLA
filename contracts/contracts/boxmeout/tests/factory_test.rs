@@ -2,7 +2,11 @@
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
+<<<<<<< HEAD
+    Address, BytesN, Env, Symbol,
+=======
     token, Address, Env, Symbol,
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
 };
 
 // Import the Factory contract
@@ -18,12 +22,15 @@ fn register_factory(env: &Env) -> Address {
     env.register_contract(None, MarketFactory)
 }
 
+<<<<<<< HEAD
+=======
 // Helper to create a mock USDC token
 fn create_mock_token(env: &Env, admin: &Address) -> Address {
     let token_address = env.register_stellar_asset_contract_v2(admin.clone());
     token_address.address()
 }
 
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
 #[test]
 fn test_factory_initialize() {
     let env = create_test_env();
@@ -36,7 +43,10 @@ fn test_factory_initialize() {
     let treasury = Address::generate(&env);
 
     // Call initialize
+<<<<<<< HEAD
+=======
     env.mock_all_auths();
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
     client.initialize(&admin, &usdc, &treasury);
 
     // Verify market count starts at 0
@@ -56,7 +66,10 @@ fn test_factory_initialize_twice_fails() {
     let treasury = Address::generate(&env);
 
     // First initialization
+<<<<<<< HEAD
+=======
     env.mock_all_auths();
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
     client.initialize(&admin, &usdc, &treasury);
 
     // Second initialization should panic
@@ -71,6 +84,40 @@ fn test_create_market() {
 
     // Initialize factory
     let admin = Address::generate(&env);
+<<<<<<< HEAD
+    let usdc = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    client.initialize(&admin, &usdc, &treasury);
+
+    // TODO: Implement when create_market is ready
+    // Create market
+    // let creator = Address::generate(&env);
+    // let title = Symbol::new(&env, "Mayweather");
+    // let description = Symbol::new(&env, "MayweatherWins");
+    // let category = Symbol::new(&env, "Boxing");
+    // let closing_time = env.ledger().timestamp() + 86400; // +1 day
+    // let resolution_time = closing_time + 3600; // +1 hour after close
+
+    // let market_id = client.create_market(
+    //     &creator,
+    //     &title,
+    //     &description,
+    //     &category,
+    //     &closing_time,
+    //     &resolution_time,
+    // );
+
+    // // Verify market was created
+    // assert!(market_id.len() == 32);
+
+    // // Verify market count incremented
+    // let market_count = client.get_market_count();
+    // assert_eq!(market_count, 1);
+}
+
+#[test]
+#[should_panic(expected = "invalid timestamps")]
+=======
     let usdc = create_mock_token(&env, &admin);
     let treasury = Address::generate(&env);
     env.mock_all_auths();
@@ -107,6 +154,7 @@ fn test_create_market() {
 
 #[test]
 #[should_panic]
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
 fn test_create_market_invalid_timestamps() {
     let env = create_test_env();
     let factory_id = register_factory(&env);
@@ -116,6 +164,27 @@ fn test_create_market_invalid_timestamps() {
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
     let treasury = Address::generate(&env);
+<<<<<<< HEAD
+    client.initialize(&admin, &usdc, &treasury);
+
+    // TODO: Implement when create_market is ready
+    // Try to create market with closing_time > resolution_time
+    // let creator = Address::generate(&env);
+    // let title = Symbol::new(&env, "Mayweather");
+    // let description = Symbol::new(&env, "MayweatherWins");
+    // let category = Symbol::new(&env, "Boxing");
+    // let closing_time = env.ledger().timestamp() + 86400;
+    // let resolution_time = closing_time - 3600; // INVALID: before closing time
+
+    // client.create_market(
+    //     &creator,
+    //     &title,
+    //     &description,
+    //     &category,
+    //     &closing_time,
+    //     &resolution_time,
+    // );
+=======
     env.mock_all_auths();
     client.initialize(&admin, &usdc, &treasury);
 
@@ -225,6 +294,7 @@ fn test_create_market_uniqueness() {
     // Verify market count incremented to 2
     let market_count = client.get_market_count();
     assert_eq!(market_count, 2);
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
 }
 
 #[test]

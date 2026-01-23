@@ -1,3 +1,7 @@
+// contracts/market.rs - Individual Prediction Market Contract
+// Handles predictions, bet commitment/reveal, market resolution
+
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, Symbol, Vec};
 // Individual Prediction Market Contract - This handles predictions, bet commitment/reveal, market resolution
 
 use soroban_sdk::{
@@ -17,6 +21,7 @@ const MARKET_STATE_KEY: &str = "market_state";
 const YES_POOL_KEY: &str = "yes_pool";
 const NO_POOL_KEY: &str = "no_pool";
 const TOTAL_VOLUME_KEY: &str = "total_volume";
+
 const PENDING_COUNT_KEY: &str = "pending_count";
 const COMMIT_PREFIX: &str = "commit";
 const PREDICTIONS_PREFIX: &str = "prediction";
@@ -28,6 +33,7 @@ const LOSER_SHARES_KEY: &str = "loser_shares";
 const STATE_OPEN: u32 = 0;
 const STATE_CLOSED: u32 = 1;
 const STATE_RESOLVED: u32 = 2;
+
 
 /// Error codes following Soroban best practices
 #[contracterror]
@@ -101,7 +107,7 @@ impl PredictionMarket {
             .persistent()
             .set(&Symbol::new(&env, CREATOR_KEY), &creator);
 
-        // Store factory address
+
         env.storage()
             .persistent()
             .set(&Symbol::new(&env, FACTORY_KEY), &factory);
@@ -125,7 +131,7 @@ impl PredictionMarket {
             .persistent()
             .set(&Symbol::new(&env, RESOLUTION_TIME_KEY), &resolution_time);
 
-        // Initialize market state as open
+
         env.storage()
             .persistent()
             .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_OPEN);
@@ -143,6 +149,7 @@ impl PredictionMarket {
         env.storage()
             .persistent()
             .set(&Symbol::new(&env, TOTAL_VOLUME_KEY), &0i128);
+
 
         // Initialize pending count
         env.storage()
@@ -163,6 +170,31 @@ impl PredictionMarket {
         );
     }
 
+
+    /// Phase 1: User commits to a prediction (commit-reveal scheme for privacy)
+    ///
+    /// TODO: Commit Prediction
+    /// - Require user authentication
+    /// - Validate market is in OPEN state
+    /// - Validate current timestamp < closing_time
+    /// - Validate amount > 0 and <= user's balance
+    /// - Validate commit_hash is valid 32-byte hash
+    /// - Create commit hash as: keccak256(user_address + outcome + amount + salt)
+    /// - Transfer amount from user to market escrow
+    /// - Handle USDC transfer failure: revert
+    /// - Store commit record: { user, commit_hash, amount, timestamp }
+    /// - Prevent user from committing twice (check existing commits)
+    /// - Record user in active_predictors list
+    /// - Emit CommitmentMade(user, market_id, commit_hash, amount, timestamp)
+    /// - Update market metadata (pending_predictions count)
+    pub fn commit_prediction(
+        env: Env,
+        user: Address,
+        market_id: BytesN<32>,
+        commit_hash: BytesN<32>,
+        amount: i128,
+    ) {
+        todo!("See commit prediction TODO above")
     pub fn commit_prediction(
         env: Env,
         user: Address,
@@ -455,6 +487,28 @@ impl PredictionMarket {
 
     /// Resolve market based on oracle consensus result
     ///
+    /// TODO: Resolve Market
+    /// - Validate current timestamp >= resolution_time
+    /// - Validate market state is CLOSED
+    /// - Receive oracle_result (0=NO, 1=YES) from oracle module
+    /// - Validate oracle_result in [0, 1]
+    /// - Set winning_outcome = oracle_result
+    /// - Change market state to RESOLVED
+    /// - Calculate payouts for winners
+    /// - For each winner: payout = (their_amount / total_winners_amount) * total_pool
+    /// - Deduct platform fee (10%) from each winner payout
+    /// - Store calculated payouts in market state
+    /// - Mark market as settled
+    /// - Emit MarketResolved(market_id, winning_outcome, total_winners, timestamp)
+    /// - Prepare treasury transfers for fee collection
+    pub fn resolve_market(
+        env: Env,
+        market_id: BytesN<32>,
+        winning_outcome: u32,
+    ) {
+    pub fn resolve_market(env: Env, market_id: BytesN<32>, winning_outcome: u32) {
+        todo!("See resolve market TODO above")
+
     /// This function finalizes the market outcome based on oracle consensus.
     /// It validates timing, checks oracle consensus, updates market state,
     /// calculates winner/loser pools, and emits resolution event.
@@ -581,6 +635,12 @@ impl PredictionMarket {
     /// - Increment dispute counter
     /// - Emit MarketDisputed(user, reason, market_id, timestamp)
     /// - Notify admin of dispute
+    pub fn dispute_market(
+        env: Env,
+        user: Address,
+        market_id: BytesN<32>,
+        dispute_reason: Symbol,
+    ) {
     pub fn dispute_market(env: Env, user: Address, market_id: BytesN<32>, dispute_reason: Symbol) {
         todo!("See dispute market TODO above")
     }
@@ -617,6 +677,11 @@ impl PredictionMarket {
     /// - Transfer refund from treasury to user
     /// - Mark as refunded
     /// - Emit LosingBetRefunded(user, market_id, refund_amount, timestamp)
+    pub fn refund_losing_bet(
+        env: Env,
+        user: Address,
+        market_id: BytesN<32>,
+    ) -> i128 {
     pub fn refund_losing_bet(env: Env, user: Address, market_id: BytesN<32>) -> i128 {
         todo!("See refund losing bet TODO above")
     }
@@ -644,6 +709,11 @@ impl PredictionMarket {
     /// - Include: commit timestamp, reveal timestamp, claim timestamp
     /// - Include potential payout if market is unresolved
     /// - Handle: user has no prediction (return error)
+    pub fn get_user_prediction(
+        env: Env,
+        user: Address,
+        market_id: BytesN<32>,
+    ) -> Symbol {
     pub fn get_user_prediction(env: Env, user: Address, market_id: BytesN<32>) -> Symbol {
         todo!("See get user prediction TODO above")
     }

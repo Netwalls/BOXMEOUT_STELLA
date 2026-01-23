@@ -1,9 +1,13 @@
 // contract/src/factory.rs - Market Factory Contract Implementation
 // Handles market creation and lifecycle management
 
+<<<<<<< HEAD
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol, Vec};
+=======
 use soroban_sdk::{
     contract, contractimpl, token, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec,
 };
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -19,6 +23,8 @@ pub struct MarketFactory;
 impl MarketFactory {
     /// Initialize factory with admin, USDC token, and treasury address
     pub fn initialize(env: Env, admin: Address, usdc: Address, treasury: Address) {
+<<<<<<< HEAD
+=======
         // Check if already initialized
         if env
             .storage()
@@ -28,6 +34,7 @@ impl MarketFactory {
             panic!("already initialized");
         }
 
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
         // Verify admin signature
         admin.require_auth();
 
@@ -67,6 +74,22 @@ impl MarketFactory {
     }
 
     /// Create a new market instance
+<<<<<<< HEAD
+    ///
+    /// TODO: Create Market
+    /// - Require creator authentication
+    /// - Validate title and description are not empty
+    /// - Validate closing_time > now and < resolution_time
+    /// - Increment market_count
+    /// - Generate market_id (hash of creator + nonce + timestamp)
+    /// - Create market struct with metadata
+    /// - Deploy new PredictionMarket contract instance
+    /// - Initialize new market with factory, creator, timings
+    /// - Store market in registry: market_id -> market_metadata
+    /// - Transfer creation fee (1 USDC) from creator to treasury
+    /// - Emit MarketCreated(market_id, creator, title, closing_time)
+=======
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
     pub fn create_market(
         env: Env,
         creator: Address,
@@ -75,6 +98,10 @@ impl MarketFactory {
         category: Symbol,
         closing_time: u64,
         resolution_time: u64,
+<<<<<<< HEAD
+    ) {
+        todo!("See create market TODO above")
+=======
     ) -> BytesN<32> {
         // Require creator authentication
         creator.require_auth();
@@ -156,6 +183,7 @@ impl MarketFactory {
         );
 
         market_id
+>>>>>>> 0d438863f72917744879ae34526e16a766719043
     }
 
     /// Get market info by market_id

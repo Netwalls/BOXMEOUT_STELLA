@@ -45,6 +45,10 @@ jobs:
           toolchain: stable
       
       - name: Run cargo-audit
-        uses: actions-rs/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # uses: actions-rs/audit-check@v1
+        working-directory: contracts/contracts/boxmeout
+        run: |
+          cargo install cargo-audit
+          cargo audit
+        # with:
+        #   token: ${{ secrets.GITHUB_TOKEN }}
