@@ -17,6 +17,10 @@ target/
 .env.local
 .env.production
 .env.development
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
 
 # IDE
 .vscode/*
@@ -38,6 +42,9 @@ lerna-debug.log*
 # Testing
 coverage/
 *.test.ts.snap
+.nyc_output/
+backend/coverage/
+frontend/coverage/
 
 # Rust
 Cargo.lock
@@ -47,6 +54,13 @@ Cargo.lock
 tmp/
 temp/
 *.tmp
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/prisma/dev.db
+backend/prisma/test.db
 
 # OS
 .DS_Store

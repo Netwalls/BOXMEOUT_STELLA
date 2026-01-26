@@ -449,3 +449,38 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ============================================================================
+// TREASURY
+// ============================================================================
+
+model Distribution {
+  id                String             @id @default(uuid())
+  distributionType  DistributionType   @map("distribution_type")
+  totalAmount       Decimal            @map("total_amount") @db.Decimal(18, 6)
+  recipientCount    Int                @map("recipient_count")
+  txHash            String             @map("tx_hash")
+  status            DistributionStatus @default(PENDING)
+  initiatedBy       String             @map("initiated_by")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  completedAt       DateTime?          @map("completed_at")
+  failedReason      String?            @map("failed_reason")
+  metadata          Json?
+
+  @@index([distributionType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([txHash])
+  @@map("distributions")
+}
+
+enum DistributionType {
+  LEADERBOARD
+  CREATOR
+}
+
+enum DistributionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}

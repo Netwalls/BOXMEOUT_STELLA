@@ -35,4 +35,7 @@ coverage/
 Thumbs.db
 
 # Prisma
-prisma/migrations/**/migration.sql
+prisma/dev.db
+prisma/test.db
+*.db
+*.sqlite

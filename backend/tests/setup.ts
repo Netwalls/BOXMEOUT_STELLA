@@ -1,6 +1,20 @@
 import { config } from 'dotenv';
 config(); // Load environment variables before anything else
 
+// Set test defaults if not provided
+if (!process.env.JWT_ACCESS_SECRET) {
+  process.env.JWT_ACCESS_SECRET = 'test-jwt-access-secret-min-32-chars-here-for-testing';
+}
+if (!process.env.JWT_REFRESH_SECRET) {
+  process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-min-32-chars-here-for-testing';
+}
+if (!process.env.ENCRYPTION_KEY) {
+  process.env.ENCRYPTION_KEY = 'test-encryption-key-32-chars!!';
+}
+if (!process.env.DATABASE_URL_TEST && !process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgresql://postgres:password@localhost:5435/boxmeout_test';
+}
+
 import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
 import { beforeAll, afterAll } from 'vitest';
@@ -53,6 +67,7 @@ async function cleanDatabase() {
     await prisma.referral.deleteMany();
     await prisma.refreshToken.deleteMany();
     await prisma.transaction.deleteMany();
+    await prisma.distribution.deleteMany();
     await prisma.auditLog.deleteMany();
     await prisma.user.deleteMany();
   } catch (error) {
