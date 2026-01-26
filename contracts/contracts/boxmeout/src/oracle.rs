@@ -64,13 +64,8 @@ impl OracleManager {
             panic!("Maximum oracle limit reached");
         }
 
-<<<<<<< HEAD
-        // Create storage key for this oracle
-        let oracle_key = Symbol::new(&env, "oracle");
-=======
         // Create storage key for this oracle using the oracle address
         let oracle_key = (Symbol::new(&env, "oracle"), oracle.clone());
->>>>>>> 0d438863f72917744879ae34526e16a766719043
 
         // Check if oracle already registered
         let is_registered: bool = env.storage().persistent().has(&oracle_key);
@@ -80,35 +75,20 @@ impl OracleManager {
         }
 
         // Store oracle metadata
-<<<<<<< HEAD
-        env.storage().persistent().set(&oracle_key, &oracle);
-
-        // Store oracle name
-        let oracle_name_key = Symbol::new(&env, "oracle_name");
-=======
         env.storage().persistent().set(&oracle_key, &true);
 
         // Store oracle name
         let oracle_name_key = (Symbol::new(&env, "oracle_name"), oracle.clone());
->>>>>>> 0d438863f72917744879ae34526e16a766719043
         env.storage()
             .persistent()
             .set(&oracle_name_key, &oracle_name);
 
         // Initialize oracle's accuracy score at 100%
-<<<<<<< HEAD
-        let accuracy_key = Symbol::new(&env, "oracle_accuracy");
-        env.storage().persistent().set(&accuracy_key, &100u32);
-
-        // Store registration timestamp
-        let timestamp_key = Symbol::new(&env, "oracle_timestamp");
-=======
         let accuracy_key = (Symbol::new(&env, "oracle_accuracy"), oracle.clone());
         env.storage().persistent().set(&accuracy_key, &100u32);
 
         // Store registration timestamp
         let timestamp_key = (Symbol::new(&env, "oracle_timestamp"), oracle.clone());
->>>>>>> 0d438863f72917744879ae34526e16a766719043
         env.storage()
             .persistent()
             .set(&timestamp_key, &env.ledger().timestamp());
@@ -169,7 +149,9 @@ impl OracleManager {
         }
 
         // 5. Store attestation
-        env.storage().persistent().set(&vote_key, &attestation_result);
+        env.storage()
+            .persistent()
+            .set(&vote_key, &attestation_result);
 
         // 6. Track oracle in market's voter list
         let voters_key = (Symbol::new(&env, "voters"), market_id.clone());
@@ -178,14 +160,19 @@ impl OracleManager {
             .persistent()
             .get(&voters_key)
             .unwrap_or(Vec::new(&env));
-        
+
         voters.push_back(oracle.clone());
         env.storage().persistent().set(&voters_key, &voters);
 
         // 7. Emit event
         env.events().publish(
             (Symbol::new(&env, "attestation_submitted"),),
-            (oracle, market_id, attestation_result, env.ledger().timestamp()),
+            (
+                oracle,
+                market_id,
+                attestation_result,
+                env.ledger().timestamp(),
+            ),
         );
     }
 

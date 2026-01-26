@@ -25,10 +25,7 @@ fn test_treasury_initialize() {
     let usdc_contract = Address::generate(&env);
     let factory = Address::generate(&env);
 
-<<<<<<< HEAD
-=======
     env.mock_all_auths();
->>>>>>> 0d438863f72917744879ae34526e16a766719043
     client.initialize(&admin, &usdc_contract, &factory);
 
     // Verify fee pools initialized to 0
@@ -51,10 +48,7 @@ fn test_deposit_fees() {
     let admin = Address::generate(&env);
     let usdc_contract = Address::generate(&env);
     let factory = Address::generate(&env);
-<<<<<<< HEAD
-=======
     env.mock_all_auths();
->>>>>>> 0d438863f72917744879ae34526e16a766719043
     client.initialize(&admin, &usdc_contract, &factory);
 
     // TODO: Implement when deposit_fees is ready
@@ -80,10 +74,7 @@ fn test_distribute_platform_rewards() {
 }
 
 #[test]
-<<<<<<< HEAD
-=======
 #[ignore]
->>>>>>> 0d438863f72917744879ae34526e16a766719043
 #[should_panic(expected = "unauthorized")]
 fn test_distribute_rewards_non_admin_fails() {
     // TODO: Implement when distribute_rewards is ready

@@ -4,7 +4,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/auth.types.js';
 import { MarketService } from '../services/market.service.js';
-import { MarketCategory } from '@prisma/client';
+import { MarketCategory, MarketStatus } from '@prisma/client';
 import { z } from 'zod';
 
 // Validation schema for market creation
@@ -238,6 +238,49 @@ export class MarketsController {
                     message: 'Failed to fetch market details',
                 },
             });
+        }
+    }
+
+    /**
+     * POST /api/markets/:id/pool - Create an AMM pool for a market
+     */
+    async createPool(req: AuthenticatedRequest, res: Response): Promise<void> {
+        try {
+            const marketId = req.params.id;
+            const amountSchema = z.object({ initial_liquidity: z.number().positive() });
+            const parsed = amountSchema.safeParse(req.body);
+            if (!parsed.success) {
+                res.status(400).json({
+                    success: false,
+                    error: { code: 'VALIDATION_ERROR', message: 'initial_liquidity must be > 0' },
+                });
+                return;
+            }
+
+            const market = await this.marketService.getMarketDetails(marketId);
+            if (!market) {
+                res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Market not found' } });
+                return;
+            }
+            if (market.status !== MarketStatus.OPEN) {
+                res.status(400).json({ success: false, error: { code: 'INVALID_STATE', message: 'Market must be OPEN' } });
+                return;
+            }
+
+            const result = await this.marketService.createPool(marketId, BigInt(Math.trunc(parsed.data.initial_liquidity * 1_000_000))); // assuming 6 decimals
+
+            res.status(201).json({ success: true, data: result });
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('duplicate pool')) {
+                res.status(409).json({ success: false, error: { code: 'DUPLICATE', message: 'Pool already exists' } });
+                return;
+            }
+            if (error instanceof Error && error.message.includes('not found')) {
+                res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Market not found' } });
+                return;
+            }
+            console.error('Create pool error:', error);
+            res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create pool' } });
         }
     }
 }

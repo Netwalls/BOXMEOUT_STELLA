@@ -4,6 +4,7 @@ import { PredictionRepository } from '../repositories/prediction.repository.js';
 import { MarketCategory, MarketStatus } from '@prisma/client';
 import { executeTransaction } from '../database/transaction.js';
 import { factoryService } from './blockchain/factory.js';
+import { ammService } from './blockchain/amm.js';
 
 export class MarketService {
   private marketRepository: MarketRepository;
@@ -12,6 +13,39 @@ export class MarketService {
   constructor() {
     this.marketRepository = new MarketRepository();
     this.predictionRepository = new PredictionRepository();
+  }
+
+  async createPool(marketId: string, initialLiquidity: bigint) {
+    // Validate market exists and is OPEN
+    const market = await this.marketRepository.findById(marketId);
+    if (!market) throw new Error('Market not found');
+    if (market.status !== MarketStatus.OPEN) throw new Error('Market is not open');
+
+    // If pool already initialized in DB by checking yesLiquidity/noLiquidity > 0
+    if (Number(market.yesLiquidity || 0) > 0 || Number(market.noLiquidity || 0) > 0) {
+      throw new Error('duplicate pool');
+    }
+
+    // Call blockchain AMM to create pool
+    const chain = await ammService.createPool({ marketId: market.contractAddress, initialLiquidity });
+
+    // Persist pool data and tx hash
+    await this.marketRepository.updateLiquidity(
+      marketId,
+      Number(chain.reserves.yes) / 1_000_000,
+      Number(chain.reserves.no) / 1_000_000
+    );
+    await this.marketRepository.setPoolTxHash(marketId, chain.txHash);
+
+    return {
+      marketId,
+      txHash: chain.txHash,
+      reserves: {
+        yes: Number(chain.reserves.yes) / 1_000_000,
+        no: Number(chain.reserves.no) / 1_000_000,
+      },
+      odds: chain.odds,
+    };
   }
 
   async createMarket(data: {

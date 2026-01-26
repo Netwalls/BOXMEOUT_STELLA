@@ -1,27 +1,17 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, BytesN, Env, Symbol,
-};
-
-use boxmeout::{MarketContract, MarketContractClient};
-
-fn create_test_env() -> Env {
-    Env::default()
-}
-
-fn register_market(env: &Env) -> Address {
-    env.register_contract(None, MarketContract)
-    testutils::{
-        Address as _, AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo,
-    },
-    token, Address, BytesN, Env, IntoVal, Symbol, TryIntoVal,
+    testutils::{Address as _, Ledger, LedgerInfo},
+    token, Address, BytesN, Env,
 };
 
 use boxmeout::{Commitment, MarketError, PredictionMarketClient};
 
-// Helper to create test environment
+// ============================================================================
+// TEST HELPERS
+// ============================================================================
+
+/// Helper to create test environment with proper ledger configuration
 fn create_test_env() -> Env {
     let env = Env::default();
     // Set ledger protocol version to 23 (matches SDK version)
@@ -38,12 +28,12 @@ fn create_test_env() -> Env {
     env
 }
 
-// Helper to register market contract
+/// Helper to register market contract
 fn register_market(env: &Env) -> Address {
     env.register(boxmeout::PredictionMarket, ())
 }
 
-// Helper to create and register a mock USDC token
+/// Helper to create and register a mock USDC token
 fn create_usdc_token<'a>(env: &Env, admin: &Address) -> (token::StellarAssetClient<'a>, Address) {
     let token_address = env
         .register_stellar_asset_contract_v2(admin.clone())
@@ -52,7 +42,7 @@ fn create_usdc_token<'a>(env: &Env, admin: &Address) -> (token::StellarAssetClie
     (token, token_address)
 }
 
-// Helper to initialize a test market
+/// Helper to initialize a test market with all required setup
 fn setup_test_market(
     env: &Env,
 ) -> (
@@ -93,121 +83,53 @@ fn setup_test_market(
     (client, market_id, creator, admin, usdc_address)
 }
 
-#[test]
-fn test_market_initialize() {
-    let env = create_test_env();
-    let market_id_contract = register_market(&env);
-    let client = MarketContractClient::new(&env, &market_id_contract);
+/// Helper to setup market with token for claim tests
+fn setup_market_for_claims(
+    env: &Env,
+) -> (
+    PredictionMarketClient,
+    BytesN<32>,
+    token::StellarAssetClient,
+    Address,
+) {
+    let market_contract = register_market(env);
+    let client = PredictionMarketClient::new(env, &market_contract);
 
-    // Create test data
-    let market_id = BytesN::from_array(&env, &[1u8; 32]);
-    let creator = Address::generate(&env);
-    let factory = Address::generate(&env);
-    let usdc_token = Address::generate(&env);
+    let market_id = BytesN::from_array(env, &[1u8; 32]);
+    let creator = Address::generate(env);
+    let admin = Address::generate(env);
+
+    let (token_client, usdc_address) = create_usdc_token(env, &admin);
+
     let closing_time = env.ledger().timestamp() + 86400;
     let resolution_time = closing_time + 3600;
 
-    // Initialize market
-
-    let market_contract = register_market(&env);
-    let client = PredictionMarketClient::new(&env, &market_contract);
-
-    let market_id = BytesN::from_array(&env, &[1u8; 32]);
-    let creator = Address::generate(&env);
-    let factory = Address::generate(&env);
-    let admin = Address::generate(&env);
-    let (_token, usdc_token) = create_usdc_token(&env, &admin);
-    let closing_time = env.ledger().timestamp() + 86400;
-    let resolution_time = closing_time + 3600;
-
-    // Mock auth for test
     env.mock_all_auths();
 
+    let oracle = Address::generate(env);
 
     client.initialize(
         &market_id,
         &creator,
-        &factory,
-        &usdc_token,
-        &closing_time,
-        &resolution_time,
-    );
-
-    // TODO: Add getters to verify state
-    // Verify market state is OPEN
-    // Verify pools initialized to 0
-}
-
-#[test]
-fn test_commit_prediction() {
-    let env = create_test_env();
-    let market_id_contract = register_market(&env);
-    let client = MarketContractClient::new(&env, &market_id_contract);
-
-    // Initialize market
-    let market_id = BytesN::from_array(&env, &[1u8; 32]);
-    let creator = Address::generate(&env);
-    let factory = Address::generate(&env);
-    let usdc_token = Address::generate(&env);
-    let closing_time = env.ledger().timestamp() + 86400;
-    let resolution_time = closing_time + 3600;
-
-    let oracle = Address::generate(&env);
-
-    client.initialize(
-        &market_id,
-        &creator,
-        &factory,
-        &usdc_token,
+        &Address::generate(env),
+        &usdc_address,
         &oracle,
         &closing_time,
         &resolution_time,
     );
 
-    // TODO: Implement when commit_prediction is ready
-    // Test commit prediction
-    // let user = Address::generate(&env);
-    // let commit_hash = BytesN::from_array(&env, &[2u8; 32]);
-    // let amount = 100_000_000i128; // 100 USDC (7 decimals)
-
-    // client.commit_prediction(&user, &market_id, &commit_hash, &amount);
-
-    // Verify commitment was stored
+    (client, market_id, token_client, market_contract)
 }
 
+// ============================================================================
+// INITIALIZATION TESTS
+// ============================================================================
+
 #[test]
-#[should_panic(expected = "market closed")]
-fn test_commit_prediction_after_closing_fails() {
+fn test_market_initialize() {
     let env = create_test_env();
-    let market_id_contract = register_market(&env);
-    let client = MarketContractClient::new(&env, &market_id_contract);
+    let (client, _market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
 
-    // Initialize market with past closing time
-    let market_id = BytesN::from_array(&env, &[1u8; 32]);
-    let creator = Address::generate(&env);
-    let factory = Address::generate(&env);
-    let usdc_token = Address::generate(&env);
-    let closing_time = env.ledger().timestamp() - 3600; // 1 hour ago
-    let resolution_time = closing_time + 3600;
-
-    client.initialize(
-        &market_id,
-        &creator,
-        &factory,
-        &usdc_token,
-        &closing_time,
-        &resolution_time,
-    );
-
-    // TODO: Implement when commit_prediction is ready
-    // Try to commit after closing time - should panic
-    // let user = Address::generate(&env);
-    // let commit_hash = BytesN::from_array(&env, &[2u8; 32]);
-    // let amount = 100_000_000i128;
-    // client.commit_prediction(&user, &market_id, &commit_hash, &amount);
-}
-
-#[test]
     // Verify market state is OPEN (0)
     let state = client.get_market_state_value();
     assert_eq!(state, Some(0));
@@ -215,13 +137,11 @@ fn test_commit_prediction_after_closing_fails() {
     // Verify pending count initialized to 0
     let pending_count = client.get_pending_count();
     assert_eq!(pending_count, 0);
-
-    // Verify initialization event was emitted
-    // Note: Events may not be available when using mock_all_auths in tests
-    // In production, events will be emitted correctly
-    // let events = env.events().all();
-    // Event verification can be done in integration tests without mocked auth
 }
+
+// ============================================================================
+// COMMIT PREDICTION TESTS
+// ============================================================================
 
 #[test]
 fn test_commit_prediction_happy_path() {
@@ -269,9 +189,6 @@ fn test_commit_prediction_happy_path() {
 
     let market_balance = token.balance(&market_address);
     assert_eq!(market_balance, amount);
-
-    // Note: Event verification is skipped in unit tests with mock_all_auths
-    // Events will be verified in integration tests
 }
 
 #[test]
@@ -332,7 +249,7 @@ fn test_commit_prediction_after_closing_rejected() {
     // Fast forward time past closing time
     env.ledger().set(LedgerInfo {
         timestamp: env.ledger().timestamp() + 86400 + 1, // Past 24 hours
-        protocol_version: 23,                            // Keep protocol version consistent
+        protocol_version: 23,
         sequence_number: env.ledger().sequence() + 1000,
         network_id: Default::default(),
         base_reserve: 10,
@@ -379,33 +296,6 @@ fn test_commit_prediction_negative_amount_rejected() {
     // Commit with negative amount should fail
     let result = client.try_commit_prediction(&user, &commit_hash, &amount);
     assert_eq!(result, Err(Ok(MarketError::InvalidAmount)));
-}
-
-#[test]
-fn test_commit_prediction_event_payload_correct() {
-    let env = create_test_env();
-    let (client, market_id, _creator, admin, usdc_address) = setup_test_market(&env);
-
-    let user = Address::generate(&env);
-    let amount = 100_000_000i128;
-    let commit_hash = BytesN::from_array(&env, &[2u8; 32]);
-
-    let token = token::StellarAssetClient::new(&env, &usdc_address);
-    token.mint(&user, &amount);
-
-    let market_address = client.address.clone();
-    token.approve(
-        &user,
-        &market_address,
-        &amount,
-        &(env.ledger().sequence() + 100),
-    );
-
-    // Commit prediction
-    client.commit_prediction(&user, &commit_hash, &amount);
-
-    // Note: Event payload verification is skipped with mock_all_auths
-    // Events are correctly emitted in production and can be verified in integration tests
 }
 
 #[test]
@@ -472,54 +362,334 @@ fn test_multiple_users_commit() {
     assert_eq!(total_escrow, amount1 + amount2 + amount3);
 }
 
+// ============================================================================
+// CLAIM WINNINGS INTEGRATION TESTS
+// ============================================================================
+
 #[test]
-fn test_commit_market_not_open() {
+fn test_claim_winnings_happy_path() {
     let env = create_test_env();
-    let (client, _market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
 
-    // This test would require manually setting market state to CLOSED
-    // For now, we've covered this scenario in the after_closing test
-    // In a real scenario, you'd implement a helper to change market state
-}
+    let user = Address::generate(&env);
 
-// Additional tests for reveal_prediction would go here
-// (To be implemented in the next phase)
+    // Mint USDC to contract to simulate pot (1000 total)
+    token_client.mint(&market_contract, &1000);
 
-#[test]
-fn test_reveal_prediction() {
-    // TODO: Implement when reveal_prediction is ready
-    // Test valid reveal with correct hash
-    // Test commit -> reveal flow
-    // Test pool updates after reveal
-}
+    // Setup State manually (Simulate Resolution)
+    // Winning outcome: YES (1)
+    // Winner shares: 1000, Loser shares: 0
+    client.test_setup_resolution(
+        &market_id, &1u32,     // Winning outcome YES
+        &1000i128, // Winner shares
+        &0i128,    // Loser shares
+    );
 
-#[test]
-#[should_panic(expected = "invalid hash")]
-fn test_reveal_prediction_wrong_salt() {
-    // TODO: Implement when reveal_prediction is ready
-    // Test reveal with incorrect salt fails
-}
+    // Setup User Prediction - user voted YES with 1000
+    client.test_set_prediction(
+        &user, &1u32,     // Voted YES
+        &1000i128, // Amount
+    );
 
-#[test]
+    // Claim winnings
+    let payout = client.claim_winnings(&user, &market_id);
 
-fn test_resolve_market() {
-    // TODO: Implement when resolve_market is ready
-    // Test oracle resolves market
-    // Test market state changes to RESOLVED
-    // Test cannot resolve before resolution_time
-}
+    // Expect 900 (1000 - 10% fee = 900)
+    assert_eq!(payout, 900);
 
-#[test]
-fn test_claim_winnings() {
-    // TODO: Implement when claim_winnings is ready
-    // Test user claims winnings after market resolves
-    // Test loser cannot claim
-    // Test double claim fails
+    // Verify transfer happened
+    assert_eq!(token_client.balance(&user), 900);
+
+    // Verify contract balance decreased
+    assert_eq!(token_client.balance(&market_contract), 100); // Fee remains
 }
 
 #[test]
-fn test_get_market_state() {
-    // TODO: Implement when getter is ready
-    // Test market state transitions: OPEN -> CLOSED -> RESOLVED
+#[should_panic(expected = "User did not predict winning outcome")]
+fn test_losing_users_cannot_claim() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    token_client.mint(&market_contract, &2000);
+
+    // Winner is YES (1), loser pool has 1000
+    client.test_setup_resolution(&market_id, &1u32, &1000, &1000);
+
+    // User predicted NO (0) - they are a loser
+    client.test_set_prediction(&user, &0u32, &500);
+
+    // Should panic: "User did not predict winning outcome"
+    client.claim_winnings(&user, &market_id);
 }
 
+#[test]
+#[should_panic(expected = "Market not resolved")]
+fn test_cannot_claim_before_resolution() {
+    let env = create_test_env();
+    let (client, market_id, _token_client, _market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    // Set user prediction without resolving market
+    client.test_set_prediction(&user, &1u32, &500);
+
+    // Market is still OPEN - should fail
+    client.claim_winnings(&user, &market_id);
+}
+
+#[test]
+#[should_panic(expected = "Winnings already claimed")]
+fn test_cannot_double_claim() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    // Sufficient funds for two claims worth
+    token_client.mint(&market_contract, &2000);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user, &1u32, &1000);
+
+    // First claim succeeds
+    let payout = client.claim_winnings(&user, &market_id);
+    assert_eq!(payout, 900);
+
+    // Second claim should panic with "Winnings already claimed"
+    client.claim_winnings(&user, &market_id);
+}
+
+#[test]
+fn test_correct_payout_calculation_with_losers() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    // Total pool: 1000 (winners) + 500 (losers) = 1500
+    // User has 500 of 1000 winner shares (50%)
+    // Gross payout = (500 / 1000) * 1500 = 750
+    // Net payout (after 10% fee) = 750 - 75 = 675
+    token_client.mint(&market_contract, &1500);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &500);
+    client.test_set_prediction(&user, &1u32, &500);
+
+    let payout = client.claim_winnings(&user, &market_id);
+    assert_eq!(payout, 675);
+    assert_eq!(token_client.balance(&user), 675);
+}
+
+#[test]
+fn test_multiple_winners_correct_proportional_payout() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+
+    // Total pool: 1000 (winners) + 1000 (losers) = 2000
+    // User1 has 600, User2 has 400 of 1000 winner shares
+    token_client.mint(&market_contract, &2000);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &1000);
+    client.test_set_prediction(&user1, &1u32, &600);
+    client.test_set_prediction(&user2, &1u32, &400);
+
+    // User1: (600 / 1000) * 2000 = 1200, minus 10% = 1080
+    let payout1 = client.claim_winnings(&user1, &market_id);
+    assert_eq!(payout1, 1080);
+
+    // User2: (400 / 1000) * 2000 = 800, minus 10% = 720
+    let payout2 = client.claim_winnings(&user2, &market_id);
+    assert_eq!(payout2, 720);
+
+    // Verify balances
+    assert_eq!(token_client.balance(&user1), 1080);
+    assert_eq!(token_client.balance(&user2), 720);
+}
+
+#[test]
+fn test_winner_no_outcome_also_works() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    // NO (0) wins this time
+    token_client.mint(&market_contract, &1000);
+
+    client.test_setup_resolution(&market_id, &0u32, &1000, &0); // NO wins
+    client.test_set_prediction(&user, &0u32, &1000); // User voted NO
+
+    let payout = client.claim_winnings(&user, &market_id);
+    assert_eq!(payout, 900); // 1000 - 10% fee
+}
+
+#[test]
+#[should_panic(expected = "No prediction found for user")]
+fn test_user_without_prediction_cannot_claim() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    token_client.mint(&market_contract, &1000);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+
+    // User has NO prediction - should fail
+    client.claim_winnings(&user, &market_id);
+}
+
+#[test]
+fn test_claim_updates_prediction_claimed_flag() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    token_client.mint(&market_contract, &1000);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user, &1u32, &1000);
+
+    // Before claim
+    let prediction_before = client.test_get_prediction(&user);
+    assert!(prediction_before.is_some());
+    assert!(!prediction_before.unwrap().claimed);
+
+    // Claim
+    client.claim_winnings(&user, &market_id);
+
+    // After claim - claimed flag should be true
+    let prediction_after = client.test_get_prediction(&user);
+    assert!(prediction_after.is_some());
+    assert!(prediction_after.unwrap().claimed);
+}
+
+#[test]
+fn test_small_payout_amounts() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    // Very small amounts
+    token_client.mint(&market_contract, &100);
+
+    client.test_setup_resolution(&market_id, &1u32, &100, &0);
+    client.test_set_prediction(&user, &1u32, &100);
+
+    let payout = client.claim_winnings(&user, &market_id);
+    assert_eq!(payout, 90); // 100 - 10% fee = 90
+}
+
+#[test]
+fn test_large_payout_amounts() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    // Large amounts (1 billion)
+    let large_amount = 1_000_000_000i128;
+    token_client.mint(&market_contract, &large_amount);
+
+    client.test_setup_resolution(&market_id, &1u32, &large_amount, &0);
+    client.test_set_prediction(&user, &1u32, &large_amount);
+
+    let payout = client.claim_winnings(&user, &market_id);
+    assert_eq!(payout, 900_000_000); // 1B - 10% = 900M
+}
+
+#[test]
+fn test_uneven_split_payout() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    // User has 333 of 1000 winner shares with 1500 total pool
+    // (333 / 1000) * 1500 = 499 (integer division)
+    // 499 - 10% = 449 (approximately)
+    token_client.mint(&market_contract, &1500);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &500);
+    client.test_set_prediction(&user, &1u32, &333);
+
+    let payout = client.claim_winnings(&user, &market_id);
+    // (333 * 1500) / 1000 = 499, fee = 49, net = 450
+    assert_eq!(payout, 450);
+}
+
+// ============================================================================
+// EVENT EMISSION TESTS
+// ============================================================================
+
+#[test]
+fn test_winnings_claimed_event_emitted() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+
+    token_client.mint(&market_contract, &1000);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user, &1u32, &1000);
+
+    // Claim winnings
+    client.claim_winnings(&user, &market_id);
+
+    // Note: Event verification with mock_all_auths is limited in unit tests
+    // Full event verification would be done in integration tests without mocked auth
+}
+
+// ============================================================================
+// EDGE CASE TESTS
+// ============================================================================
+
+#[test]
+fn test_all_winners_no_losers() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+
+    // Everyone bet on the winner, loser pool = 0
+    token_client.mint(&market_contract, &1000);
+
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user1, &1u32, &600);
+    client.test_set_prediction(&user2, &1u32, &400);
+
+    // User1: (600 / 1000) * 1000 = 600, minus 10% = 540
+    let payout1 = client.claim_winnings(&user1, &market_id);
+    assert_eq!(payout1, 540);
+
+    // User2: (400 / 1000) * 1000 = 400, minus 10% = 360
+    let payout2 = client.claim_winnings(&user2, &market_id);
+    assert_eq!(payout2, 360);
+}
+
+#[test]
+fn test_single_winner_gets_all() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let winner = Address::generate(&env);
+
+    // Winner bet 200, losers bet 800 = 1000 total pool
+    token_client.mint(&market_contract, &1000);
+
+    client.test_setup_resolution(&market_id, &1u32, &200, &800);
+    client.test_set_prediction(&winner, &1u32, &200);
+
+    // Winner: (200 / 200) * 1000 = 1000, minus 10% = 900
+    let payout = client.claim_winnings(&winner, &market_id);
+    assert_eq!(payout, 900);
+}

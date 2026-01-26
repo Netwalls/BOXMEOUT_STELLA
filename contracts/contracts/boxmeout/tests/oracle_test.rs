@@ -24,7 +24,6 @@ fn test_oracle_initialize() {
     let admin = Address::generate(&env);
     let required_consensus = 2u32; // 2 of 3 oracles
 
-
     env.mock_all_auths();
     client.initialize(&admin, &required_consensus);
 
@@ -206,13 +205,16 @@ fn test_check_consensus_not_reached() {
 }
 
 #[test]
-
 #[ignore]
 #[should_panic(expected = "consensus not reached")]
 fn test_resolve_market_without_consensus() {
     // TODO: Implement when resolve_market is ready
     // Only 1 oracle submitted
     // Cannot resolve yet
+    // Cannot resolve yet
+}
+
+#[test]
 fn test_check_consensus_tie_handling() {
     let env = create_test_env();
     env.mock_all_auths();
