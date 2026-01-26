@@ -121,20 +121,61 @@ impl Treasury {
         todo!("See distribute leaderboard rewards TODO above")
     }
 
-    /// Distribute rewards to market creators
-    ///
-    /// TODO: Distribute Creator Rewards
-    /// - Require admin authentication
-    /// - Query creator_fees pool
-    /// - For each market that was successfully resolved:
-    ///   - Calculate creator share (0.5% - 1% of trading volume)
-    ///   - Transfer USDC to market creator
-    /// - Record distribution with creator address and amount
-    /// - Handle transfer failures: log and continue
-    /// - Emit CreatorRewardDistributed(creator, market_id, amount, timestamp)
-    /// - Reset creator_fees counter after distribution
-    pub fn distribute_creator_rewards(env: Env) {
-        todo!("See distribute creator rewards TODO above")
+    pub fn distribute_creator_rewards(
+        env: Env,
+        admin: Address,
+        distributions: soroban_sdk::Vec<(Address, i128)>,
+    ) {
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, ADMIN_KEY))
+            .expect("Admin not set");
+
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can distribute rewards");
+        }
+
+        let creator_fees: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, CREATOR_FEES_KEY))
+            .unwrap_or(0);
+
+        let mut total_amount = 0i128;
+        for dist in distributions.iter() {
+            total_amount += dist.1;
+        }
+
+        if total_amount > creator_fees {
+            panic!("Insufficient balance in creator pool");
+        }
+
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not set");
+
+        let token_client = soroban_sdk::token::Client::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+
+        for dist in distributions.iter() {
+            let (creator, amount) = dist;
+            token_client.transfer(&contract_address, &creator, &amount);
+        }
+
+        let new_balance = creator_fees - total_amount;
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, CREATOR_FEES_KEY), &new_balance);
+
+        env.events().publish(
+            (Symbol::new(&env, "creator_rewards_distributed"),),
+            (total_amount, distributions.len()),
+        );
     }
 
     /// Get treasury balance (total USDC held)
