@@ -15,12 +15,14 @@ pub use amm::*;
 // mod factory;
 // pub use factory::*;
 
-// Uncomment below to build other contracts:
-// mod market;
-// pub use market::*;
+// MARKET CONTRACT (for prediction market logic)
+mod market;
+pub use market::*;
 
+// TREASURY CONTRACT
 // mod treasury;
 // pub use treasury::*;
 
-// mod oracle;
-// pub use oracle::*;
+// ORACLE CONTRACT (required by market for resolution)
+mod oracle;
+pub use oracle::*;

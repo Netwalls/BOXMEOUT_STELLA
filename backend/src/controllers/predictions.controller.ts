@@ -1,33 +1,120 @@
 // backend/src/controllers/predictions.controller.ts - Predictions Controller
 // Handles prediction/betting requests
 
-/*
-TODO: Predictions Controller - Request Handling Layer
-- Import PredictionService, MarketService
-- Validate user authentication for all endpoints
-- Extract and validate request data
-- Call appropriate service methods
-- Format and return responses
-*/
+import { Request, Response } from 'express';
+import { PredictionService } from '../services/prediction.service.js';
 
-/*
-TODO: POST /api/markets/:market_id/predict - Commit Prediction Controller
-- Require authentication
-- Extract: market_id, amount_usdc, outcome (from body)
-- Validate: market exists, status OPEN, amount > 0, outcome in [YES, NO]
-- Validate: user has sufficient balance
-- Call: PredictionService.commitPrediction(user_id, market_id, amount_usdc, outcome)
-- Return: commitment_id, salt (secure transmission to user)
-*/
+class PredictionsController {
+  private predictionService: PredictionService;
 
-/*
-TODO: POST /api/predictions/:commitment_id/reveal - Reveal Prediction Controller
-- Require authentication
-- Extract: commitment_id, salt, prediction from body
-- Validate: commitment exists, not already revealed
-- Call: PredictionService.revealPrediction(user_id, commitment_id, salt, prediction)
-- Return: success or validation error
-*/
+  constructor() {
+    this.predictionService = new PredictionService();
+  }
+
+  /**
+   * POST /api/markets/:marketId/commit - Commit Prediction (Phase 1)
+   * Server generates and stores salt securely
+   */
+  async commitPrediction(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const { marketId } = req.params;
+      const { predictedOutcome, amountUsdc } = req.body;
+
+      // Validate input
+      if (predictedOutcome === undefined || predictedOutcome === null) {
+        res.status(400).json({ error: 'predictedOutcome is required' });
+        return;
+      }
+
+      if (!amountUsdc || amountUsdc <= 0) {
+        res.status(400).json({ error: 'amountUsdc must be greater than 0' });
+        return;
+      }
+
+      if (![0, 1].includes(predictedOutcome)) {
+        res.status(400).json({ error: 'predictedOutcome must be 0 (NO) or 1 (YES)' });
+        return;
+      }
+
+      const result = await this.predictionService.commitPrediction(
+        userId,
+        marketId,
+        predictedOutcome,
+        amountUsdc
+      );
+
+      res.status(201).json({
+        success: true,
+        data: {
+          predictionId: result.id,
+          commitmentHash: result.commitmentHash,
+          transactionHash: result.transactionHash,
+          amountUsdc: result.amountUsdc,
+          status: result.status,
+          createdAt: result.createdAt,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error committing prediction:', error);
+      res.status(error.message.includes('not found') ? 404 : 400).json({
+        error: error.message || 'Failed to commit prediction',
+      });
+    }
+  }
+
+  /**
+   * POST /api/markets/:marketId/reveal - Reveal Prediction (Phase 2)
+   * Server provides stored salt for blockchain verification
+   */
+  async revealPrediction(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const { marketId } = req.params;
+      const { predictionId } = req.body;
+
+      // Validate input
+      if (!predictionId) {
+        res.status(400).json({ error: 'predictionId is required' });
+        return;
+      }
+
+      const result = await this.predictionService.revealPrediction(
+        userId,
+        predictionId,
+        marketId
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          predictionId: result.id,
+          predictedOutcome: result.predictedOutcome,
+          revealTxHash: result.revealTxHash,
+          status: result.status,
+          revealedAt: result.revealedAt,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error revealing prediction:', error);
+      res.status(error.message.includes('not found') ? 404 : 400).json({
+        error: error.message || 'Failed to reveal prediction',
+      });
+    }
+  }
+}
+
+export const predictionsController = new PredictionsController();
 
 /*
 TODO: POST /api/markets/:market_id/buy-shares - Buy Shares Controller

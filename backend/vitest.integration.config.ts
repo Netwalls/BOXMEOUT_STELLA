@@ -1,4 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { config } from 'dotenv';
+
+// Load environment variables for tests
+config();
 
 export default defineConfig({
   test: {
@@ -15,6 +19,7 @@ export default defineConfig({
     },
     env: {
       NODE_ENV: 'test',
+      DATABASE_URL_TEST: process.env.DATABASE_URL_TEST || process.env.DATABASE_URL,
     },
   },
 });

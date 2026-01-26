@@ -115,6 +115,13 @@ export class MarketRepository extends BaseRepository<Market> {
     });
   }
 
+  async setPoolTxHash(marketId: string, txHash: string): Promise<Market> {
+    return await this.prisma.market.update({
+      where: { id: marketId },
+      data: { poolTxHash: txHash },
+    });
+  }
+
   async addFeesCollected(marketId: string, feeAmount: number): Promise<Market> {
     return await this.prisma.market.update({
       where: { id: marketId },
