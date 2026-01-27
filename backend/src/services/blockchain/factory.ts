@@ -3,7 +3,7 @@
 
 import {
   Contract,
-  SorobanRpc,
+  rpc,
   TransactionBuilder,
   Networks,
   BASE_FEE,
@@ -11,6 +11,7 @@ import {
   nativeToScVal,
   scValToNative,
   xdr,
+  Address,
 } from '@stellar/stellar-sdk';
 
 interface CreateMarketParams {
@@ -29,196 +30,184 @@ interface CreateMarketResult {
 }
 
 export class FactoryService {
-  private rpcServer: SorobanRpc.Server;
-  private factoryContractId: string;
-  private networkPassphrase: string;
-  private adminKeypair: Keypair;
+  private readonly rpcServer: rpc.Server;
+  private readonly factoryContractId: string;
+  private readonly networkPassphrase: string;
+  private readonly adminKeypair: Keypair;
 
   constructor() {
-    const rpcUrl = process.env.STELLAR_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-    const network = process.env.STELLAR_NETWORK || 'testnet';
-    
-    this.rpcServer = new SorobanRpc.Server(rpcUrl, { allowHttp: rpcUrl.includes('localhost') });
-    this.factoryContractId = process.env.FACTORY_CONTRACT_ADDRESS || '';
-    this.networkPassphrase = network === 'mainnet' 
-      ? Networks.PUBLIC 
-      : Networks.TESTNET;
-    
-    // Admin keypair for signing contract calls
+    const rpcUrl =
+      process.env.STELLAR_SOROBAN_RPC_URL ??
+      'https://soroban-testnet.stellar.org';
+
+    const network = process.env.STELLAR_NETWORK ?? 'testnet';
+
+    this.rpcServer = new rpc.Server(rpcUrl, {
+      allowHttp: rpcUrl.includes('localhost'),
+    });
+
+    this.factoryContractId =
+      process.env.FACTORY_CONTRACT_ADDRESS ?? '';
+
+    this.networkPassphrase =
+      network === 'mainnet'
+        ? Networks.PUBLIC
+        : Networks.TESTNET;
+
     const adminSecret = process.env.ADMIN_WALLET_SECRET;
     if (!adminSecret) {
       throw new Error('ADMIN_WALLET_SECRET not configured');
     }
+
     this.adminKeypair = Keypair.fromSecret(adminSecret);
   }
 
   /**
    * Call Factory.create_market() contract function
-   * @param params - Market creation parameters
-   * @returns Market ID, transaction hash, and contract address
    */
-  async createMarket(params: CreateMarketParams): Promise<CreateMarketResult> {
+  async createMarket(
+    params: CreateMarketParams,
+  ): Promise<CreateMarketResult> {
     if (!this.factoryContractId) {
       throw new Error('Factory contract address not configured');
     }
 
     try {
-      // Convert timestamps to Unix time (seconds)
-      const closingTimeUnix = Math.floor(params.closingTime.getTime() / 1000);
-      const resolutionTimeUnix = Math.floor(params.resolutionTime.getTime() / 1000);
+      const closingTimeUnix = Math.floor(
+        params.closingTime.getTime() / 1000,
+      );
 
-      // Build contract arguments
+      const resolutionTimeUnix = Math.floor(
+        params.resolutionTime.getTime() / 1000,
+      );
+
       const contract = new Contract(this.factoryContractId);
-      
-      // Get source account
-      const sourceAccount = await this.rpcServer.getAccount(this.adminKeypair.publicKey());
+      const sourceAccount = await this.rpcServer.getAccount(
+        this.adminKeypair.publicKey(),
+      );
 
-      // Build the contract call operation
-      const builtTransaction = new TransactionBuilder(sourceAccount, {
+      const tx = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
         networkPassphrase: this.networkPassphrase,
       })
         .addOperation(
           contract.call(
             'create_market',
-            nativeToScVal(params.creator, { type: 'address' }),
-            nativeToScVal(params.title, { type: 'symbol' }),
-            nativeToScVal(params.description, { type: 'symbol' }),
-            nativeToScVal(params.category, { type: 'symbol' }),
+            new Address(params.creator).toScVal(),
+            nativeToScVal(params.title, { type: 'string' }),
+            nativeToScVal(params.description, { type: 'string' }),
+            nativeToScVal(params.category, { type: 'string' }),
             nativeToScVal(closingTimeUnix, { type: 'u64' }),
-            nativeToScVal(resolutionTimeUnix, { type: 'u64' })
-          )
+            nativeToScVal(resolutionTimeUnix, { type: 'u64' }),
+          ),
         )
         .setTimeout(30)
         .build();
 
-      // Prepare transaction for the network
-      const preparedTransaction = await this.rpcServer.prepareTransaction(builtTransaction);
+      const preparedTx =
+        await this.rpcServer.prepareTransaction(tx);
 
-      // Sign transaction
-      preparedTransaction.sign(this.adminKeypair);
+      preparedTx.sign(this.adminKeypair);
 
-      // Submit transaction
-      const response = await this.rpcServer.sendTransaction(preparedTransaction);
+      const sendResponse =
+        await this.rpcServer.sendTransaction(preparedTx);
 
-      if (response.status === 'PENDING') {
-        // Wait for transaction confirmation
-        const txHash = response.hash;
-        const result = await this.waitForTransaction(txHash);
-        
-        if (result.status === 'SUCCESS') {
-          // Extract market_id from contract return value
-          const returnValue = result.returnValue;
-          const marketId = this.extractMarketId(returnValue);
-          
-          return {
-            marketId,
-            txHash,
-            contractAddress: this.factoryContractId,
-          };
-        } else {
-          throw new Error(`Transaction failed: ${result.status}`);
-        }
-      } else if (response.status === 'ERROR') {
-        throw new Error(`Transaction submission error: ${response.errorResult}`);
-      } else {
-        throw new Error(`Unexpected response status: ${response.status}`);
+      if (sendResponse.status !== 'PENDING') {
+        throw new Error(
+          `Transaction submission failed: ${sendResponse.status}`,
+        );
       }
+
+      const txResult = await this.waitForTransaction(
+        sendResponse.hash,
+      );
+
+      if (txResult.status !== 'SUCCESS') {
+        throw new Error('Transaction execution failed');
+      }
+
+      const marketId = this.extractMarketId(
+        txResult.returnValue,
+      );
+
+      return {
+        marketId,
+        txHash: sendResponse.hash,
+        contractAddress: this.factoryContractId,
+      };
     } catch (error) {
-      console.error('Factory.create_market() error:', error);
+      console.error(
+        'Factory.create_market() error:',
+        error,
+      );
       throw new Error(
-        `Failed to create market on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to create market: ${
+          error instanceof Error
+            ? error.message
+            : 'Unknown error'
+        }`,
       );
     }
   }
 
   /**
-   * Wait for transaction to be confirmed
-   * @param txHash - Transaction hash
-   * @returns Transaction result
+   * Wait for a transaction to reach finality
    */
-  private async waitForTransaction(txHash: string, maxRetries: number = 10): Promise<any> {
-    let retries = 0;
-    
-    while (retries < maxRetries) {
-      try {
-        const txResponse = await this.rpcServer.getTransaction(txHash);
-        
-        if (txResponse.status === 'NOT_FOUND') {
-          // Transaction not yet processed, wait and retry
-          await this.sleep(2000);
-          retries++;
-          continue;
-        }
-        
-        if (txResponse.status === 'SUCCESS') {
-          return txResponse;
-        }
-        
-        if (txResponse.status === 'FAILED') {
-          throw new Error('Transaction failed on blockchain');
-        }
-        
-        // Other status, wait and retry
-        await this.sleep(2000);
-        retries++;
-      } catch (error) {
-        if (retries >= maxRetries - 1) {
-          throw error;
-        }
-        await this.sleep(2000);
-        retries++;
+  private async waitForTransaction(
+    txHash: string,
+    maxRetries = 10,
+  ) {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const tx = await this.rpcServer.getTransaction(txHash);
+
+      if (tx.status === 'SUCCESS') {
+        return tx;
       }
+
+      if (tx.status === 'FAILED') {
+        throw new Error('Transaction failed on-chain');
+      }
+
+      await this.sleep(2000);
     }
-    
+
     throw new Error('Transaction confirmation timeout');
   }
 
   /**
-   * Extract market_id from contract return value
-   * @param returnValue - Contract return value
-   * @returns Market ID as hex string
+   * Extract BytesN<32> market_id from return value
    */
-  private extractMarketId(returnValue: xdr.ScVal | undefined): string {
+  private extractMarketId(
+    returnValue: xdr.ScVal | undefined,
+  ): string {
     if (!returnValue) {
       throw new Error('No return value from contract');
     }
-    
-    try {
-      // The contract returns BytesN<32>, convert to hex string
-      const bytes = scValToNative(returnValue);
-      
-      if (bytes instanceof Buffer) {
-        return bytes.toString('hex');
-      } else if (typeof bytes === 'string') {
-        return bytes;
-      } else {
-        throw new Error('Unexpected return value type');
-      }
-    } catch (error) {
-      console.error('Error extracting market_id:', error);
-      throw new Error('Failed to extract market ID from contract response');
+
+    const native = scValToNative(returnValue);
+
+    if (native instanceof Buffer) {
+      return native.toString('hex');
     }
+
+    if (typeof native === 'string') {
+      return native;
+    }
+
+    throw new Error('Unexpected return value type');
   }
 
   /**
-   * Sleep utility
-   * @param ms - Milliseconds to sleep
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Get market count from factory contract
-   * @returns Total number of markets created
+   * Read-only call: get market count
    */
   async getMarketCount(): Promise<number> {
     try {
       const contract = new Contract(this.factoryContractId);
-      const sourceAccount = await this.rpcServer.getAccount(this.adminKeypair.publicKey());
+      const sourceAccount = await this.rpcServer.getAccount(
+        this.adminKeypair.publicKey(),
+      );
 
-      const builtTransaction = new TransactionBuilder(sourceAccount, {
+      const tx = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
         networkPassphrase: this.networkPassphrase,
       })
@@ -226,18 +215,33 @@ export class FactoryService {
         .setTimeout(30)
         .build();
 
-      const simulationResponse = await this.rpcServer.simulateTransaction(builtTransaction);
-      
-      if (SorobanRpc.Api.isSimulationSuccess(simulationResponse)) {
-        const result = simulationResponse.result?.retval;
-        return scValToNative(result) as number;
+      const simulation =
+        await this.rpcServer.simulateTransaction(tx);
+
+      if (this.isSimulationSuccess(simulation)) {
+        return scValToNative(
+          simulation.result.retval,
+        ) as number;
       }
-      
-      throw new Error('Failed to get market count');
+
+      throw new Error('Simulation failed');
     } catch (error) {
-      console.error('Error getting market count:', error);
+      console.error('getMarketCount error:', error);
       return 0;
     }
+  }
+
+  /**
+   * Type guard for successful simulation
+   */
+  private isSimulationSuccess(
+    response: any,
+  ): response is { result: any } {
+    return 'result' in response;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 

@@ -1,26 +1,50 @@
 import { config } from 'dotenv';
-config(); // Load environment variables before anything else
-
 import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
-import { beforeAll, afterAll } from 'vitest';
+import { beforeAll, afterAll, beforeEach, vi } from 'vitest';
 
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL_TEST || process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/boxmeout_test',
-    },
-  },
+config(); // Load environment variables before anything else
+
+// Set test environment
+process.env.NODE_ENV = 'test';
+
+// Mock console methods to keep test output clean for middleware tests
+beforeEach(() => {
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
+// Database setup (only for integration tests that actually need it)
+let prisma: PrismaClient | null = null;
 let isSetup = false;
 
-// Run migrations before tests (once)
+// Only setup database if we're running integration tests
+// Check if this is a unit test by looking at the test file path
 beforeAll(async () => {
-  if (!isSetup) {
-    console.log('🔧 Setting up test database...');
+  // Check if we should skip database setup (for unit tests)
+  const isUnitTest = process.env.VITEST_TEST_FILE?.includes('middleware');
 
-    // Deploy migrations to test database
+  if (isUnitTest) {
+    console.log('🧪 Skipping database setup for middleware unit tests');
+    return;
+  }
+
+  // Only setup database for integration tests
+  const hasDatabaseUrl = process.env.DATABASE_URL_TEST || process.env.DATABASE_URL;
+
+  if (hasDatabaseUrl && !process.env.SKIP_DB_SETUP) {
+    console.log('🔧 Setting up test database for integration tests...');
+
+    prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL_TEST || process.env.DATABASE_URL,
+        },
+      },
+    });
+
     try {
       execSync('npx prisma migrate deploy', {
         env: {
@@ -30,31 +54,31 @@ beforeAll(async () => {
         stdio: 'pipe',
       });
     } catch (error) {
-      // Migrations may already be applied
+      console.warn('⚠️ Database migrations may already be applied:', error.message);
     }
 
+    if (prisma) {
+      await cleanDatabase(prisma);
+    }
     isSetup = true;
   }
-
-  // Clean database before each test file
-  await cleanDatabase();
 });
 
-async function cleanDatabase() {
+async function cleanDatabase(client: PrismaClient) {
   try {
-    // Delete all data in reverse order of dependencies (sequentially to respect foreign keys)
-    await prisma.trade.deleteMany();
-    await prisma.prediction.deleteMany();
-    await prisma.share.deleteMany();
-    await prisma.dispute.deleteMany();
-    await prisma.market.deleteMany();
-    await prisma.achievement.deleteMany();
-    await prisma.leaderboard.deleteMany();
-    await prisma.referral.deleteMany();
-    await prisma.refreshToken.deleteMany();
-    await prisma.transaction.deleteMany();
-    await prisma.auditLog.deleteMany();
-    await prisma.user.deleteMany();
+    // Delete all data in reverse order of dependencies
+    await client.trade.deleteMany();
+    await client.prediction.deleteMany();
+    await client.share.deleteMany();
+    await client.dispute.deleteMany();
+    await client.market.deleteMany();
+    await client.achievement.deleteMany();
+    await client.leaderboard.deleteMany();
+    await client.referral.deleteMany();
+    await client.refreshToken.deleteMany();
+    await client.transaction.deleteMany();
+    await client.auditLog.deleteMany();
+    await client.user.deleteMany();
   } catch (error) {
     console.warn('⚠️ Failed to clean database:', error);
   }
@@ -62,7 +86,14 @@ async function cleanDatabase() {
 
 // Disconnect after all tests
 afterAll(async () => {
-  await prisma.$disconnect();
+  // Restore console mocks
+  vi.restoreAllMocks();
+
+  // Only disconnect if we actually connected to database
+  if (prisma) {
+    await prisma.$disconnect();
+  }
 });
 
+// Only export prisma if it was created
 export { prisma };

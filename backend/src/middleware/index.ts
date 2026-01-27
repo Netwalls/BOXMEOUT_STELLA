@@ -14,3 +14,14 @@ export {
   sensitiveOperationRateLimiter,
   createRateLimiter,
 } from './rateLimit.middleware.js';
+
+export { validate, schemas } from './validation.middleware';
+export { errorHandler, notFoundHandler, ApiError } from './error.middleware';
+export { requestLogger } from './logging.middleware';
+export {
+  securityHeaders,
+  corsMiddleware,
+  xssProtection,
+  frameGuard,
+  noCache
+} from './security.middleware';
