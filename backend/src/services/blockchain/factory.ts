@@ -50,9 +50,16 @@ export class FactoryService {
     // Admin keypair for signing contract calls
     const adminSecret = process.env.ADMIN_WALLET_SECRET;
     if (!adminSecret) {
-      throw new Error('ADMIN_WALLET_SECRET not configured');
+      // In development/testnet, generate a random keypair if not provided (prevents startup crash)
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('ADMIN_WALLET_SECRET not configured, using random keypair for development (Warning: No funds)');
+        this.adminKeypair = Keypair.random();
+      } else {
+        throw new Error('ADMIN_WALLET_SECRET not configured');
+      }
+    } else {
+      this.adminKeypair = Keypair.fromSecret(adminSecret);
     }
-    this.adminKeypair = Keypair.fromSecret(adminSecret);
   }
 
   /**

@@ -154,4 +154,46 @@ export class TradeRepository extends BaseRepository<Trade> {
       },
     });
   }
+
+  async createBuyTrade(data: {
+    userId: string;
+    marketId: string;
+    outcome: number;
+    quantity: number;
+    pricePerUnit: number;
+    totalAmount: number;
+    feeAmount: number;
+    txHash: string;
+  }): Promise<Trade> {
+    return this.createTrade({
+      ...data,
+      tradeType: TradeType.BUY,
+    });
+  }
+
+  async createSellTrade(data: {
+    userId: string;
+    marketId: string;
+    outcome: number;
+    quantity: number;
+    pricePerUnit: number;
+    totalAmount: number;
+    feeAmount: number;
+    txHash: string;
+  }): Promise<Trade> {
+    return this.createTrade({
+      ...data,
+      tradeType: TradeType.SELL,
+    });
+  }
+
+  async findByUserAndMarket(userId: string, marketId: string): Promise<Trade[]> {
+    return await this.prisma.trade.findMany({
+      where: {
+        userId,
+        marketId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
