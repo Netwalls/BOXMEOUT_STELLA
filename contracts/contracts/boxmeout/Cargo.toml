@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
@@ -14,8 +14,8 @@ soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"
-overflow-checks = true
 debug = false
-panic = "abort"
+overflow-checks = true
 lto = true
+panic = "abort"
 codegen-units = 1
