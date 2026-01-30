@@ -195,98 +195,97 @@ impl Treasury {
 
     /// Distribute rewards to market creators
     ///
-    /// TODO: Distribute Creator Rewards
-    /// - Require admin authentication
-    /// - Query creator_fees pool
-    /// - For each market that was successfully resolved:
-    ///   - Calculate creator share (0.5% - 1% of trading volume)
-    ///   - Transfer USDC to market creator
-    /// - Record distribution with creator address and amount
-    /// - Handle transfer failures: log and continue
-    /// - Emit CreatorRewardDistributed(creator, market_id, amount, timestamp)
-    /// - Reset creator_fees counter after distribution
-    pub fn distribute_creator_rewards(_env: Env) {
-        todo!("See distribute creator rewards TODO above")
+    /// Distributes rewards to market creators based on trading volume.
+    /// Requires admin authentication.
+    pub fn distribute_creator_rewards(
+        env: Env,
+        admin: Address,
+        distributions: Vec<(Address, i128)>,
+    ) {
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, ADMIN_KEY))
+            .expect("Admin not set");
+
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can distribute rewards");
+        }
+
+        let creator_fees: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, CREATOR_FEES_KEY))
+            .unwrap_or(0);
+
+        let mut total_amount = 0i128;
+        for dist in distributions.iter() {
+            total_amount += dist.1;
+        }
+
+        if total_amount > creator_fees {
+            panic!("Insufficient balance in creator pool");
+        }
+
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not set");
+
+        let token_client = token::Client::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+
+        for dist in distributions.iter() {
+            let (creator, amount) = dist;
+            token_client.transfer(&contract_address, &creator, &amount);
+        }
+
+        let new_balance = creator_fees - total_amount;
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, CREATOR_FEES_KEY), &new_balance);
+
+        env.events().publish(
+            (Symbol::new(&env, "creator_rewards_distributed"),),
+            (total_amount, distributions.len()),
+        );
     }
 
     /// Get treasury balance (total USDC held)
-    ///
-    /// TODO: Get Treasury Balance
-    /// - Query total USDC balance in treasury contract
-    /// - Include: pending_distributions (not yet claimed)
-    /// - Include: available_balance (can be withdrawn)
-    /// - Include: breakdown by fee pool
-    pub fn get_treasury_balance(_env: Env) -> i128 {
+    pub fn get_treasury_balance(env: Env) -> i128 {
         todo!("See get treasury balance TODO above")
     }
 
     /// Get treasury statistics
-    ///
-    /// TODO: Get Treasury Stats
-    /// - Calculate total_fees_collected_all_time
-    /// - Calculate total_rewards_distributed
-    /// - Calculate pending_distributions
-    /// - Calculate by_category breakdown
-    /// - Include: last_distribution_timestamp
-    /// - Return stats object
-    pub fn get_treasury_stats(_env: Env) -> Symbol {
+    pub fn get_treasury_stats(env: Env) -> Symbol {
         todo!("See get treasury stats TODO above")
     }
 
     /// Admin function: Emergency withdrawal of funds
-    ///
-    /// TODO: Emergency Withdraw
-    /// - Require admin authentication (multi-sig for production)
-    /// - Validate withdrawal amount <= total treasury balance
-    /// - Validate withdrawal_recipient is not zero address
-    /// - Transfer amount from treasury USDC to recipient
-    /// - Handle transfer failure: revert
-    /// - Record withdrawal with admin who authorized it
-    /// - Emit EmergencyWithdrawal(admin, recipient, amount, timestamp)
-    /// - Require 2+ admins to approve for security
-    pub fn emergency_withdraw(_env: Env, _admin: Address, _recipient: Address, _amount: i128) {
+    pub fn emergency_withdraw(env: Env, admin: Address, recipient: Address, amount: i128) {
         todo!("See emergency withdraw TODO above")
     }
 
     /// Admin: Update fee distribution percentages
-    ///
-    /// TODO: Set Fee Distribution
-    /// - Require admin authentication
-    /// - Validate platform_fee + leaderboard_fee + creator_fee = 100%
-    /// - Validate each fee > 0 and < 100
-    /// - Update fee_distribution config
-    /// - Apply to future markets only
-    /// - Emit FeeDistributionUpdated(platform%, leaderboard%, creator%, timestamp)
     pub fn set_fee_distribution(
-        _env: Env,
-        _platform_fee_pct: u32,
-        _leaderboard_fee_pct: u32,
-        _creator_fee_pct: u32,
+        env: Env,
+        platform_fee_pct: u32,
+        leaderboard_fee_pct: u32,
+        creator_fee_pct: u32,
     ) {
         todo!("See set fee distribution TODO above")
     }
 
     /// Admin: Set reward multiplier for leaderboard
-    ///
-    /// TODO: Set Reward Multiplier
-    /// - Require admin authentication
-    /// - Validate multiplier > 0 and <= 10
-    /// - Update reward_multiplier
-    /// - Affects next distribution cycle
-    /// - Emit RewardMultiplierUpdated(new_multiplier, old_multiplier)
-    pub fn set_reward_multiplier(_env: Env, _multiplier: u32) {
+    pub fn set_reward_multiplier(env: Env, multiplier: u32) {
         todo!("See set reward multiplier TODO above")
     }
 }
 
 /// Get treasury summary report
-///
-/// TODO: Get Treasury Report
-/// - Compile all treasury metrics
-/// - Return: total_collected, total_distributed, current_balance
-/// - Include: by_pool (platform, leaderboard, creator)
-/// - Include: pending_distributions, pending_claims
-/// - Include: for_date (monthly/yearly breakdown)
-pub fn get_treasury_report(_env: Env) -> Symbol {
+pub fn get_treasury_report(env: Env) -> Symbol {
     todo!("See get treasury report TODO above")
 }
