@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.routes.js';
 import marketRoutes from './routes/markets.routes.js';
 import oracleRoutes from './routes/oracle.js';
 import predictionRoutes from './routes/predictions.js';
+import treasuryRoutes from './routes/treasury.routes.js';
 
 // Import Redis initialization
 import {
@@ -201,6 +202,13 @@ app.use('/api/markets', oracleRoutes);
 
 // Prediction routes (commit-reveal flow)
 app.use('/api/markets', predictionRoutes);
+
+// Treasury routes
+app.use('/api/treasury', treasuryRoutes);
+
+// TODO: Add other routes as they are implemented
+// app.use('/api/users', userRoutes);
+// app.use('/api/leaderboard', leaderboardRoutes);
 
 // =============================================================================
 // ERROR HANDLING - UPDATED WITH NEW ERROR HANDLER

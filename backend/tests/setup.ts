@@ -16,6 +16,19 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
 config(); // Load environment variables before anything else
 
+// Set test defaults if not provided
+if (!process.env.JWT_ACCESS_SECRET) {
+  process.env.JWT_ACCESS_SECRET = 'test-jwt-access-secret-min-32-chars-here-for-testing';
+}
+if (!process.env.JWT_REFRESH_SECRET) {
+  process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-min-32-chars-here-for-testing';
+}
+if (!process.env.ENCRYPTION_KEY) {
+  process.env.ENCRYPTION_KEY = 'test-encryption-key-32-chars!!';
+}
+if (!process.env.DATABASE_URL_TEST && !process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgresql://postgres:password@localhost:5435/boxmeout_test';
+}
 // Set default env vars for testing if not present
 process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET =
@@ -123,6 +136,20 @@ beforeAll(async () => {
 
 async function cleanDatabase(client: PrismaClient) {
   try {
+    // Delete all data in reverse order of dependencies (sequentially to respect foreign keys)
+    await prisma.trade.deleteMany();
+    await prisma.prediction.deleteMany();
+    await prisma.share.deleteMany();
+    await prisma.dispute.deleteMany();
+    await prisma.market.deleteMany();
+    await prisma.achievement.deleteMany();
+    await prisma.leaderboard.deleteMany();
+    await prisma.referral.deleteMany();
+    await prisma.refreshToken.deleteMany();
+    await prisma.transaction.deleteMany();
+    await prisma.distribution.deleteMany();
+    await prisma.auditLog.deleteMany();
+    await prisma.user.deleteMany();
     // Delete all data in reverse order of dependencies
     await client.trade.deleteMany();
     await client.prediction.deleteMany();
