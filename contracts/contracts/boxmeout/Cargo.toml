@@ -14,8 +14,8 @@ soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"
-overflow-checks = true
 debug = false
-panic = "abort"
+overflow-checks = true
 lto = true
+panic = "abort"
 codegen-units = 1

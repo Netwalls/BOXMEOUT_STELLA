@@ -1,98 +1,295 @@
-// backend/src/controllers/markets.controller.ts - Market Controller
-// Handles market-related requests and delegates to services
+// backend/src/controllers/markets.controller.ts
+// Market controller - handles HTTP requests and delegates to services
 
-/*
-TODO: Market Controller - Request Handling Layer
-- Import MarketService
-- Import validation helpers
-- Import response formatting helpers
-- This layer: validate input, call service, format response
-- Services layer: handle business logic
-*/
+import { Response } from 'express';
+import { AuthenticatedRequest } from '../types/auth.types.js';
+import { MarketService } from '../services/market.service.js';
+import { MarketCategory, MarketStatus } from '@prisma/client';
+import { z } from 'zod';
 
-/*
-TODO: GET /api/markets - List Markets Controller
-- Extract query params: category, status, offset, limit
-- Validate pagination: offset >= 0, limit > 0 && <= 500
-- Call: MarketService.listMarkets(category, status, offset, limit)
-- Format response: { success: true, data: markets, pagination: {...} }
-- Catch errors: return error response with status code
-*/
+// Validation schema for market creation
+const createMarketSchema = z.object({
+  title: z.string().min(5).max(200),
+  description: z.string().min(10).max(5000),
+  category: z.nativeEnum(MarketCategory),
+  outcomeA: z.string().min(1).max(100),
+  outcomeB: z.string().min(1).max(100),
+  closingAt: z.string().datetime(),
+  resolutionTime: z.string().datetime().optional(),
+});
 
-/*
-TODO: GET /api/markets/:market_id - Get Market Details Controller
-- Extract market_id from params
-- Validate market_id format (UUID)
-- Call: MarketService.getMarketDetails(market_id)
-- Return 404 if market not found
-- Format response with market data
-*/
+export class MarketsController {
+  private marketService: MarketService;
 
-/*
-TODO: POST /api/markets - Create Market Controller
-- Require admin authentication (check JWT)
-- Extract body: title, description, category, outcome_a, outcome_b, closing_at, base_liquidity
-- Validate all fields present and format correct
-- Call: MarketService.createMarket(market_data, admin_id)
-- Return created market with contract_address
-- Handle contract errors, return meaningful error response
-*/
+  constructor() {
+    this.marketService = new MarketService();
+  }
 
-/*
-TODO: GET /api/markets/:market_id/odds - Get Odds Controller
-- Extract market_id
-- Call: MarketService.getOdds(market_id)
-- Return odds immediately (low latency, no caching)
-*/
+  /**
+   * POST /api/markets - Create a new market
+   */
+  async createMarket(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      // Ensure user is authenticated
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required',
+          },
+        });
+        return;
+      }
 
-/*
-TODO: POST /api/markets/:market_id/close - Close Market Controller
-- Require authentication
-- Extract market_id from params
-- Verify user is market creator (call service to check)
-- Call: MarketService.closeMarket(market_id)
-- Return success or error
-*/
+      // Ensure user has connected wallet
+      if (!req.user.publicKey) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'WALLET_NOT_CONNECTED',
+            message: 'Wallet connection required to create markets',
+          },
+        });
+        return;
+      }
 
-/*
-TODO: POST /api/markets/:market_id/resolve - Resolve Market Controller
-- Require admin/oracle authentication
-- Extract market_id
-- Call: MarketService.resolveMarket(market_id)
-- Wait for oracle consensus (may take time)
-- Return resolution result
-*/
+      // Validate request body
+      const validation = createMarketSchema.safeParse(req.body);
+      if (!validation.success) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request data',
+            details: validation.error.errors,
+          },
+        });
+        return;
+      }
 
-/*
-TODO: POST /api/markets/:market_id/dispute - Dispute Market Controller
-- Require authentication
-- Extract market_id, reason, evidence_url
-- Validate user is participant in market
-- Call: MarketService.disputeMarket(market_id, user_id, reason)
-- Return dispute_id
-*/
+      const data = validation.data;
 
-/*
-TODO: GET /api/markets/trending - Trending Markets Controller
-- No params needed
-- Call: MarketService.getTrendingMarkets()
-- Return top 10 markets by volume
-*/
+      // Parse timestamps
+      const closingAt = new Date(data.closingAt);
+      const resolutionTime = data.resolutionTime
+        ? new Date(data.resolutionTime)
+        : undefined;
 
-/*
-TODO: GET /api/markets/by-category/:category - Category Filter Controller
-- Extract category from params
-- Validate category in enum
-- Call: MarketService.listMarketsByCategory(category, offset, limit)
-- Return filtered markets
-*/
+      // Validate timestamps are in the future
+      const now = new Date();
+      if (closingAt <= now) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_TIMESTAMP',
+            message: 'Closing time must be in the future',
+          },
+        });
+        return;
+      }
 
-/*
-TODO: DELETE /api/markets/:market_id - Cancel Market Controller
-- Require authentication
-- Verify user is market creator
-- Call: MarketService.cancelMarket(market_id)
-- Return success
-*/
+      if (resolutionTime && resolutionTime <= closingAt) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_TIMESTAMP',
+            message: 'Resolution time must be after closing time',
+          },
+        });
+        return;
+      }
 
-export default {};
+      // Create market via service
+      const market = await this.marketService.createMarket({
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        creatorId: req.user.userId,
+        creatorPublicKey: req.user.publicKey,
+        outcomeA: data.outcomeA,
+        outcomeB: data.outcomeB,
+        closingAt,
+        resolutionTime,
+      });
+
+      // Return success response
+      res.status(201).json({
+        success: true,
+        data: {
+          id: market.id,
+          contractAddress: market.contractAddress,
+          title: market.title,
+          description: market.description,
+          category: market.category,
+          status: market.status,
+          outcomeA: market.outcomeA,
+          outcomeB: market.outcomeB,
+          closingAt: market.closingAt,
+          createdAt: market.createdAt,
+          txHash: market.txHash,
+          creatorId: market.creatorId,
+        },
+      });
+    } catch (error) {
+      console.error('Create market error:', error);
+
+      // Handle specific errors
+      if (error instanceof Error) {
+        if (error.message.includes('blockchain')) {
+          res.status(503).json({
+            success: false,
+            error: {
+              code: 'BLOCKCHAIN_ERROR',
+              message: 'Failed to create market on blockchain',
+              details: error.message,
+            },
+          });
+          return;
+        }
+
+        if (
+          error.message.includes('validation') ||
+          error.message.includes('Invalid')
+        ) {
+          res.status(400).json({
+            success: false,
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: error.message,
+            },
+          });
+          return;
+        }
+      }
+
+      // Generic error response
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to create market',
+        },
+      });
+    }
+  }
+
+  /**
+   * GET /api/markets - List all markets
+   */
+  async listMarkets(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const category = req.query.category as MarketCategory | undefined;
+      const skip = parseInt(req.query.skip as string) || 0;
+      const take = Math.min(parseInt(req.query.take as string) || 20, 100);
+
+      const markets = await this.marketService.listMarkets({
+        category,
+        skip,
+        take,
+      });
+
+      res.json({
+        success: true,
+        data: markets,
+        pagination: {
+          skip,
+          take,
+          hasMore: markets.length === take,
+        },
+      });
+    } catch (error) {
+      console.error('List markets error:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to fetch markets',
+        },
+      });
+    }
+  }
+
+  /**
+   * GET /api/markets/:id - Get market details
+   */
+  async getMarketDetails(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      const marketId = req.params.id as string;
+
+      const market = await this.marketService.getMarketDetails(marketId);
+
+      res.json({
+        success: true,
+        data: market,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Market not found') {
+        res.status(404).json({
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Market not found',
+          },
+        });
+        return;
+      }
+
+      console.error('Get market details error:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to fetch market details',
+        },
+      });
+    }
+  }
+
+  /**
+   * POST /api/markets/:id/pool - Create AMM pool
+   */
+  async createPool(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const marketId = req.params.id as string;
+      const { initialLiquidity } = req.body;
+
+      if (!initialLiquidity || BigInt(initialLiquidity) <= 0n) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_LIQUIDITY',
+            message: 'Initial liquidity must be greater than 0',
+          },
+        });
+        return;
+      }
+
+      const result = await this.marketService.createPool(
+        marketId,
+        BigInt(initialLiquidity)
+      );
+
+      res.status(201).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error('Create pool error:', error);
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'POOL_CREATION_FAILED',
+          message:
+            error instanceof Error ? error.message : 'Failed to create pool',
+        },
+      });
+    }
+  }
+}
+
+// Export singleton instance
+export const marketsController = new MarketsController();

@@ -97,6 +97,7 @@ fn test_register_oracle_exceeds_limit() {
 }
 
 #[test]
+#[should_panic(expected = "oracle already registered")]
 #[should_panic]
 fn test_register_duplicate_oracle() {
     let env = create_test_env();
@@ -201,6 +202,16 @@ fn test_check_consensus_not_reached() {
     // Only 2 of 3 votes, consensus not reached
     let (reached, _) = client.check_consensus(&market_id);
     assert!(!reached);
+}
+
+#[test]
+#[ignore]
+#[should_panic(expected = "consensus not reached")]
+fn test_resolve_market_without_consensus() {
+    // TODO: Implement when resolve_market is ready
+    // Only 1 oracle submitted
+    // Cannot resolve yet
+    // Cannot resolve yet
 }
 
 #[test]

@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env, Symbol,
+    token, Address, BytesN, Env, Symbol,
 };
 
 // Import the Factory contract

@@ -149,7 +149,9 @@ impl OracleManager {
         }
 
         // 5. Store attestation
-        env.storage().persistent().set(&vote_key, &attestation_result);
+        env.storage()
+            .persistent()
+            .set(&vote_key, &attestation_result);
 
         // 6. Track oracle in market's voter list
         let voters_key = (Symbol::new(&env, "voters"), market_id.clone());
@@ -158,14 +160,19 @@ impl OracleManager {
             .persistent()
             .get(&voters_key)
             .unwrap_or(Vec::new(&env));
-        
+
         voters.push_back(oracle.clone());
         env.storage().persistent().set(&voters_key, &voters);
 
         // 7. Emit event
         env.events().publish(
             (Symbol::new(&env, "attestation_submitted"),),
-            (oracle, market_id, attestation_result, env.ledger().timestamp()),
+            (
+                oracle,
+                market_id,
+                attestation_result,
+                env.ledger().timestamp(),
+            ),
         );
     }
 

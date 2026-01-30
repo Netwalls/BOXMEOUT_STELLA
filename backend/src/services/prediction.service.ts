@@ -4,7 +4,12 @@ import { MarketRepository } from '../repositories/market.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import { MarketStatus, PredictionStatus } from '@prisma/client';
 import { executeTransaction } from '../database/transaction.js';
-import crypto from 'crypto';
+import {
+  generateSalt,
+  createCommitmentHash,
+  encrypt,
+  decrypt,
+} from '../utils/crypto.js';
 
 export class PredictionService {
   private predictionRepository: PredictionRepository;
@@ -17,11 +22,15 @@ export class PredictionService {
     this.userRepository = new UserRepository();
   }
 
+  /**
+   * Commit a prediction with server-generated salt
+   * Server generates and stores encrypted salt for reveal phase
+   */
   async commitPrediction(
     userId: string,
     marketId: string,
-    amountUsdc: number,
-    salt: string
+    predictedOutcome: number,
+    amountUsdc: number
   ) {
     // Validate market exists and is open
     const market = await this.marketRepository.findById(marketId);
@@ -51,6 +60,11 @@ export class PredictionService {
       throw new Error('Amount must be greater than 0');
     }
 
+    // Validate outcome
+    if (![0, 1].includes(predictedOutcome)) {
+      throw new Error('Predicted outcome must be 0 (NO) or 1 (YES)');
+    }
+
     // Check user balance
     const user = await this.userRepository.findById(userId);
     if (!user) {
@@ -61,11 +75,25 @@ export class PredictionService {
       throw new Error('Insufficient balance');
     }
 
-    // Generate commitment hash (will be verified on reveal)
-    const commitmentHash = crypto
-      .createHash('sha256')
-      .update(`${userId}:${marketId}:${salt}`)
-      .digest('hex');
+    // Generate salt and create commitment hash
+    const salt = generateSalt();
+    const commitmentHash = createCommitmentHash(
+      userId,
+      marketId,
+      predictedOutcome,
+      salt
+    );
+
+    // Encrypt salt for secure storage
+    const { encrypted: encryptedSalt, iv: saltIv } = encrypt(salt);
+
+    // TODO: Call blockchain contract - Market.commit_prediction()
+    // const txHash = await blockchainService.commitPrediction(
+    //   marketId,
+    //   commitmentHash,
+    //   amountUsdc
+    // );
+    const txHash = 'mock-tx-hash-' + Date.now(); // Mock for now
 
     // Create prediction and update balances in transaction
     return await executeTransaction(async (tx) => {
@@ -73,12 +101,16 @@ export class PredictionService {
       const userRepo = new UserRepository(tx);
       const marketRepo = new MarketRepository(tx);
 
-      // Create prediction
+      // Create prediction with encrypted salt
       const prediction = await predictionRepo.createPrediction({
         userId,
         marketId,
         commitmentHash,
+        encryptedSalt,
+        saltIv,
         amountUsdc,
+        transactionHash: txHash,
+        status: PredictionStatus.COMMITTED,
       });
 
       // Deduct from user balance
@@ -94,11 +126,14 @@ export class PredictionService {
     });
   }
 
+  /**
+   * Reveal a prediction using server-stored encrypted salt
+   * Server decrypts salt and calls blockchain with prediction + salt
+   */
   async revealPrediction(
     userId: string,
     predictionId: string,
-    predictedOutcome: number,
-    salt: string
+    marketId: string
   ) {
     const prediction = await this.predictionRepository.findById(predictionId);
     if (!prediction) {
@@ -109,23 +144,17 @@ export class PredictionService {
       throw new Error('Unauthorized');
     }
 
+    if (prediction.marketId !== marketId) {
+      throw new Error('Market ID mismatch');
+    }
+
     if (prediction.status !== PredictionStatus.COMMITTED) {
-      throw new Error('Prediction already revealed');
+      throw new Error('Prediction already revealed or invalid status');
     }
 
-    // Validate outcome
-    if (predictedOutcome !== 0 && predictedOutcome !== 1) {
-      throw new Error('Outcome must be 0 or 1');
-    }
-
-    // Verify commitment hash
-    const expectedHash = crypto
-      .createHash('sha256')
-      .update(`${userId}:${prediction.marketId}:${salt}`)
-      .digest('hex');
-
-    if (expectedHash !== prediction.commitmentHash) {
-      throw new Error('Invalid salt - commitment hash mismatch');
+    // Check encrypted salt exists
+    if (!prediction.encryptedSalt || !prediction.saltIv) {
+      throw new Error('Salt not found - cannot reveal prediction');
     }
 
     // Check market is still open for reveals
@@ -138,9 +167,39 @@ export class PredictionService {
       throw new Error('Reveal period has ended');
     }
 
+    // Decrypt the stored salt
+    const salt = decrypt(prediction.encryptedSalt, prediction.saltIv);
+
+    // TODO: Call blockchain contract - Market.reveal_prediction()
+    // const revealTxHash = await blockchainService.revealPrediction(
+    //   marketId,
+    //   predictedOutcome,
+    //   salt
+    // );
+    const revealTxHash = 'mock-reveal-tx-' + Date.now(); // Mock for now
+
+    // Calculate the original predicted outcome from commitment hash
+    // We need to try both outcomes to verify which one matches
+    let predictedOutcome: number | null = null;
+    for (const outcome of [0, 1]) {
+      const testHash = createCommitmentHash(userId, marketId, outcome, salt);
+      if (testHash === prediction.commitmentHash) {
+        predictedOutcome = outcome;
+        break;
+      }
+    }
+
+    if (predictedOutcome === null) {
+      throw new Error(
+        'Invalid commitment hash - cannot determine predicted outcome'
+      );
+    }
+
+    // Update prediction to revealed status
     return await this.predictionRepository.revealPrediction(
       predictionId,
-      predictedOutcome
+      predictedOutcome,
+      revealTxHash
     );
   }
 

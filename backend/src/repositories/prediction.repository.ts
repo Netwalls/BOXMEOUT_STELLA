@@ -11,12 +11,22 @@ export class PredictionRepository extends BaseRepository<Prediction> {
     userId: string;
     marketId: string;
     commitmentHash: string;
+    encryptedSalt?: string;
+    saltIv?: string;
     amountUsdc: number;
+    transactionHash?: string;
+    status?: PredictionStatus;
   }): Promise<Prediction> {
     return await this.prisma.prediction.create({
       data: {
-        ...data,
-        status: PredictionStatus.COMMITTED,
+        userId: data.userId,
+        marketId: data.marketId,
+        commitmentHash: data.commitmentHash,
+        encryptedSalt: data.encryptedSalt,
+        saltIv: data.saltIv,
+        amountUsdc: data.amountUsdc,
+        transactionHash: data.transactionHash,
+        status: data.status || PredictionStatus.COMMITTED,
       },
     });
   }
@@ -32,14 +42,19 @@ export class PredictionRepository extends BaseRepository<Prediction> {
 
   async revealPrediction(
     predictionId: string,
-    predictedOutcome: number
+    predictedOutcome: number,
+    revealTxHash?: string
   ): Promise<Prediction> {
     return await this.prisma.prediction.update({
       where: { id: predictionId },
       data: {
         predictedOutcome,
+        revealTxHash,
         status: PredictionStatus.REVEALED,
         revealedAt: new Date(),
+        // Clear encrypted salt after reveal for security
+        encryptedSalt: null,
+        saltIv: null,
       },
     });
   }

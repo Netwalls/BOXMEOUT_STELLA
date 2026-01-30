@@ -1,35 +1,29 @@
 // backend/src/routes/predictions.ts - Prediction & Betting Routes
 // Handles user predictions, share purchases, settlement
 
-/*
-TODO: POST /api/markets/:market_id/predict - Submit Prediction (Commit Phase)
-- Require authentication
-- Validate market_id exists and status = OPEN
-- Validate prediction_amount > 0 and in USDC
-- Validate outcome in [YES, NO]
-- Generate commitment hash: keccak256(prediction + salt)
-- Don't store actual prediction yet (privacy via commit-reveal)
-- Store commitment to database: user_id, market_id, commitment_hash, timestamp
-- Transfer USDC from user to contract: call market.commit_prediction()
-- Emit event: PredictionCommitted
-- Return commitment_id, salt (for reveal later)
-- Send salt securely to user (email or download, not stored on server)
-*/
+import { Router } from 'express';
+import { predictionsController } from '../controllers/predictions.controller.js';
+import { requireAuth } from '../middleware/auth.middleware.js';
 
-/*
-TODO: POST /api/predictions/:commitment_id/reveal - Reveal Prediction (Reveal Phase)
-- Require authentication
-- Validate commitment exists in database
-- Validate market is still OPEN (reveal before closing)
-- Accept salt + original_prediction from request
-- Recalculate hash: keccak256(prediction + salt)
-- Verify matches stored commitment_hash
-- If mismatch: return 400 (invalid reveal)
-- Call smart contract: market.reveal_prediction(prediction, salt)
-- Update database: store actual prediction (now revealed)
-- Emit event: PredictionRevealed
-- Return success
-*/
+const router = Router();
+
+/**
+ * POST /api/markets/:marketId/commit - Commit Prediction (Phase 1)
+ * Server generates and stores salt securely
+ */
+router.post('/:marketId/commit', requireAuth, (req, res) =>
+  predictionsController.commitPrediction(req, res)
+);
+
+/**
+ * POST /api/markets/:marketId/reveal - Reveal Prediction (Phase 2)
+ * Server provides stored salt for blockchain verification
+ */
+router.post('/:marketId/reveal', requireAuth, (req, res) =>
+  predictionsController.revealPrediction(req, res)
+);
+
+export default router;
 
 /*
 TODO: POST /api/markets/:market_id/buy-shares - Buy Outcome Shares
@@ -169,4 +163,4 @@ TODO: WebSocket Events - Real-Time Prediction Updates
 - Update every second or on significant change
 */
 
-export default {};
+// export default {};

@@ -30,6 +30,7 @@ export class UserRepository extends BaseRepository<User> {
     username: string;
     passwordHash: string;
     displayName?: string;
+    walletAddress?: string;
   }): Promise<User> {
     return await this.prisma.user.create({
       data,
@@ -75,7 +76,10 @@ export class UserRepository extends BaseRepository<User> {
     });
   }
 
-  async searchUsers(query: string, limit: number = 10): Promise<Partial<User>[]> {
+  async searchUsers(
+    query: string,
+    limit: number = 10
+  ): Promise<Partial<User>[]> {
     return await this.prisma.user.findMany({
       where: {
         OR: [
@@ -93,7 +97,7 @@ export class UserRepository extends BaseRepository<User> {
         tier: true,
         reputationScore: true,
         createdAt: true,
-      } as any,
+      },
     });
   }
 
