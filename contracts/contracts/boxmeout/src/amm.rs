@@ -3,6 +3,7 @@
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol};
 
+
 // Storage keys
 const ADMIN_KEY: &str = "admin";
 const FACTORY_KEY: &str = "factory";
@@ -71,12 +72,12 @@ impl AMM {
         // Set slippage_protection default (2% = 200 basis points)
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, SLIPPAGE_PROTECTION_KEY), &200u32);
+            .set(&Symbol::new(&env, SLIPPAGE_PROTECTION_KEY), &200u128);
 
         // Set trading fee (0.2% = 20 basis points)
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, TRADING_FEE_KEY), &20u32);
+            .set(&Symbol::new(&env, TRADING_FEE_KEY), &20u128);
 
         // Set pricing_model (CPMM - Constant Product Market Maker)
         env.storage().persistent().set(
@@ -491,6 +492,120 @@ impl AMM {
         (yes_odds, no_odds)
     }
 
+    /// Add liquidity to the pool
+    /// Adds proportional amount to both reserves to maintain current odds
+    /// Mints LP tokens to provider
+    pub fn add_liquidity(
+        env: Env,
+        provider: Address,
+        market_id: BytesN<32>,
+        amount: u128,
+    ) -> u128 {
+        provider.require_auth();
+
+        if amount == 0 {
+            panic!("amount must be positive");
+        }
+
+        // Check if pool exists
+        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        if !env.storage().persistent().has(&pool_exists_key) {
+            panic!("pool does not exist");
+        }
+
+        // Create storage keys
+        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
+        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id.clone());
+        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            market_id.clone(),
+            provider.clone(),
+        );
+
+        // Get current reserves
+        let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
+        let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
+        
+        if yes_reserve == 0 || no_reserve == 0 {
+            // Should verify if this state is reachable if pool exists.
+            // If reserves are empty, we can't determine ratio. 
+            // Assume 50/50? Or panic?
+            panic!("pool corrupted: zero reserves");
+        }
+
+        // Calculate proportional split
+        // alpha = amount / (yes + no)
+        // yes_add = yes * alpha
+        // no_add = no * alpha
+        // Use integer math: yes_add = amount * yes / (yes + no)
+        let total_reserves = yes_reserve + no_reserve;
+        let yes_add = (amount * yes_reserve) / total_reserves;
+        let no_add = (amount * no_reserve) / total_reserves;
+        
+        // Due to rounding, yes_add + no_add might be slightly less than amount.
+        // We will only take (yes_add + no_add) from user to be precise?
+        // Or take full amount and put remainder in one side (shifts odds slightly)?
+        // Safer to take exactly what we add.
+        let actual_amount = yes_add + no_add;
+
+        if actual_amount == 0 {
+             panic!("amount too small to add liquidity");
+        }
+
+        // Get current LP supply
+        let current_lp_supply: u128 = env.storage().persistent().get(&lp_supply_key).unwrap_or(0);
+
+        // Calculate LP tokens to mint
+        // lp_mint = supply * (actual_amount / total_reserves)
+        let lp_mint = (current_lp_supply * actual_amount) / total_reserves;
+
+        if lp_mint == 0 {
+            panic!("amount too small to mint lp tokens");
+        }
+
+        // Update reserves
+        let new_yes_reserve = yes_reserve + yes_add;
+        let new_no_reserve = no_reserve + no_add;
+        let new_k = new_yes_reserve * new_no_reserve;
+
+        // Save new state
+        env.storage().persistent().set(&yes_key, &new_yes_reserve);
+        env.storage().persistent().set(&no_key, &new_no_reserve);
+        env.storage().persistent().set(&k_key, &new_k);
+
+        // Update LP supply
+        let new_lp_supply = current_lp_supply + lp_mint;
+        env.storage().persistent().set(&lp_supply_key, &new_lp_supply);
+
+        // Update User LP balance
+        let current_lp_balance: u128 = env.storage().persistent().get(&lp_balance_key).unwrap_or(0);
+        env.storage().persistent().set(&lp_balance_key, &(current_lp_balance + lp_mint));
+
+        // Transfer USDC from user
+        let usdc_address: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not configured");
+        let usdc_client = token::Client::new(&env, &usdc_address);
+
+        usdc_client.transfer(
+            &provider,
+            &env.current_contract_address(),
+            &(actual_amount as i128),
+        );
+
+        // Emit LiquidityAdded event
+        env.events().publish(
+            (Symbol::new(&env, "liquidity_added"),),
+            (provider, market_id, actual_amount, lp_mint, new_yes_reserve, new_no_reserve),
+        );
+
+        lp_mint
+    }
+
     /// Remove liquidity from pool (redeem LP tokens)
     ///
     /// Validates LP token ownership, calculates proportional YES/NO withdrawal,
@@ -649,7 +764,6 @@ impl AMM {
     }
 
     // TODO: Implement remaining AMM functions
-    // - add_liquidity()
     // - get_lp_position() / claim_lp_fees()
     // - calculate_spot_price()
     // - get_trade_history()

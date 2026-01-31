@@ -362,7 +362,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u32": 200
+                  "u128": "200"
                 }
               }
             },
@@ -393,7 +393,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u32": 20
+                  "u128": "20"
                 }
               }
             },

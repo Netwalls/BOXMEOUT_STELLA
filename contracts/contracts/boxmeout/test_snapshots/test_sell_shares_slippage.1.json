@@ -318,7 +318,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u32": 200
+                  "u128": "200"
                 }
               }
             },
@@ -349,7 +349,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u32": 20
+                  "u128": "20"
                 }
               }
             },
@@ -576,13 +576,16 @@
             "key": {
               "vec": [
                 {
-                  "symbol": "user_shares_yes"
+                  "symbol": "user_shares"
+                },
+                {
+                  "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
+                  "u32": 1
                 }
               ]
             },
@@ -599,13 +602,16 @@
                 "key": {
                   "vec": [
                     {
-                      "symbol": "user_shares_yes"
+                      "symbol": "user_shares"
+                    },
+                    {
+                      "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
                     },
                     {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                     },
                     {
-                      "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
+                      "u32": 1
                     }
                   ]
                 },

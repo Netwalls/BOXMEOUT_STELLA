@@ -652,7 +652,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "market_resolved"
+                "symbol": "MarketResolved"
               }
             ],
             "data": {

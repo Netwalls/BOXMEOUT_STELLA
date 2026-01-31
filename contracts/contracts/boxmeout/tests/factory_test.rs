@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, Symbol,
+    token, Address, BytesN, Env, Symbol, contract, contractimpl,
 };
 
 // Import the Factory contract
@@ -24,6 +24,17 @@ fn create_mock_token(env: &Env, admin: &Address) -> Address {
     token_address.address()
 }
 
+#[contract]
+pub struct MockTreasury;
+#[contractimpl]
+impl MockTreasury {
+    pub fn deposit_fees(_env: Env, _source: Address, _amount: i128) {}
+}
+
+fn register_mock_treasury(env: &Env) -> Address {
+    env.register(MockTreasury, ())
+}
+
 #[test]
 fn test_factory_initialize() {
     let env = create_test_env();
@@ -33,7 +44,7 @@ fn test_factory_initialize() {
     // Create mock addresses
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
-    let treasury = Address::generate(&env);
+    let treasury = register_mock_treasury(&env);
 
     // Call initialize
     env.mock_all_auths();
@@ -53,7 +64,7 @@ fn test_factory_initialize_twice_fails() {
 
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
-    let treasury = Address::generate(&env);
+    let treasury = register_mock_treasury(&env);
 
     // First initialization
     env.mock_all_auths();
@@ -72,7 +83,7 @@ fn test_create_market() {
     // Initialize factory
     let admin = Address::generate(&env);
     let usdc = create_mock_token(&env, &admin);
-    let treasury = Address::generate(&env);
+    let treasury = register_mock_treasury(&env);
     env.mock_all_auths();
     client.initialize(&admin, &usdc, &treasury);
 
@@ -115,7 +126,7 @@ fn test_create_market_invalid_timestamps() {
     // Initialize factory
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
-    let treasury = Address::generate(&env);
+    let treasury = register_mock_treasury(&env);
     env.mock_all_auths();
     client.initialize(&admin, &usdc, &treasury);
 
@@ -147,7 +158,7 @@ fn test_create_market_closing_time_in_past() {
     // Initialize factory
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
-    let treasury = Address::generate(&env);
+    let treasury = register_mock_treasury(&env);
     env.mock_all_auths();
     client.initialize(&admin, &usdc, &treasury);
 
@@ -178,7 +189,7 @@ fn test_create_market_uniqueness() {
     // Initialize factory
     let admin = Address::generate(&env);
     let usdc = create_mock_token(&env, &admin);
-    let treasury = Address::generate(&env);
+    let treasury = register_mock_treasury(&env);
     env.mock_all_auths();
     client.initialize(&admin, &usdc, &treasury);
 

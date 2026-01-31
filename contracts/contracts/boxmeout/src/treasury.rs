@@ -1,7 +1,7 @@
 // contract/src/treasury.rs - Treasury Contract Implementation
 // Handles fee collection and reward distribution
 
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -13,7 +13,7 @@ const CREATOR_FEES_KEY: &str = "creator_fees";
 const TOTAL_FEES_KEY: &str = "total_fees";
 const DISTRIBUTION_KEY: &str = "distribution";
 
-/// Fee distribution ratios (sum to 100)
+// Fee distribution ratios (sum to 100)
 #[soroban_sdk::contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeeRatios {
@@ -135,6 +135,7 @@ impl Treasury {
 
     /// Deposit fees into treasury and split across pools
     pub fn deposit_fees(env: Env, source: Address, amount: i128) {
+        source.require_auth();
         // Validate amount > 0
         if amount <= 0 {
             panic!("Amount must be positive");
@@ -215,15 +216,76 @@ impl Treasury {
     }
 
     /// Distribute rewards to leaderboard winners
-    pub fn distribute_leaderboard_rewards(env: Env) {
-        todo!("Leaderboard distribution logic not yet implemented")
+    ///
+    /// Distributes accumulated leaderboard fees to top performers based on shares.
+    /// Shares are in basis points (10000 = 100%).
+    ///
+    /// # Arguments
+    /// * `rewards` - List of (user_address, share_bps) tuples
+    pub fn distribute_leaderboard(env: Env, rewards: Vec<(Address, u32)>) {
+        // Require admin authentication
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, ADMIN_KEY))
+            .expect("Admin not set");
+        admin.require_auth();
+
+        // Validate total shares = 100% (10000 bps)
+        let mut total_shares = 0u32;
+        for (_, share) in rewards.iter() {
+            total_shares += share;
+        }
+        if total_shares != 10000 {
+            panic!("Total shares must equal 10000 bps (100%)");
+        }
+
+        // Get total leaderboard fees collected
+        let total_fees = Self::get_leaderboard_fees(env.clone());
+        if total_fees == 0 {
+            return; // Nothing to distribute
+        }
+
+        // Get USDC token client
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not set");
+        let token_client = token::Client::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+
+        // Distribute to each winner
+        let mut distributed_amount = 0i128;
+        for (winner, share) in rewards.iter() {
+            let amount = (total_fees * share as i128) / 10000;
+            if amount > 0 {
+                token_client.transfer(&contract_address, &winner, &amount);
+                distributed_amount += amount;
+            }
+        }
+
+        // Reset leaderboard fees (subtract distributed)
+        let remaining = total_fees - distributed_amount;
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, LEADERBOARD_FEES_KEY), &remaining);
+
+        // Emit LeaderboardDistributed event
+        env.events().publish(
+            (Symbol::new(&env, "LeaderboardDistributed"),),
+            (total_fees, rewards.len()),
+        );
     }
 
-    /// Distribute rewards to creators
+    /// Distribute rewards to market creators
+    ///
+    /// Distributes rewards to market creators based on trading volume.
+    /// Requires admin authentication.
     pub fn distribute_creator_rewards(
         env: Env,
         admin: Address,
-        distributions: soroban_sdk::Vec<(Address, i128)>,
+        distributions: Vec<(Address, i128)>,
     ) {
         admin.require_auth();
 

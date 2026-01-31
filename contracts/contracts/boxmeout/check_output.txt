@@ -1,70 +1,104 @@
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /Users/ram/Desktop/BOXMEOUT_STELLA/contracts/contracts/boxmeout/Cargo.toml
-workspace: /Users/ram/Desktop/BOXMEOUT_STELLA/contracts/Cargo.toml
-    Checking boxmeout v0.1.0 (/Users/ram/Desktop/BOXMEOUT_STELLA/contracts/contracts/boxmeout)
-warning: unused import: `Map`
- --> contracts/boxmeout/src/market.rs:4:65
+package:   /home/knights/Documents/Project/Drips/BOXMEOUT_STELLA/contracts/contracts/boxmeout/Cargo.toml
+workspace: /home/knights/Documents/Project/Drips/BOXMEOUT_STELLA/contracts/Cargo.toml
+warning: unused import: `crate::helpers::*`
+ --> contracts/boxmeout/src/amm.rs:6:5
   |
-4 | use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, Symbol, Vec};
-  |                                                                 ^^^
+6 | use crate::helpers::*;
+  |     ^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
-  --> contracts/boxmeout/src/factory.rs:49:22
+warning: unexpected `cfg` condition value: `testutils`
+  --> contracts/boxmeout/src/helpers.rs:13:17
    |
-49 |         env.events().publish(
+13 | #[cfg(any(test, feature = "testutils"))]
+   |                 ^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+   |
+   = note: no expected values for `feature`
+   = help: consider adding `testutils` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unused import: `token::StellarAssetClient`
+ --> contracts/boxmeout/src/helpers.rs:3:19
+  |
+3 | use soroban_sdk::{token::StellarAssetClient, Address...
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/boxmeout/src/amm.rs:90:22
+   |
+90 |         env.events().publish(
    |                      ^^^^^^^
    |
    = note: `#[warn(deprecated)]` on by default
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
-   --> contracts/boxmeout/src/factory.rs:140:22
+   --> contracts/boxmeout/src/amm.rs:163:22
     |
-140 |         env.events().publish(
+163 |         env.events().publish(
     |                      ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
-   --> contracts/boxmeout/src/market.rs:101:22
+   --> contracts/boxmeout/src/amm.rs:304:22
     |
-101 |         env.events().publish(
+304 |         env.events().publish(
     |                      ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
-   --> contracts/boxmeout/src/market.rs:196:22
+   --> contracts/boxmeout/src/amm.rs:443:22
     |
-196 |         env.events().publish(
-    |                      ^^^^^^^
-
-error[E0599]: no method named `get_consensus_result` found for struct `OracleManagerClient<'a>` in the current scope
-   --> contracts/boxmeout/src/market.rs:266:43
-    |
-266 |         let final_outcome = oracle_client.get_consensus_result(&market_id);
-    |                                           ^^^^^^^^^^^^^^^^^^^^
-    |
-   ::: contracts/boxmeout/src/oracle.rs:12:1
-    |
- 12 | #[contract]
-    | ----------- method `get_consensus_result` not found for this struct
-    |
-help: there is a method `get_consensus_report` with a similar name, but with different arguments
-   --> contracts/boxmeout/src/oracle.rs:15:1
-    |
- 15 | #[contractimpl]
-    | ^^^^^^^^^^^^^^^
-    = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
-   --> contracts/boxmeout/src/market.rs:315:22
-    |
-315 |         env.events().publish(
+443 |         env.events().publish(
     |                      ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
-  --> contracts/boxmeout/src/treasury.rs:54:22
+   --> contracts/boxmeout/src/amm.rs:639:22
+    |
+639 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/boxmeout/src/factory.rs:55:22
    |
-54 |         env.events().publish(
+55 |         env.events().publish(
    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/factory.rs:153:22
+    |
+153 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/market.rs:157:22
+    |
+157 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/market.rs:267:22
+    |
+267 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/market.rs:364:22
+    |
+364 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/market.rs:477:22
+    |
+477 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/market.rs:614:22
+    |
+614 |         env.events().publish(
+    |                      ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
   --> contracts/boxmeout/src/oracle.rs:39:22
@@ -79,943 +113,839 @@ warning: use of deprecated method `soroban_sdk::events::Events::publish`: use th
     |                      ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
-  --> contracts/boxmeout/src/amm.rs:70:22
+   --> contracts/boxmeout/src/oracle.rs:168:22
+    |
+168 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/boxmeout/src/treasury.rs:55:22
    |
-70 |         env.events().publish(
+55 |         env.events().publish(
    |                      ^^^^^^^
 
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/treasury.rs:122:22
+    |
+122 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/boxmeout/src/treasury.rs:190:22
+    |
+190 |         env.events().publish(
+    |                      ^^^^^^^
+
 warning: unused import: `IntoVal`
- --> contracts/boxmeout/src/factory.rs:4:79
+ --> contracts/boxmeout/src/factory.rs:5:65
   |
-4 | use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec};
-  |                                                                               ^^^^^^^
+5 | ... Bytes, BytesN, Env, IntoVal, Symbol, Vec,
+  |                         ^^^^^^^
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:158:28
+   --> contracts/boxmeout/src/amm.rs:683:9
     |
-158 |     pub fn get_market_info(env: Env, market_id: BytesN<32>) {
-    |                            ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+683 |         env: Env,
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
     |
     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/factory.rs:158:38
+   --> contracts/boxmeout/src/amm.rs:685:9
     |
-158 |     pub fn get_market_info(env: Env, market_id: BytesN<32>) {
-    |                                      ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+685 |         market_id: BytesN<32>,
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+
+warning: unused variable: `amount`
+   --> contracts/boxmeout/src/amm.rs:686:9
+    |
+686 |         amount: u128,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_amount`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:170:31
+   --> contracts/boxmeout/src/factory.rs:171:28
     |
-170 |     pub fn get_active_markets(env: Env, offset: u32, limit: u32) -> Vec<Symbol> {
-    |                               ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `offset`
-   --> contracts/boxmeout/src/factory.rs:170:41
-    |
-170 |     pub fn get_active_markets(env: Env, offset: u32, limit: u32) -> Vec<Symbol> {
-    |                                         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_offset`
-
-warning: unused variable: `limit`
-   --> contracts/boxmeout/src/factory.rs:170:54
-    |
-170 |     pub fn get_active_markets(env: Env, offset: u32, limit: u32) -> Vec<Symbol> {
-    |                                                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_limit`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:182:32
-    |
-182 |     pub fn get_creator_markets(env: Env, creator: Address) {
-    |                                ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `creator`
-   --> contracts/boxmeout/src/factory.rs:182:42
-    |
-182 |     pub fn get_creator_markets(env: Env, creator: Address) {
-    |                                          ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_creator`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:194:34
-    |
-194 |     pub fn get_market_resolution(env: Env, market_id: BytesN<32>) -> Symbol {
-    |                                  ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+171 | ... get_market_info(env: Env, market_id: BytesN<32...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/factory.rs:194:44
+   --> contracts/boxmeout/src/factory.rs:171:38
     |
-194 |     pub fn get_market_resolution(env: Env, market_id: BytesN<32>) -> Symbol {
-    |                                            ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+171 | ...info(env: Env, market_id: BytesN<32>) {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:205:38
+   --> contracts/boxmeout/src/factory.rs:183:31
     |
-205 |     pub fn set_market_creation_pause(env: Env, paused: bool) {
-    |                                      ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+183 | ...t_active_markets(env: Env, offset: u32, limit: ...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `offset`
+   --> contracts/boxmeout/src/factory.rs:183:41
+    |
+183 | ...arkets(env: Env, offset: u32, limit: u32) -> Ve...
+    |                     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_offset`
+
+warning: unused variable: `limit`
+   --> contracts/boxmeout/src/factory.rs:183:54
+    |
+183 | ...nv, offset: u32, limit: u32) -> Vec<Symbol> {
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_limit`
+
+warning: unused variable: `env`
+   --> contracts/boxmeout/src/factory.rs:195:32
+    |
+195 | ..._creator_markets(env: Env, creator: Address) {
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `creator`
+   --> contracts/boxmeout/src/factory.rs:195:42
+    |
+195 | ...kets(env: Env, creator: Address) {
+    |                   ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_creator`
+
+warning: unused variable: `env`
+   --> contracts/boxmeout/src/factory.rs:207:34
+    |
+207 | ...arket_resolution(env: Env, market_id: BytesN<32...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `market_id`
+   --> contracts/boxmeout/src/factory.rs:207:44
+    |
+207 | ...tion(env: Env, market_id: BytesN<32>) -> Symbol {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+
+warning: unused variable: `env`
+   --> contracts/boxmeout/src/factory.rs:218:38
+    |
+218 | ...t_creation_pause(env: Env, paused: bool) {
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `paused`
-   --> contracts/boxmeout/src/factory.rs:205:48
+   --> contracts/boxmeout/src/factory.rs:218:48
     |
-205 |     pub fn set_market_creation_pause(env: Env, paused: bool) {
-    |                                                ^^^^^^ help: if this is intentional, prefix it with an underscore: `_paused`
+218 | ..._pause(env: Env, paused: bool) {
+    |                     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_paused`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:220:30
+   --> contracts/boxmeout/src/factory.rs:233:30
     |
-220 |     pub fn get_factory_stats(env: Env) {
+233 |     pub fn get_factory_stats(env: Env) {
     |                              ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:230:31
+   --> contracts/boxmeout/src/factory.rs:243:31
     |
-230 |     pub fn get_collected_fees(env: Env) {
+243 |     pub fn get_collected_fees(env: Env) {
     |                               ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/factory.rs:245:26
+   --> contracts/boxmeout/src/factory.rs:258:26
     |
-245 |     pub fn withdraw_fees(env: Env, amount: i128) {
+258 |     pub fn withdraw_fees(env: Env, amount: i128) {
     |                          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `amount`
-   --> contracts/boxmeout/src/factory.rs:245:36
+   --> contracts/boxmeout/src/factory.rs:258:36
     |
-245 |     pub fn withdraw_fees(env: Env, amount: i128) {
+258 |     pub fn withdraw_fees(env: Env, amount: i128) {
     |                                    ^^^^^^ help: if this is intentional, prefix it with an underscore: `_amount`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:124:9
+   --> contracts/boxmeout/src/market.rs:319:9
     |
-124 |         env: Env,
+319 |         env: Env,
     |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `user`
-   --> contracts/boxmeout/src/market.rs:125:9
+   --> contracts/boxmeout/src/market.rs:320:9
     |
-125 |         user: Address,
+320 |         user: Address,
     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:126:9
+   --> contracts/boxmeout/src/market.rs:321:9
     |
-126 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `commit_hash`
-   --> contracts/boxmeout/src/market.rs:127:9
-    |
-127 |         commit_hash: BytesN<32>,
-    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_commit_hash`
-
-warning: unused variable: `amount`
-   --> contracts/boxmeout/src/market.rs:128:9
-    |
-128 |         amount: i128,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_amount`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:151:9
-    |
-151 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `user`
-   --> contracts/boxmeout/src/market.rs:152:9
-    |
-152 |         user: Address,
-    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:153:9
-    |
-153 |         market_id: BytesN<32>,
+321 |         market_id: BytesN<32>,
     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `outcome`
-   --> contracts/boxmeout/src/market.rs:154:9
+   --> contracts/boxmeout/src/market.rs:322:9
     |
-154 |         outcome: u32,
+322 |         outcome: u32,
     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_outcome`
 
 warning: unused variable: `amount`
-   --> contracts/boxmeout/src/market.rs:155:9
+   --> contracts/boxmeout/src/market.rs:323:9
     |
-155 |         amount: i128,
+323 |         amount: i128,
     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_amount`
 
 warning: unused variable: `salt`
-   --> contracts/boxmeout/src/market.rs:156:9
+   --> contracts/boxmeout/src/market.rs:324:9
     |
-156 |         salt: BytesN<32>,
+324 |         salt: BytesN<32>,
     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_salt`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:334:9
+   --> contracts/boxmeout/src/market.rs:495:27
     |
-334 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+495 | ...n dispute_market(env: Env, user: Address, marke...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `user`
-   --> contracts/boxmeout/src/market.rs:335:9
+   --> contracts/boxmeout/src/market.rs:495:37
     |
-335 |         user: Address,
-    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
+495 | ...market(env: Env, user: Address, market_id: Byte...
+    |                     ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:336:9
+   --> contracts/boxmeout/src/market.rs:495:52
     |
-336 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+495 | ...user: Address, market_id: BytesN<32>, dispute_r...
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `dispute_reason`
-   --> contracts/boxmeout/src/market.rs:337:9
+   --> contracts/boxmeout/src/market.rs:495:75
     |
-337 |         dispute_reason: Symbol,
-    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dispute_reason`
+495 | ... BytesN<32>, dispute_reason: Symbol) {
+    |                 ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dispute_reason`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:358:27
+   --> contracts/boxmeout/src/market.rs:634:30
     |
-358 |     pub fn claim_winnings(env: Env, user: Address, market_id: BytesN<32>) -> i128 {
-    |                           ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+634 | ...efund_losing_bet(env: Env, user: Address, marke...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `user`
-   --> contracts/boxmeout/src/market.rs:358:37
+   --> contracts/boxmeout/src/market.rs:634:40
     |
-358 |     pub fn claim_winnings(env: Env, user: Address, market_id: BytesN<32>) -> i128 {
-    |                                     ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
+634 | ...ng_bet(env: Env, user: Address, market_id: Byte...
+    |                     ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:358:52
+   --> contracts/boxmeout/src/market.rs:634:55
     |
-358 |     pub fn claim_winnings(env: Env, user: Address, market_id: BytesN<32>) -> i128 {
-    |                                                    ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+634 | ...user: Address, market_id: BytesN<32>) -> i128 {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:375:9
+   --> contracts/boxmeout/src/market.rs:649:29
     |
-375 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+649 | ...get_market_state(env: Env, market_id: BytesN<32...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `market_id`
+   --> contracts/boxmeout/src/market.rs:649:39
+    |
+649 | ...tate(env: Env, market_id: BytesN<32>) -> Symbol {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+
+warning: unused variable: `env`
+   --> contracts/boxmeout/src/market.rs:661:32
+    |
+661 | ..._user_prediction(env: Env, user: Address, marke...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `user`
-   --> contracts/boxmeout/src/market.rs:376:9
+   --> contracts/boxmeout/src/market.rs:661:42
     |
-376 |         user: Address,
-    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
+661 | ...iction(env: Env, user: Address, market_id: Byte...
+    |                     ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:377:9
+   --> contracts/boxmeout/src/market.rs:661:57
     |
-377 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+661 | ...user: Address, market_id: BytesN<32>) -> Symbol {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:393:29
+   --> contracts/boxmeout/src/market.rs:673:32
     |
-393 |     pub fn get_market_state(env: Env, market_id: BytesN<32>) -> Symbol {
-    |                             ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+673 | ..._all_predictions(env: Env, market_id: BytesN<32...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:393:39
+   --> contracts/boxmeout/src/market.rs:673:42
     |
-393 |     pub fn get_market_state(env: Env, market_id: BytesN<32>) -> Symbol {
-    |                                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+673 | ...ions(env: Env, market_id: BytesN<32>) -> Vec<Sy...
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:406:9
+   --> contracts/boxmeout/src/market.rs:685:35
     |
-406 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `user`
-   --> contracts/boxmeout/src/market.rs:407:9
-    |
-407 |         user: Address,
-    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
+685 | ...rket_leaderboard(env: Env, market_id: BytesN<32...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:408:9
+   --> contracts/boxmeout/src/market.rs:685:45
     |
-408 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+685 | ...oard(env: Env, market_id: BytesN<32>) -> Vec<Sy...
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:421:32
+   --> contracts/boxmeout/src/market.rs:696:33
     |
-421 |     pub fn get_all_predictions(env: Env, market_id: BytesN<32>) -> Vec<Symbol> {
-    |                                ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+696 | ...market_liquidity(env: Env, market_id: BytesN<32...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:421:42
+   --> contracts/boxmeout/src/market.rs:696:43
     |
-421 |     pub fn get_all_predictions(env: Env, market_id: BytesN<32>) -> Vec<Symbol> {
-    |                                          ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+696 | ...dity(env: Env, market_id: BytesN<32>) -> i128 {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:433:35
+   --> contracts/boxmeout/src/market.rs:711:26
     |
-433 |     pub fn get_market_leaderboard(env: Env, market_id: BytesN<32>) -> Vec<Symbol> {
-    |                                   ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:433:45
-    |
-433 |     pub fn get_market_leaderboard(env: Env, market_id: BytesN<32>) -> Vec<Symbol> {
-    |                                             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:444:33
-    |
-444 |     pub fn get_market_liquidity(env: Env, market_id: BytesN<32>) -> i128 {
-    |                                 ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:444:43
-    |
-444 |     pub fn get_market_liquidity(env: Env, market_id: BytesN<32>) -> i128 {
-    |                                           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/market.rs:459:26
-    |
-459 |     pub fn cancel_market(env: Env, creator: Address, market_id: BytesN<32>) {
-    |                          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+711 | ...fn cancel_market(env: Env, creator: Address, ma...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `creator`
-   --> contracts/boxmeout/src/market.rs:459:36
+   --> contracts/boxmeout/src/market.rs:711:36
     |
-459 |     pub fn cancel_market(env: Env, creator: Address, market_id: BytesN<32>) {
-    |                                    ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_creator`
+711 | ...rket(env: Env, creator: Address, market_id: Byt...
+    |                   ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_creator`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/market.rs:459:54
+   --> contracts/boxmeout/src/market.rs:711:54
     |
-459 |     pub fn cancel_market(env: Env, creator: Address, market_id: BytesN<32>) {
-    |                                                      ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-  --> contracts/boxmeout/src/treasury.rs:95:9
-   |
-95 |         env: Env,
-   |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `source`
-  --> contracts/boxmeout/src/treasury.rs:96:9
-   |
-96 |         source: Address,
-   |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_source`
-
-warning: unused variable: `fee_category`
-  --> contracts/boxmeout/src/treasury.rs:97:9
-   |
-97 |         fee_category: Symbol,
-   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_fee_category`
-
-warning: unused variable: `amount`
-  --> contracts/boxmeout/src/treasury.rs:98:9
-   |
-98 |         amount: i128,
-   |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_amount`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:116:43
-    |
-116 |     pub fn distribute_leaderboard_rewards(env: Env) {
-    |                                           ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:132:39
-    |
-132 |     pub fn distribute_creator_rewards(env: Env) {
-    |                                       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:143:33
-    |
-143 |     pub fn get_treasury_balance(env: Env) -> i128 {
-    |                                 ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:156:31
-    |
-156 |     pub fn get_treasury_stats(env: Env) -> Symbol {
-    |                               ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:172:9
-    |
-172 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `admin`
-   --> contracts/boxmeout/src/treasury.rs:173:9
-    |
-173 |         admin: Address,
-    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
-
-warning: unused variable: `recipient`
-   --> contracts/boxmeout/src/treasury.rs:174:9
-    |
-174 |         recipient: Address,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_recipient`
-
-warning: unused variable: `amount`
-   --> contracts/boxmeout/src/treasury.rs:175:9
-    |
-175 |         amount: i128,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_amount`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:190:9
-    |
-190 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `platform_fee_pct`
-   --> contracts/boxmeout/src/treasury.rs:191:9
-    |
-191 |         platform_fee_pct: u32,
-    |         ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_platform_fee_pct`
-
-warning: unused variable: `leaderboard_fee_pct`
-   --> contracts/boxmeout/src/treasury.rs:192:9
-    |
-192 |         leaderboard_fee_pct: u32,
-    |         ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_leaderboard_fee_pct`
-
-warning: unused variable: `creator_fee_pct`
-   --> contracts/boxmeout/src/treasury.rs:193:9
-    |
-193 |         creator_fee_pct: u32,
-    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_creator_fee_pct`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:206:34
-    |
-206 |     pub fn set_reward_multiplier(env: Env, multiplier: u32) {
-    |                                  ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `multiplier`
-   --> contracts/boxmeout/src/treasury.rs:206:44
-    |
-206 |     pub fn set_reward_multiplier(env: Env, multiplier: u32) {
-    |                                            ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_multiplier`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/treasury.rs:220:32
-    |
-220 |     pub fn get_treasury_report(env: Env) -> Symbol {
-    |                                ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+711 | ...ator: Address, market_id: BytesN<32>) {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
    --> contracts/boxmeout/src/oracle.rs:118:30
     |
-118 |     pub fn deregister_oracle(env: Env, oracle: Address) {
-    |                              ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+118 | ...eregister_oracle(env: Env, oracle: Address) {
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `oracle`
    --> contracts/boxmeout/src/oracle.rs:118:40
     |
-118 |     pub fn deregister_oracle(env: Env, oracle: Address) {
-    |                                        ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
+118 | ...oracle(env: Env, oracle: Address) {
+    |                     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:138:9
+   --> contracts/boxmeout/src/oracle.rs:251:32
     |
-138 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `oracle`
-   --> contracts/boxmeout/src/oracle.rs:139:9
-    |
-139 |         oracle: Address,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/oracle.rs:140:9
-    |
-140 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `attestation_result`
-   --> contracts/boxmeout/src/oracle.rs:141:9
-    |
-141 |         attestation_result: u32,
-    |         ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_attestation_result`
-
-warning: unused variable: `data_hash`
-   --> contracts/boxmeout/src/oracle.rs:142:9
-    |
-142 |         data_hash: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_data_hash`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:159:28
-    |
-159 |     pub fn check_consensus(env: Env, market_id: BytesN<32>) -> bool {
-    |                            ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/oracle.rs:159:38
-    |
-159 |     pub fn check_consensus(env: Env, market_id: BytesN<32>) -> bool {
-    |                                      ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:175:32
-    |
-175 |     pub fn finalize_resolution(env: Env, market_id: BytesN<32>) {
-    |                                ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/oracle.rs:175:42
-    |
-175 |     pub fn finalize_resolution(env: Env, market_id: BytesN<32>) {
-    |                                          ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:190:9
-    |
-190 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `challenger`
-   --> contracts/boxmeout/src/oracle.rs:191:9
-    |
-191 |         challenger: Address,
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_challenger`
-
-warning: unused variable: `oracle`
-   --> contracts/boxmeout/src/oracle.rs:192:9
-    |
-192 |         oracle: Address,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/oracle.rs:193:9
-    |
-193 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `challenge_reason`
-   --> contracts/boxmeout/src/oracle.rs:194:9
-    |
-194 |         challenge_reason: Symbol,
-    |         ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_challenge_reason`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:215:9
-    |
-215 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `oracle`
-   --> contracts/boxmeout/src/oracle.rs:216:9
-    |
-216 |         oracle: Address,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/oracle.rs:217:9
-    |
-217 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `challenge_valid`
-   --> contracts/boxmeout/src/oracle.rs:218:9
-    |
-218 |         challenge_valid: bool,
-    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_challenge_valid`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:230:29
-    |
-230 |     pub fn get_attestations(env: Env, market_id: BytesN<32>) -> Vec<Symbol> {
-    |                             ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/oracle.rs:230:39
-    |
-230 |     pub fn get_attestations(env: Env, market_id: BytesN<32>) -> Vec<Symbol> {
-    |                                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:241:28
-    |
-241 |     pub fn get_oracle_info(env: Env, oracle: Address) -> Symbol {
-    |                            ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `oracle`
-   --> contracts/boxmeout/src/oracle.rs:241:38
-    |
-241 |     pub fn get_oracle_info(env: Env, oracle: Address) -> Symbol {
-    |                                      ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:252:31
-    |
-252 |     pub fn get_active_oracles(env: Env) -> Vec<Address> {
-    |                               ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:265:36
-    |
-265 |     pub fn set_consensus_threshold(env: Env, new_threshold: u32) {
-    |                                    ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `new_threshold`
-   --> contracts/boxmeout/src/oracle.rs:265:46
-    |
-265 |     pub fn set_consensus_threshold(env: Env, new_threshold: u32) {
-    |                                              ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_threshold`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:276:33
-    |
-276 |     pub fn get_consensus_report(env: Env) -> Symbol {
-    |                                 ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/oracle.rs:290:9
-    |
-290 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `admin`
-   --> contracts/boxmeout/src/oracle.rs:291:9
-    |
-291 |         admin: Address,
-    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/oracle.rs:292:9
-    |
-292 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `forced_outcome`
-   --> contracts/boxmeout/src/oracle.rs:293:9
-    |
-293 |         forced_outcome: u32,
-    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_forced_outcome`
-
-warning: unused variable: `reason`
-   --> contracts/boxmeout/src/oracle.rs:294:9
-    |
-294 |         reason: Symbol,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_reason`
-
-warning: unused variable: `env`
-  --> contracts/boxmeout/src/amm.rs:89:24
-   |
-89 |     pub fn create_pool(env: Env, market_id: BytesN<32>, initial_liquidity: u128) {
-   |                        ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-  --> contracts/boxmeout/src/amm.rs:89:34
-   |
-89 |     pub fn create_pool(env: Env, market_id: BytesN<32>, initial_liquidity: u128) {
-   |                                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `initial_liquidity`
-  --> contracts/boxmeout/src/amm.rs:89:57
-   |
-89 |     pub fn create_pool(env: Env, market_id: BytesN<32>, initial_liquidity: u128) {
-   |                                                         ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_initial_liquidity`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:110:9
-    |
-110 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `buyer`
-   --> contracts/boxmeout/src/amm.rs:111:9
-    |
-111 |         buyer: Address,
-    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_buyer`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:112:9
-    |
-112 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `outcome`
-   --> contracts/boxmeout/src/amm.rs:113:9
-    |
-113 |         outcome: u32,
-    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_outcome`
-
-warning: unused variable: `amount`
-   --> contracts/boxmeout/src/amm.rs:114:9
-    |
-114 |         amount: u128,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_amount`
-
-warning: unused variable: `min_shares`
-   --> contracts/boxmeout/src/amm.rs:115:9
-    |
-115 |         min_shares: u128,
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_min_shares`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:136:9
-    |
-136 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `seller`
-   --> contracts/boxmeout/src/amm.rs:137:9
-    |
-137 |         seller: Address,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_seller`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:138:9
-    |
-138 |         market_id: BytesN<32>,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `outcome`
-   --> contracts/boxmeout/src/amm.rs:139:9
-    |
-139 |         outcome: u32,
-    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_outcome`
-
-warning: unused variable: `shares`
-   --> contracts/boxmeout/src/amm.rs:140:9
-    |
-140 |         shares: u128,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_shares`
-
-warning: unused variable: `min_payout`
-   --> contracts/boxmeout/src/amm.rs:141:9
-    |
-141 |         min_payout: u128,
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_min_payout`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:155:21
-    |
-155 |     pub fn get_odds(env: Env, market_id: BytesN<32>) -> (u128, u128) {
+251 | ...alize_resolution(env: Env, market_id: BytesN<32...
     |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:155:31
+   --> contracts/boxmeout/src/oracle.rs:251:42
     |
-155 |     pub fn get_odds(env: Env, market_id: BytesN<32>) -> (u128, u128) {
-    |                               ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+251 | ...tion(env: Env, market_id: BytesN<32>) {
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:167:27
+   --> contracts/boxmeout/src/oracle.rs:266:9
     |
-167 |     pub fn get_pool_state(env: Env, market_id: BytesN<32>) -> Symbol {
-    |                           ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:167:37
-    |
-167 |     pub fn get_pool_state(env: Env, market_id: BytesN<32>) -> Symbol {
-    |                                     ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:185:9
-    |
-185 |         env: Env,
+266 |         env: Env,
     |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
-warning: unused variable: `lp_provider`
-   --> contracts/boxmeout/src/amm.rs:186:9
+warning: unused variable: `challenger`
+   --> contracts/boxmeout/src/oracle.rs:267:9
     |
-186 |         lp_provider: Address,
-    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lp_provider`
+267 |         challenger: Address,
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_challenger`
+
+warning: unused variable: `oracle`
+   --> contracts/boxmeout/src/oracle.rs:268:9
+    |
+268 |         oracle: Address,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:187:9
+   --> contracts/boxmeout/src/oracle.rs:269:9
     |
-187 |         market_id: BytesN<32>,
+269 |         market_id: BytesN<32>,
     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
-warning: unused variable: `liquidity_amount`
-   --> contracts/boxmeout/src/amm.rs:188:9
+warning: unused variable: `challenge_reason`
+   --> contracts/boxmeout/src/oracle.rs:270:9
     |
-188 |         liquidity_amount: u128,
-    |         ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_liquidity_amount`
+270 |         challenge_reason: Symbol,
+    |         ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_challenge_reason`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:207:9
+   --> contracts/boxmeout/src/oracle.rs:291:9
     |
-207 |         env: Env,
+291 |         env: Env,
     |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
-warning: unused variable: `lp_provider`
-   --> contracts/boxmeout/src/amm.rs:208:9
+warning: unused variable: `oracle`
+   --> contracts/boxmeout/src/oracle.rs:292:9
     |
-208 |         lp_provider: Address,
-    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lp_provider`
+292 |         oracle: Address,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:209:9
+   --> contracts/boxmeout/src/oracle.rs:293:9
     |
-209 |         market_id: BytesN<32>,
+293 |         market_id: BytesN<32>,
     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
-warning: unused variable: `lp_tokens`
-   --> contracts/boxmeout/src/amm.rs:210:9
+warning: unused variable: `challenge_valid`
+   --> contracts/boxmeout/src/oracle.rs:294:9
     |
-210 |         lp_tokens: u128,
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lp_tokens`
+294 |         challenge_valid: bool,
+    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_challenge_valid`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:223:28
+   --> contracts/boxmeout/src/oracle.rs:306:29
     |
-223 |     pub fn get_lp_position(env: Env, lp_provider: Address, market_id: BytesN<32>) -> Symbol {
-    |                            ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `lp_provider`
-   --> contracts/boxmeout/src/amm.rs:223:38
-    |
-223 |     pub fn get_lp_position(env: Env, lp_provider: Address, market_id: BytesN<32>) -> Symbol {
-    |                                      ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lp_provider`
+306 | ...get_attestations(env: Env, market_id: BytesN<32...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:223:60
+   --> contracts/boxmeout/src/oracle.rs:306:39
     |
-223 |     pub fn get_lp_position(env: Env, lp_provider: Address, market_id: BytesN<32>) -> Symbol {
-    |                                                            ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+306 | ...ions(env: Env, market_id: BytesN<32>) -> Vec<Sy...
+    |                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:236:26
+   --> contracts/boxmeout/src/oracle.rs:317:28
     |
-236 |     pub fn claim_lp_fees(env: Env, lp_provider: Address, market_id: BytesN<32>) -> u128 {
-    |                          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+317 | ... get_oracle_info(env: Env, oracle: Address) -> ...
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
-warning: unused variable: `lp_provider`
-   --> contracts/boxmeout/src/amm.rs:236:36
+warning: unused variable: `oracle`
+   --> contracts/boxmeout/src/oracle.rs:317:38
     |
-236 |     pub fn claim_lp_fees(env: Env, lp_provider: Address, market_id: BytesN<32>) -> u128 {
-    |                                    ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lp_provider`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:236:58
-    |
-236 |     pub fn claim_lp_fees(env: Env, lp_provider: Address, market_id: BytesN<32>) -> u128 {
-    |                                                          ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+317 | ...e_info(env: Env, oracle: Address) -> Symbol {
+    |                     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_oracle`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:250:27
+   --> contracts/boxmeout/src/oracle.rs:328:31
     |
-250 |     pub fn rebalance_pool(env: Env, market_id: BytesN<32>) {
-    |                           ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:250:37
-    |
-250 |     pub fn rebalance_pool(env: Env, market_id: BytesN<32>) {
-    |                                     ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+328 | ...t_active_oracles(env: Env) -> Vec<Address> {
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:261:28
+   --> contracts/boxmeout/src/oracle.rs:341:36
     |
-261 |     pub fn get_user_shares(env: Env, user: Address, market_id: BytesN<32>) -> Symbol {
-    |                            ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+341 | ...sensus_threshold(env: Env, new_threshold: u32) {
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
-warning: unused variable: `user`
-   --> contracts/boxmeout/src/amm.rs:261:38
+warning: unused variable: `new_threshold`
+   --> contracts/boxmeout/src/oracle.rs:341:46
     |
-261 |     pub fn get_user_shares(env: Env, user: Address, market_id: BytesN<32>) -> Symbol {
-    |                                      ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:261:53
-    |
-261 |     pub fn get_user_shares(env: Env, user: Address, market_id: BytesN<32>) -> Symbol {
-    |                                                     ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+341 | ...ld(env: Env, new_threshold: u32) {
+    |                 ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_threshold`
 
 warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:273:9
+   --> contracts/boxmeout/src/oracle.rs:352:33
     |
-273 |         env: Env,
+352 |     pub fn get_consensus_report(env: Env) -> Symbol {
+    |                                 ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> contracts/boxmeout/src/oracle.rs:366:9
+    |
+366 |         env: Env,
     |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
 
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:274:9
+warning: unused variable: `admin`
+   --> contracts/boxmeout/src/oracle.rs:367:9
     |
-274 |         market_id: BytesN<32>,
+367 |         admin: Address,
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `market_id`
+   --> contracts/boxmeout/src/oracle.rs:368:9
+    |
+368 |         market_id: BytesN<32>,
     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
-warning: unused variable: `offset`
-   --> contracts/boxmeout/src/amm.rs:275:9
+warning: unused variable: `forced_outcome`
+   --> contracts/boxmeout/src/oracle.rs:369:9
     |
-275 |         offset: u32,
-    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_offset`
+369 |         forced_outcome: u32,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_forced_outcome`
 
-warning: unused variable: `limit`
-   --> contracts/boxmeout/src/amm.rs:276:9
+warning: unused variable: `reason`
+   --> contracts/boxmeout/src/oracle.rs:370:9
     |
-276 |         limit: u32,
-    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_limit`
+370 |         reason: Symbol,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_reason`
 
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:289:9
+warning: unused imports: `ADMIN_KEY`, `LEADERBOARD_FEES_KEY`, and `USDC_KEY`
+ --> contracts/boxmeout/src/test_treasury.rs:5:23
+  |
+5 | ...y::{ADMIN_KEY, LEADERBOARD_FEES_KEY, USDC_KEY};
+  |        ^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^
+
+warning: unused import: `Vec`
+ --> contracts/boxmeout/src/test_treasury.rs:6:139
+  |
+6 | ... Address, Env, Symbol, Vec, IntoVal, TryIntoVal};
+  |                           ^^^
+
+warning: unused import: `Ledger`
+ --> contracts/boxmeout/src/test_treasury.rs:6:77
+  |
+6 | ...ddress as _, Events, Ledger, MockAuth, MockAuthIn...
+  |                         ^^^^^^
+
+warning: `boxmeout` (lib) generated 93 warnings (run `cargo fix --lib -p boxmeout` to apply 73 suggestions)
+warning: `boxmeout` (lib test) generated 96 warnings (93 duplicates) (run `cargo fix --lib -p boxmeout --tests` to apply 2 suggestions)
+warning: unused import: `Ledger`
+ --> contracts/boxmeout/tests/oracle_test.rs:4:31
+  |
+4 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused attribute
+   --> contracts/boxmeout/tests/oracle_test.rs:101:1
     |
-289 |         env: Env,
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+101 | #[should_panic]
+    | ^^^^^^^^^^^^^^^ help: remove this attribute
+    |
+note: attribute also specified here
+   --> contracts/boxmeout/tests/oracle_test.rs:100:1
+    |
+100 | #[should_panic(expected = "oracle already registered")]
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: `#[warn(unused_attributes)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/oracle_test.rs:15:9
+   |
+15 |     env.register_contract(None, OracleManager)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: unused variable: `i`
+  --> contracts/boxmeout/tests/oracle_test.rs:92:9
+   |
+92 |     for i in 0..11 {
+   |         ^ help: if this is intentional, prefix it with an underscore: `_i`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `BytesN` and `Ledger`
+ --> contracts/boxmeout/tests/factory_test.rs:4:31
+  |
+4 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+5 |     token, Address, BytesN, Env, Symbol,
+  |                     ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/factory_test.rs:18:9
+   |
+18 |     env.register_contract(None, MarketFactory)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: unused import: `Commitment`
+ --> contracts/boxmeout/tests/market_test.rs:8:16
+  |
+8 | use boxmeout::{Commitment, MarketError, PredictionMa...
+  |                ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `admin`
+   --> contracts/boxmeout/tests/market_test.rs:149:40
+    |
+149 | ...et_id, _creator, admin, usdc_address) = setup_t...
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `admin`
+   --> contracts/boxmeout/tests/market_test.rs:197:40
+    |
+197 | ...et_id, _creator, admin, usdc_address) = setup_t...
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> contracts/boxmeout/tests/market_test.rs:232:40
+    |
+232 | ...et_id, _creator, admin, usdc_address) = setup_t...
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> contracts/boxmeout/tests/market_test.rs:304:40
+    |
+304 | ...et_id, _creator, admin, usdc_address) = setup_t...
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> contracts/boxmeout/tests/market_test.rs:47:10
+   |
+47 |     env: &Env,
+   |          ^^^^ the lifetime is elided here
+48 | ) -> (
+49 |     PredictionMarketClient,
+   |     ^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+49 |     PredictionMarketClient<'_>,
+   |                           ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> contracts/boxmeout/tests/market_test.rs:88:10
+   |
+88 |     env: &Env,
+   |          ^^^^ the lifetime is elided here
+89 | ) -> (
+90 |     PredictionMarketClient,
+   |     ^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+91 |     BytesN<32>,
+92 |     token::StellarAssetClient,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+90 ~     PredictionMarketClient<'_>,
+91 |     BytesN<32>,
+92 ~     token::StellarAssetClient<'_>,
+   |
+
+    Checking boxmeout v0.1.0 (/home/knights/Documents/Project/Drips/BOXMEOUT_STELLA/contracts/contracts/boxmeout)
+warning: unused import: `Ledger`
+ --> contracts/boxmeout/tests/treasury_test.rs:4:31
+  |
+4 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/treasury_test.rs:15:9
+   |
+15 |     env.register_contract(None, Treasury)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: unused imports: `BytesN`, `LedgerInfo`, and `Ledger`
+ --> contracts/boxmeout/tests/integration_test.rs:4:31
+  |
+4 |     testutils::{Address as _, Ledger, LedgerInfo},
+  |                               ^^^^^^  ^^^^^^^^^^
+5 |     Address, BytesN, Env, Symbol,
+  |              ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `PredictionMarketClient` and `PredictionMarket`
+  --> contracts/boxmeout/tests/integration_test.rs:9:57
+   |
+ 9 |     AMM, AMMClient, MarketFactory, MarketFactoryClient, PredictionMarket,
+   |                                                         ^^^^^^^^^^^^^^^^
+10 |     PredictionMarketClient, OracleManager, OracleManagerClient, Treasury, T...
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/integration_test.rs:20:26
+   |
+20 |     let factory_id = env.register_contract(None, Ma...
+   |                          ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/integration_test.rs:21:27
+   |
+21 |     let treasury_id = env.register_contract(None, T...
+   |                           ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/integration_test.rs:22:25
+   |
+22 |     let oracle_id = env.register_contract(None, Ora...
+   |                         ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/integration_test.rs:23:22
+   |
+23 |     let amm_id = env.register_contract(None, AMM);
+   |                      ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts/boxmeout/tests/integration_test.rs:123:26
+    |
+123 |     let factory_id = env.register_contract(None, M...
+    |                          ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts/boxmeout/tests/integration_test.rs:124:22
+    |
+124 |     let amm_id = env.register_contract(None, AMM);
+    |                      ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts/boxmeout/tests/integration_test.rs:152:25
+    |
+152 |     let oracle_id = env.register_contract(None, Or...
+    |                         ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts/boxmeout/tests/integration_test.rs:179:27
+    |
+179 |     let treasury_id = env.register_contract(None, ...
+    |                           ^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `creator`
+  --> contracts/boxmeout/tests/integration_test.rs:33:9
+   |
+33 |     let creator = Address::generate(&env);
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_creator`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `user1`
+  --> contracts/boxmeout/tests/integration_test.rs:34:9
+   |
+34 |     let user1 = Address::generate(&env);
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_user1`
+
+warning: unused variable: `user2`
+  --> contracts/boxmeout/tests/integration_test.rs:35:9
+   |
+35 |     let user2 = Address::generate(&env);
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_user2`
+
+warning: `boxmeout` (test "oracle_test") generated 4 warnings (run `cargo fix --test "oracle_test" -p boxmeout` to apply 3 suggestions)
+warning: `boxmeout` (test "factory_test") generated 2 warnings (run `cargo fix --test "factory_test" -p boxmeout` to apply 1 suggestion)
+warning: `boxmeout` (test "market_test") generated 7 warnings (run `cargo fix --test "market_test" -p boxmeout` to apply 7 suggestions)
+warning: `boxmeout` (test "treasury_test") generated 2 warnings (run `cargo fix --test "treasury_test" -p boxmeout` to apply 1 suggestion)
+warning: `boxmeout` (test "integration_test") generated 13 warnings (run `cargo fix --test "integration_test" -p boxmeout` to apply 5 suggestions)
+warning: unused imports: `IntoVal` and `TokenClient`
+ --> contracts/boxmeout/tests/amm_test.rs:6:33
+  |
+6 |     token::{StellarAssetClient, TokenClient},
+  |                                 ^^^^^^^^^^^
+7 |     Address, BytesN, Env, IntoVal, Symbol,
+  |                           ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `AMMContract`
+  --> contracts/boxmeout/tests/amm_test.rs:18:16
+   |
+18 | use boxmeout::{AMMContract, AMMContractClient};
+   |                ^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts/boxmeout/tests/amm_test.rs:27:9
+   |
+27 |     env.register_contract(None, AMM)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+error[E0308]: mismatched types
+   --> contracts/boxmeout/tests/amm_test.rs:461:32
+    |
+461 |     token_client.mint(&trader, &buy_amount);
+    |                  ----          ^^^^^^^^^^^ expected `&i128`, found `&u128`
+    |                  |
+    |                  arguments to this method are incorrect
+    |
+    = note: expected reference `&i128`
+               found reference `&u128`
+note: method defined here
+   --> /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-23.5.1/src/token.rs:456:8
+    |
+456 |     fn mint(env: Env, to: Address, amount: i128);
+    |        ^^^^
+
+warning: unused import: `Address`
+ --> contracts/boxmeout/tests/amm_test.rs:5:17
+  |
+5 |     testutils::{Address as _, Ledger},
+  |                 ^^^^^^^
+
+warning: unused import: `Ledger`
+ --> contracts/boxmeout/tests/amm_test.rs:5:31
+  |
+5 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+
+warning: unused variable: `factory`
+   --> contracts/boxmeout/tests/amm_test.rs:318:9
+    |
+318 |     let factory = Address::generate(&env);
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_factory`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `buyer`
+   --> contracts/boxmeout/tests/amm_test.rs:319:9
+    |
+319 |     let buyer = Address::generate(&env);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_buyer`
+
+warning: unused variable: `yes_reserve`
+   --> contracts/boxmeout/tests/amm_test.rs:399:10
+    |
+399 |     let (yes_reserve, no_reserve) =
+    |          ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_yes_reserve`
+
+warning: unused variable: `no_reserve`
+   --> contracts/boxmeout/tests/amm_test.rs:399:23
+    |
+399 |     let (yes_reserve, no_reserve) =
+    |                       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_no_reserve`
+
+warning: unused variable: `new_k`
+   --> contracts/boxmeout/tests/amm_test.rs:401:9
+    |
+401 |     let new_k = get_pool_k(&env, &amm_id, &market_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_new_k`
 
 warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:290:9
+   --> contracts/boxmeout/tests/amm_test.rs:485:9
     |
-290 |         market_id: BytesN<32>,
+485 |     let market_id = BytesN::from_array(&env, &[1u8...
     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
 
-warning: unused variable: `outcome`
-   --> contracts/boxmeout/src/amm.rs:291:9
+warning: unused variable: `yes_reserve`
+   --> contracts/boxmeout/tests/amm_test.rs:504:10
     |
-291 |         outcome: u32,
-    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_outcome`
+504 |     let (yes_reserve, no_reserve) =
+    |          ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_yes_reserve`
 
-warning: unused variable: `buy_amount`
-   --> contracts/boxmeout/src/amm.rs:292:9
+warning: unused variable: `no_reserve`
+   --> contracts/boxmeout/tests/amm_test.rs:504:23
     |
-292 |         buy_amount: u128,
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_buy_amount`
+504 |     let (yes_reserve, no_reserve) =
+    |                       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_no_reserve`
 
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:305:35
+warning: unused variable: `stored_k`
+   --> contracts/boxmeout/tests/amm_test.rs:506:9
     |
-305 |     pub fn set_slippage_tolerance(env: Env, market_id: BytesN<32>, new_slippage_bps: u32) {
-    |                                   ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+506 |     let stored_k = env.as_contract(&amm_id, || get...
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stored_k`
 
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:305:45
+warning: unused variable: `usdc_token`
+   --> contracts/boxmeout/tests/amm_test.rs:749:9
     |
-305 |     pub fn set_slippage_tolerance(env: Env, market_id: BytesN<32>, new_slippage_bps: u32) {
-    |                                             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
+749 |     let usdc_token = setup_usdc_token(&env, &admin...
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_usdc_token`
 
-warning: unused variable: `new_slippage_bps`
-   --> contracts/boxmeout/src/amm.rs:305:68
-    |
-305 |     pub fn set_slippage_tolerance(env: Env, market_id: BytesN<32>, new_slippage_bps: u32) {
-    |                                                                    ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_slippage_bps`
+warning: unused variable: `shares_2`
+    --> contracts/boxmeout/tests/amm_test.rs:1109:9
+     |
+1109 |     let shares_2 = client.buy_shares(&trader2, &m...
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_shares_2`
 
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:318:23
-    |
-318 |     pub fn drain_pool(env: Env, market_id: BytesN<32>) {
-    |                       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-warning: unused variable: `market_id`
-   --> contracts/boxmeout/src/amm.rs:318:33
-    |
-318 |     pub fn drain_pool(env: Env, market_id: BytesN<32>) {
-    |                                 ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_market_id`
-
-warning: unused variable: `env`
-   --> contracts/boxmeout/src/amm.rs:331:30
-    |
-331 |     pub fn get_amm_analytics(env: Env) -> Symbol {
-    |                              ^^^ help: if this is intentional, prefix it with an underscore: `_env`
-
-For more information about this error, try `rustc --explain E0599`.
-warning: `boxmeout` (lib) generated 165 warnings
-error: could not compile `boxmeout` (lib) due to 1 previous error; 165 warnings emitted
+For more information about this error, try `rustc --explain E0308`.
+warning: `boxmeout` (test "amm_test") generated 16 warnings
+error: could not compile `boxmeout` (test "amm_test") due to 1 previous error; 16 warnings emitted

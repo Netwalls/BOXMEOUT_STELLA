@@ -4,28 +4,44 @@
 #![no_std]
 
 // Module declarations for modular contract architecture
-// NOTE: Only one contract can be compiled at a time for WASM
-// To build different contracts, comment/uncomment the appropriate module
+// NOTE: Only one contract can be compiled at a time for WASM deployment
+// For testing and development, all modules are exposed
+// To build different contracts for deployment, comment/uncomment the appropriate module below
 
-// AMM CONTRACT (currently active for get_odds implementation)
+// All modules are always available for library and test builds
 mod amm;
-pub use amm::*;
-
-// FACTORY CONTRACT
 mod factory;
-pub use factory::*;
-
-// MARKET CONTRACT (for prediction market logic)
 mod market;
-pub use market::*;
-
-// TREASURY CONTRACT
-mod treasury;
-pub use treasury::*;
-
-// ORACLE CONTRACT (required by market for resolution)
 mod oracle;
-pub use oracle::*;
+mod treasury;
+
+pub mod helpers;
 
 #[cfg(test)]
+mod test_treasury;
+#[cfg(test)]
 mod treasury_integration_tests;
+
+// Export all contracts - needed for integration tests
+pub use amm::*;
+pub use factory::*;
+pub use market::*;
+pub use oracle::*;
+pub use treasury::*;
+pub use helpers::*;
+
+// Type aliases for test compatibility
+pub use factory::MarketFactory as FactoryContract;
+pub use factory::MarketFactoryClient as FactoryContractClient;
+
+pub use market::PredictionMarket as MarketContract;
+pub use market::PredictionMarketClient as MarketContractClient;
+
+pub use treasury::Treasury as TreasuryContract;
+pub use treasury::TreasuryClient as TreasuryContractClient;
+
+pub use oracle::OracleManager as OracleContract;
+pub use oracle::OracleManagerClient as OracleContractClient;
+
+pub use amm::AMMClient as AMMContractClient;
+pub use amm::AMM as AMMContract;

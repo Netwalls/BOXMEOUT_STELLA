@@ -8,9 +8,9 @@ const POOL_NO_RESERVE: &str = "pool_no_reserve";
 const POOL_K: &str = "pool_k";
 const POOL_EXISTS: &str = "pool_exists";
 const TRADE_COUNT: &str = "trade_count";
-const USER_SHARES_YES: &str = "user_shares_yes";
-const USER_SHARES_NO: &str = "user_shares_no";
+const USER_SHARES_KEY: &str = "user_shares";
 
+#[cfg(any(test, feature = "testutils"))]
 pub fn create_test_env() -> Env {
     let env = Env::default();
     env.mock_all_auths();
@@ -59,19 +59,12 @@ pub fn set_pool_reserves(env: &Env, market_id: &BytesN<32>, yes_reserve: u128, n
 
 /// Get user's share balance for a specific outcome
 pub fn get_user_shares(env: &Env, user: &Address, market_id: &BytesN<32>, outcome: u32) -> u128 {
-    let key = if outcome == 1 {
-        (
-            Symbol::new(env, USER_SHARES_YES),
-            user.clone(),
-            market_id.clone(),
-        )
-    } else {
-        (
-            Symbol::new(env, USER_SHARES_NO),
-            user.clone(),
-            market_id.clone(),
-        )
-    };
+    let key = (
+        Symbol::new(env, USER_SHARES_KEY),
+        market_id.clone(),
+        user.clone(),
+        outcome,
+    );
     env.storage().persistent().get(&key).unwrap_or(0)
 }
 
@@ -83,19 +76,12 @@ pub fn set_user_shares(
     outcome: u32,
     shares: u128,
 ) {
-    let key = if outcome == 1 {
-        (
-            Symbol::new(env, USER_SHARES_YES),
-            user.clone(),
-            market_id.clone(),
-        )
-    } else {
-        (
-            Symbol::new(env, USER_SHARES_NO),
-            user.clone(),
-            market_id.clone(),
-        )
-    };
+    let key = (
+        Symbol::new(env, USER_SHARES_KEY),
+        market_id.clone(),
+        user.clone(),
+        outcome,
+    );
     env.storage().persistent().set(&key, &shares);
 }
 
