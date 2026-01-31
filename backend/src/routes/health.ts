@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { checkDatabaseConnection } from '../database/prisma.js';
 import { getRedisStatus, isRedisHealthy } from '../config/redis.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * Basic health check - Liveness probe

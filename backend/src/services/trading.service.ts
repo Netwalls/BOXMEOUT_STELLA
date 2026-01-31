@@ -86,7 +86,9 @@ export class TradingService {
     }
 
     if (market.status !== MarketStatus.OPEN) {
-      throw new Error(`Market is ${market.status}. Trading is only allowed for OPEN markets.`);
+      throw new Error(
+        `Market is ${market.status}. Trading is only allowed for OPEN markets.`
+      );
     }
 
     // Check user balance
@@ -100,7 +102,9 @@ export class TradingService {
 
     const userBalance = Number(user.usdcBalance);
     if (userBalance < amount) {
-      throw new Error(`Insufficient balance. Available: ${userBalance} USDC, Required: ${amount} USDC`);
+      throw new Error(
+        `Insufficient balance. Available: ${userBalance} USDC, Required: ${amount} USDC`
+      );
     }
 
     // Set minimum shares to 95% of expected if not provided (5% slippage tolerance)
@@ -139,7 +143,11 @@ export class TradingService {
       await tradeRepository.confirmTrade(trade.id);
 
       // Update or create share position
-      const existingShare = await shareRepository.findByUserMarketOutcome(userId, marketId, outcome);
+      const existingShare = await shareRepository.findByUserMarketOutcome(
+        userId,
+        marketId,
+        outcome
+      );
 
       let updatedShare;
       if (existingShare) {
@@ -199,7 +207,8 @@ export class TradingService {
       tradeId: result.trade.id,
       newSharePosition: {
         totalShares: Number(result.share.quantity),
-        averagePrice: Number(result.share.costBasis) / Number(result.share.quantity),
+        averagePrice:
+          Number(result.share.costBasis) / Number(result.share.quantity),
       },
     };
   }
@@ -230,10 +239,16 @@ export class TradingService {
     }
 
     // Check if user has sufficient shares
-    const userShare = await shareRepository.findByUserMarketOutcome(userId, marketId, outcome);
+    const userShare = await shareRepository.findByUserMarketOutcome(
+      userId,
+      marketId,
+      outcome
+    );
 
     if (!userShare) {
-      throw new Error(`No shares found for outcome ${outcome === 0 ? 'NO' : 'YES'}`);
+      throw new Error(
+        `No shares found for outcome ${outcome === 0 ? 'NO' : 'YES'}`
+      );
     }
 
     const availableShares = Number(userShare.quantity);

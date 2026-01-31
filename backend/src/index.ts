@@ -45,7 +45,7 @@ import {
 import { setupSwagger } from './config/swagger.js';
 
 // Initialize Express app
-const app = express();
+const app: express.Express = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 

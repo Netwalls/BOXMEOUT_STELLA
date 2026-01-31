@@ -79,8 +79,7 @@ export const challengeRateLimiter: RateLimiterMiddleware = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: createRedisStore('challenge'),
-  keyGenerator: (req: any) =>
-    req.body?.publicKey || getIpKey(req),
+  keyGenerator: (req: any) => req.body?.publicKey || getIpKey(req),
   message: rateLimitMessage(
     'Too many challenge requests. Please wait a moment.'
   ),
@@ -161,9 +160,7 @@ export function createRateLimiter(options: {
       const authReq = req as AuthenticatedRequest;
       return authReq.user?.userId || getIpKey(req);
     },
-    message: rateLimitMessage(
-      options.message || 'Too many requests.'
-    ),
+    message: rateLimitMessage(options.message || 'Too many requests.'),
     skip: () => process.env.NODE_ENV === 'test',
   });
 }

@@ -26,7 +26,10 @@ export class ShareRepository {
   /**
    * Find all shares for a user in a specific market
    */
-  async findByUserAndMarket(userId: string, marketId: string): Promise<Share[]> {
+  async findByUserAndMarket(
+    userId: string,
+    marketId: string
+  ): Promise<Share[]> {
     return prisma.share.findMany({
       where: {
         userId,
@@ -82,13 +85,19 @@ export class ShareRepository {
   ): Promise<Share> {
     const updateData: Prisma.ShareUpdateInput = {};
 
-    if (data.quantity !== undefined) updateData.quantity = new Decimal(data.quantity);
-    if (data.costBasis !== undefined) updateData.costBasis = new Decimal(data.costBasis);
-    if (data.currentValue !== undefined) updateData.currentValue = new Decimal(data.currentValue);
-    if (data.unrealizedPnl !== undefined) updateData.unrealizedPnl = new Decimal(data.unrealizedPnl);
-    if (data.soldQuantity !== undefined) updateData.soldQuantity = new Decimal(data.soldQuantity);
+    if (data.quantity !== undefined)
+      updateData.quantity = new Decimal(data.quantity);
+    if (data.costBasis !== undefined)
+      updateData.costBasis = new Decimal(data.costBasis);
+    if (data.currentValue !== undefined)
+      updateData.currentValue = new Decimal(data.currentValue);
+    if (data.unrealizedPnl !== undefined)
+      updateData.unrealizedPnl = new Decimal(data.unrealizedPnl);
+    if (data.soldQuantity !== undefined)
+      updateData.soldQuantity = new Decimal(data.soldQuantity);
     if (data.soldAt !== undefined) updateData.soldAt = data.soldAt;
-    if (data.realizedPnl !== undefined) updateData.realizedPnl = new Decimal(data.realizedPnl);
+    if (data.realizedPnl !== undefined)
+      updateData.realizedPnl = new Decimal(data.realizedPnl);
 
     return prisma.share.update({
       where: { id: shareId },

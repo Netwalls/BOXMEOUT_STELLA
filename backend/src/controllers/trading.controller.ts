@@ -23,7 +23,7 @@ class TradingController {
         return;
       }
 
-      const { marketId } = req.params;
+      const marketId = req.params.marketId as string;
       const { outcome, amount, minShares } = req.body;
 
       // Validate input
@@ -133,7 +133,7 @@ class TradingController {
         return;
       }
 
-      const { marketId } = req.params;
+      const marketId = req.params.marketId as string;
       const { outcome, shares, minPayout } = req.body;
 
       // Validate input
@@ -231,7 +231,7 @@ class TradingController {
    */
   async getOdds(req: Request, res: Response): Promise<void> {
     try {
-      const { marketId } = req.params;
+      const marketId = req.params.marketId as string;
 
       // Call service
       const result = await tradingService.getMarketOdds(marketId);

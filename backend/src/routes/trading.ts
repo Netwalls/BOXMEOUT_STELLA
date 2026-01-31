@@ -5,19 +5,19 @@ import { Router } from 'express';
 import { tradingController } from '../controllers/trading.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/markets/:marketId/buy - Buy Outcome Shares
  * Requires authentication
- * 
+ *
  * Request Body:
  * {
  *   outcome: 0 | 1,  // 0 for NO, 1 for YES
  *   amount: number,   // USDC amount to spend
  *   minShares?: number  // Minimum shares to receive (slippage protection)
  * }
- * 
+ *
  * Response:
  * {
  *   success: true,
@@ -35,23 +35,21 @@ const router = Router();
  *   }
  * }
  */
-router.post(
-  '/:marketId/buy',
-  requireAuth,
-  (req, res) => tradingController.buyShares(req, res)
+router.post('/:marketId/buy', requireAuth, (req, res) =>
+  tradingController.buyShares(req, res)
 );
 
 /**
  * POST /api/markets/:marketId/sell - Sell Outcome Shares
  * Requires authentication
- * 
+ *
  * Request Body:
  * {
  *   outcome: 0 | 1,    // 0 for NO, 1 for YES
  *   shares: number,     // Number of shares to sell
  *   minPayout?: number  // Minimum payout to receive (slippage protection)
  * }
- * 
+ *
  * Response:
  * {
  *   success: true,
@@ -66,16 +64,14 @@ router.post(
  *   }
  * }
  */
-router.post(
-  '/:marketId/sell',
-  requireAuth,
-  (req, res) => tradingController.sellShares(req, res)
+router.post('/:marketId/sell', requireAuth, (req, res) =>
+  tradingController.sellShares(req, res)
 );
 
 /**
  * GET /api/markets/:marketId/odds - Get Current Market Odds
  * No authentication required
- * 
+ *
  * Response:
  * {
  *   success: true,
@@ -94,9 +90,8 @@ router.post(
  *   }
  * }
  */
-router.get(
-  '/:marketId/odds',
-  (req, res) => tradingController.getOdds(req, res)
+router.get('/:marketId/odds', (req, res) =>
+  tradingController.getOdds(req, res)
 );
 
 export default router;

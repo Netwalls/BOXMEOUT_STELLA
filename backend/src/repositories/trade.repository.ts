@@ -187,7 +187,10 @@ export class TradeRepository extends BaseRepository<Trade> {
     });
   }
 
-  async findByUserAndMarket(userId: string, marketId: string): Promise<Trade[]> {
+  async findByUserAndMarket(
+    userId: string,
+    marketId: string
+  ): Promise<Trade[]> {
     return await this.prisma.trade.findMany({
       where: {
         userId,
