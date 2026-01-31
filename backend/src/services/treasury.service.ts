@@ -1,4 +1,7 @@
-import { treasuryService as blockchainTreasuryService, TreasuryBalances } from './blockchain/treasury.js';
+import {
+  treasuryService as blockchainTreasuryService,
+  TreasuryBalances,
+} from './blockchain/treasury.js';
 import { DistributionRepository } from '../repositories/distribution.repository.js';
 import { DistributionType, DistributionStatus } from '@prisma/client';
 
@@ -22,7 +25,8 @@ export class TreasuryService {
       0
     );
 
-    const result = await blockchainTreasuryService.distributeLeaderboard(recipients);
+    const result =
+      await blockchainTreasuryService.distributeLeaderboard(recipients);
 
     const distribution = await this.distributionRepository.createDistribution({
       distributionType: DistributionType.LEADERBOARD,

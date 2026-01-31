@@ -9,12 +9,16 @@ export const securityHeaders = helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org']
-    }
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: [
+        "'self'",
+        process.env.STELLAR_HORIZON_URL ||
+          'https://horizon-testnet.stellar.org',
+      ],
+    },
   },
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 });
 
 // CORS middleware
@@ -23,11 +27,15 @@ export const corsMiddleware = cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page']
+  exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
 });
 
 // Additional security headers
-export const xssProtection = (req: Request, res: Response, next: NextFunction) => {
+export const xssProtection = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   next();
 };
@@ -39,7 +47,10 @@ export const frameGuard = (req: Request, res: Response, next: NextFunction) => {
 
 export const noCache = (req: Request, res: Response, next: NextFunction) => {
   res.setHeader('Surrogate-Control', 'no-store');
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader(
+    'Cache-Control',
+    'no-store, no-cache, must-revalidate, proxy-revalidate'
+  );
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   next();

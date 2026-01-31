@@ -4,12 +4,14 @@ import { TreasuryService } from '../services/treasury.service.js';
 import { z } from 'zod';
 
 const distributeLeaderboardSchema = z.object({
-  recipients: z.array(
-    z.object({
-      address: z.string().min(56).max(56),
-      amount: z.string().regex(/^\d+$/),
-    })
-  ).min(1),
+  recipients: z
+    .array(
+      z.object({
+        address: z.string().min(56).max(56),
+        amount: z.string().regex(/^\d+$/),
+      })
+    )
+    .min(1),
 });
 
 const distributeCreatorSchema = z.object({
@@ -39,13 +41,17 @@ export class TreasuryController {
         success: false,
         error: {
           code: 'TREASURY_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to fetch balances',
+          message:
+            error instanceof Error ? error.message : 'Failed to fetch balances',
         },
       });
     }
   }
 
-  async distributeLeaderboard(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async distributeLeaderboard(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
     try {
       if (!req.user) {
         res.status(401).json({
@@ -83,13 +89,17 @@ export class TreasuryController {
         success: false,
         error: {
           code: 'DISTRIBUTION_ERROR',
-          message: error instanceof Error ? error.message : 'Distribution failed',
+          message:
+            error instanceof Error ? error.message : 'Distribution failed',
         },
       });
     }
   }
 
-  async distributeCreator(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async distributeCreator(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
     try {
       if (!req.user) {
         res.status(401).json({
@@ -131,7 +141,8 @@ export class TreasuryController {
         success: false,
         error: {
           code: 'DISTRIBUTION_ERROR',
-          message: error instanceof Error ? error.message : 'Distribution failed',
+          message:
+            error instanceof Error ? error.message : 'Distribution failed',
         },
       });
     }

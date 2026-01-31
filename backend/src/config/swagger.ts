@@ -5,10 +5,8 @@ import { Express } from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
 
 // OpenAPI Specification
 const options: swaggerJsdoc.Options = {
@@ -58,76 +56,76 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
       contact: {
         name: 'BoxMeOut API Support',
         email: 'api@boxmeout.com',
-        url: 'https://boxmeout.com/support'
+        url: 'https://boxmeout.com/support',
       },
       license: {
         name: 'MIT',
-        url: 'https://opensource.org/licenses/MIT'
-      }
+        url: 'https://opensource.org/licenses/MIT',
+      },
     },
     servers: [
       {
         url: 'http://localhost:3000',
-        description: 'Development server'
+        description: 'Development server',
       },
       {
         url: 'https://api.boxmeout.com',
-        description: 'Production server'
+        description: 'Production server',
       },
       {
         url: 'https://api-staging.boxmeout.com',
-        description: 'Staging server'
-      }
+        description: 'Staging server',
+      },
     ],
     tags: [
       {
         name: 'Authentication',
-        description: 'User authentication and authorization'
+        description: 'User authentication and authorization',
       },
       {
         name: 'Users',
-        description: 'User profiles and account management'
+        description: 'User profiles and account management',
       },
       {
         name: 'Markets',
-        description: 'Prediction market creation and management'
+        description: 'Prediction market creation and management',
       },
       {
         name: 'Predictions',
-        description: 'User predictions with commit-reveal'
+        description: 'User predictions with commit-reveal',
       },
       {
         name: 'Trading',
-        description: 'Share trading and AMM operations'
+        description: 'Share trading and AMM operations',
       },
       {
         name: 'Transactions',
-        description: 'Deposits, withdrawals, and payments'
+        description: 'Deposits, withdrawals, and payments',
       },
       {
         name: 'Leaderboard',
-        description: 'User rankings and achievements'
+        description: 'User rankings and achievements',
       },
       {
         name: 'Referrals',
-        description: 'Referral program management'
+        description: 'Referral program management',
       },
       {
         name: 'Disputes',
-        description: 'Market resolution disputes'
+        description: 'Market resolution disputes',
       },
       {
         name: 'Admin',
-        description: 'Administrative operations'
+        description: 'Administrative operations',
       },
       {
         name: 'Health',
-        description: 'API health and monitoring'
-      }
+        description: 'API health and monitoring',
+      },
     ],
     externalDocs: {
       description: 'BoxMeOut Documentation',
-      url: 'https://docs.boxmeout.com'
+      url: 'https://docs.boxmeout.com',
     },
     components: {
       securitySchemes: {
@@ -135,20 +133,20 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: 'Standard JWT token for email/password users'
+          description: 'Standard JWT token for email/password users',
         },
         stellarAuth: {
           type: 'apiKey',
           in: 'header',
           name: 'X-Stellar-Signature',
-          description: 'Stellar wallet signature for blockchain authentication'
+          description: 'Stellar wallet signature for blockchain authentication',
         },
         apiKey: {
           type: 'apiKey',
           in: 'header',
           name: 'X-API-Key',
-          description: 'API key for admin operations'
-        }
+          description: 'API key for admin operations',
+        },
       },
       schemas: {
         // ========== STANDARD RESPONSE SCHEMAS ==========
@@ -157,11 +155,11 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           properties: {
             success: {
               type: 'boolean',
-              example: true
+              example: true,
             },
             data: {
               type: 'object',
-              description: 'Response data'
+              description: 'Response data',
             },
             meta: {
               type: 'object',
@@ -169,11 +167,11 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
                 timestamp: {
                   type: 'string',
                   format: 'date-time',
-                  example: '2024-01-27T12:00:00.000Z'
-                }
-              }
-            }
-          }
+                  example: '2024-01-27T12:00:00.000Z',
+                },
+              },
+            },
+          },
         },
 
         ErrorResponse: {
@@ -181,18 +179,18 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           properties: {
             success: {
               type: 'boolean',
-              example: false
+              example: false,
             },
             error: {
               type: 'object',
               properties: {
                 code: {
                   type: 'string',
-                  example: 'VALIDATION_ERROR'
+                  example: 'VALIDATION_ERROR',
                 },
                 message: {
                   type: 'string',
-                  example: 'Validation failed'
+                  example: 'Validation failed',
                 },
                 details: {
                   type: 'array',
@@ -201,22 +199,22 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
                     properties: {
                       field: { type: 'string' },
                       message: { type: 'string' },
-                      code: { type: 'string' }
-                    }
-                  }
-                }
-              }
+                      code: { type: 'string' },
+                    },
+                  },
+                },
+              },
             },
             meta: {
               type: 'object',
               properties: {
                 timestamp: {
                   type: 'string',
-                  format: 'date-time'
-                }
-              }
-            }
-          }
+                  format: 'date-time',
+                },
+              },
+            },
+          },
         },
 
         Pagination: {
@@ -225,22 +223,22 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             page: {
               type: 'integer',
               minimum: 1,
-              default: 1
+              default: 1,
             },
             limit: {
               type: 'integer',
               minimum: 1,
               maximum: 100,
-              default: 20
+              default: 20,
             },
             sort: {
-              type: 'string'
+              type: 'string',
             },
             order: {
               type: 'string',
-              enum: ['asc', 'desc']
-            }
-          }
+              enum: ['asc', 'desc'],
+            },
+          },
         },
 
         PaginationMeta: {
@@ -251,8 +249,8 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             limit: { type: 'integer' },
             pages: { type: 'integer' },
             hasNext: { type: 'boolean' },
-            hasPrev: { type: 'boolean' }
-          }
+            hasPrev: { type: 'boolean' },
+          },
         },
 
         // ========== USER SCHEMAS ==========
@@ -265,21 +263,21 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             walletAddress: {
               type: 'string',
               nullable: true,
-              pattern: '^G[A-Z0-9]{55}$'
+              pattern: '^G[A-Z0-9]{55}$',
             },
             usdcBalance: {
               type: 'number',
               format: 'float',
-              description: 'USDC balance (6 decimals)'
+              description: 'USDC balance (6 decimals)',
             },
             xlmBalance: {
               type: 'number',
               format: 'float',
-              description: 'XLM balance (7 decimals)'
+              description: 'XLM balance (7 decimals)',
             },
             tier: {
               type: 'string',
-              enum: ['BEGINNER', 'ADVANCED', 'EXPERT', 'LEGENDARY']
+              enum: ['BEGINNER', 'ADVANCED', 'EXPERT', 'LEGENDARY'],
             },
             reputationScore: { type: 'integer' },
             avatarUrl: { type: 'string', nullable: true },
@@ -290,8 +288,8 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             createdAt: { type: 'string', format: 'date-time' },
             lastLogin: { type: 'string', format: 'date-time', nullable: true },
             updatedAt: { type: 'string', format: 'date-time' },
-            isActive: { type: 'boolean' }
-          }
+            isActive: { type: 'boolean' },
+          },
         },
 
         RegisterRequest: {
@@ -301,36 +299,36 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             email: {
               type: 'string',
               format: 'email',
-              description: 'Valid email address'
+              description: 'Valid email address',
             },
             password: {
               type: 'string',
               format: 'password',
               minLength: 8,
-              description: 'Minimum 8 characters'
+              description: 'Minimum 8 characters',
             },
             username: {
               type: 'string',
               minLength: 3,
               maxLength: 30,
-              pattern: '^[a-zA-Z0-9_]+$'
+              pattern: '^[a-zA-Z0-9_]+$',
             },
             walletAddress: {
               type: 'string',
               pattern: '^G[A-Z0-9]{55}$',
-              nullable: true
+              nullable: true,
             },
             displayName: {
               type: 'string',
               maxLength: 50,
-              nullable: true
+              nullable: true,
             },
             bio: {
               type: 'string',
               maxLength: 500,
-              nullable: true
-            }
-          }
+              nullable: true,
+            },
+          },
         },
 
         LoginRequest: {
@@ -338,8 +336,8 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           required: ['email', 'password'],
           properties: {
             email: { type: 'string', format: 'email' },
-            password: { type: 'string', format: 'password' }
-          }
+            password: { type: 'string', format: 'password' },
+          },
         },
 
         AuthResponse: {
@@ -351,10 +349,10 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
               properties: {
                 accessToken: { type: 'string' },
                 refreshToken: { type: 'string' },
-                expiresIn: { type: 'integer' }
-              }
-            }
-          }
+                expiresIn: { type: 'integer' },
+              },
+            },
+          },
         },
 
         // ========== MARKET SCHEMAS ==========
@@ -364,17 +362,25 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             id: { type: 'string', format: 'uuid' },
             contractAddress: {
               type: 'string',
-              description: 'Stellar smart contract address'
+              description: 'Stellar smart contract address',
             },
             title: { type: 'string', maxLength: 200 },
             description: { type: 'string' },
             category: {
               type: 'string',
-              enum: ['WRESTLING', 'BOXING', 'MMA', 'SPORTS', 'POLITICAL', 'CRYPTO', 'ENTERTAINMENT']
+              enum: [
+                'WRESTLING',
+                'BOXING',
+                'MMA',
+                'SPORTS',
+                'POLITICAL',
+                'CRYPTO',
+                'ENTERTAINMENT',
+              ],
             },
             status: {
               type: 'string',
-              enum: ['OPEN', 'CLOSED', 'RESOLVED', 'DISPUTED', 'CANCELLED']
+              enum: ['OPEN', 'CLOSED', 'RESOLVED', 'DISPUTED', 'CANCELLED'],
             },
             creatorId: { type: 'string', format: 'uuid' },
             outcomeA: { type: 'string', maxLength: 100 },
@@ -382,7 +388,7 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             winningOutcome: {
               type: 'integer',
               nullable: true,
-              description: '0 = outcomeA wins, 1 = outcomeB wins'
+              description: '0 = outcomeA wins, 1 = outcomeB wins',
             },
             createdAt: { type: 'string', format: 'date-time' },
             closingAt: { type: 'string', format: 'date-time' },
@@ -391,75 +397,90 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             totalVolume: {
               type: 'number',
               format: 'float',
-              description: 'Total trading volume in USDC'
+              description: 'Total trading volume in USDC',
             },
             participantCount: { type: 'integer' },
             yesLiquidity: {
               type: 'number',
               format: 'float',
-              description: 'Liquidity for YES outcome'
+              description: 'Liquidity for YES outcome',
             },
             noLiquidity: {
               type: 'number',
               format: 'float',
-              description: 'Liquidity for NO outcome'
+              description: 'Liquidity for NO outcome',
             },
             feesCollected: {
               type: 'number',
               format: 'float',
-              description: 'Platform fees collected'
+              description: 'Platform fees collected',
             },
             disputeReason: { type: 'string', nullable: true },
             resolutionSource: { type: 'string', nullable: true },
             updatedAt: { type: 'string', format: 'date-time' },
-            creator: { $ref: '#/components/schemas/User' }
-          }
+            creator: { $ref: '#/components/schemas/User' },
+          },
         },
 
         CreateMarketRequest: {
           type: 'object',
-          required: ['title', 'description', 'category', 'outcomeA', 'outcomeB', 'closingAt'],
+          required: [
+            'title',
+            'description',
+            'category',
+            'outcomeA',
+            'outcomeB',
+            'closingAt',
+          ],
           properties: {
             title: {
               type: 'string',
               minLength: 10,
               maxLength: 200,
-              description: 'Market title'
+              description: 'Market title',
             },
             description: {
               type: 'string',
               minLength: 20,
               maxLength: 2000,
-              description: 'Detailed market description'
+              description: 'Detailed market description',
             },
             category: {
               type: 'string',
-              enum: ['WRESTLING', 'BOXING', 'MMA', 'SPORTS', 'POLITICAL', 'CRYPTO', 'ENTERTAINMENT']
+              enum: [
+                'WRESTLING',
+                'BOXING',
+                'MMA',
+                'SPORTS',
+                'POLITICAL',
+                'CRYPTO',
+                'ENTERTAINMENT',
+              ],
             },
             outcomeA: {
               type: 'string',
               minLength: 5,
               maxLength: 100,
-              description: 'First outcome description'
+              description: 'First outcome description',
             },
             outcomeB: {
               type: 'string',
               minLength: 5,
               maxLength: 100,
-              description: 'Second outcome description'
+              description: 'Second outcome description',
             },
             closingAt: {
               type: 'string',
               format: 'date-time',
-              description: 'When market closes for new predictions'
+              description: 'When market closes for new predictions',
             },
             resolutionSource: {
               type: 'string',
               maxLength: 500,
               nullable: true,
-              description: 'Source for market resolution'
-            }
-          }
+              description: 'Source for market resolution',
+            },
+          },
         },
 
         UpdateMarketRequest: {
@@ -469,12 +490,20 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             description: { type: 'string', minLength: 20, maxLength: 2000 },
             category: {
               type: 'string',
-              enum: ['WRESTLING', 'BOXING', 'MMA', 'SPORTS', 'POLITICAL', 'CRYPTO', 'ENTERTAINMENT']
+              enum: [
+                'WRESTLING',
+                'BOXING',
+                'MMA',
+                'SPORTS',
+                'POLITICAL',
+                'CRYPTO',
+                'ENTERTAINMENT',
+              ],
             },
             outcomeA: { type: 'string', minLength: 5, maxLength: 100 },
             outcomeB: { type: 'string', minLength: 5, maxLength: 100 },
-            closingAt: { type: 'string', format: 'date-time' }
-          }
+            closingAt: { type: 'string', format: 'date-time' },
+          },
         },
 
         ResolveMarketRequest: {
@@ -484,14 +513,14 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             winningOutcome: {
               type: 'integer',
               enum: [0, 1],
-              description: '0 = outcomeA, 1 = outcomeB'
+              description: '0 = outcomeA, 1 = outcomeB',
             },
             resolutionSource: {
               type: 'string',
               maxLength: 500,
-              description: 'Source for resolution decision'
-            }
-          }
+              description: 'Source for resolution decision',
+            },
+          },
         },
 
         // ========== PREDICTION SCHEMAS ==========
@@ -503,42 +532,42 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             marketId: { type: 'string', format: 'uuid' },
             commitmentHash: {
               type: 'string',
-              description: 'Hash of (prediction + salt)'
+              description: 'Hash of (prediction + salt)',
             },
             encryptedSalt: {
               type: 'string',
               nullable: true,
-              description: 'Encrypted salt for reveal phase'
+              description: 'Encrypted salt for reveal phase',
             },
             saltIv: {
               type: 'string',
               nullable: true,
-              description: 'IV for salt encryption'
+              description: 'IV for salt encryption',
             },
             predictedOutcome: {
               type: 'integer',
               nullable: true,
               enum: [0, 1],
-              description: '0 = outcomeA, 1 = outcomeB'
+              description: '0 = outcomeA, 1 = outcomeB',
             },
             amountUsdc: {
               type: 'number',
               format: 'float',
-              description: 'Amount staked in USDC'
+              description: 'Amount staked in USDC',
             },
             transactionHash: {
               type: 'string',
               nullable: true,
-              description: 'Stellar transaction hash'
+              description: 'Stellar transaction hash',
             },
             revealTxHash: {
               type: 'string',
               nullable: true,
-              description: 'Reveal transaction hash'
+              description: 'Reveal transaction hash',
             },
             status: {
               type: 'string',
-              enum: ['COMMITTED', 'REVEALED', 'SETTLED', 'DISPUTED']
+              enum: ['COMMITTED', 'REVEALED', 'SETTLED', 'DISPUTED'],
             },
             createdAt: { type: 'string', format: 'date-time' },
             revealedAt: { type: 'string', format: 'date-time', nullable: true },
@@ -547,45 +576,51 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
               type: 'number',
               format: 'float',
               nullable: true,
-              description: 'Profit/Loss in USD'
+              description: 'Profit/Loss in USD',
             },
             isWinner: { type: 'boolean', nullable: true },
             winningsClaimed: { type: 'boolean' },
             updatedAt: { type: 'string', format: 'date-time' },
             user: { $ref: '#/components/schemas/User' },
-            market: { $ref: '#/components/schemas/Market' }
-          }
+            market: { $ref: '#/components/schemas/Market' },
+          },
         },
 
         CreatePredictionRequest: {
           type: 'object',
-          required: ['marketId', 'commitmentHash', 'encryptedSalt', 'saltIv', 'amountUsdc'],
+          required: [
+            'marketId',
+            'commitmentHash',
+            'encryptedSalt',
+            'saltIv',
+            'amountUsdc',
+          ],
           properties: {
             marketId: { type: 'string', format: 'uuid' },
             commitmentHash: {
               type: 'string',
               pattern: '^[a-f0-9]{64}$',
-              description: 'SHA-256 hash of (prediction + salt)'
+              description: 'SHA-256 hash of (prediction + salt)',
             },
             encryptedSalt: {
               type: 'string',
-              description: 'Encrypted salt (AES-256-GCM)'
+              description: 'Encrypted salt (AES-256-GCM)',
             },
             saltIv: {
               type: 'string',
-              description: 'IV for salt encryption'
+              description: 'IV for salt encryption',
             },
             amountUsdc: {
               type: 'number',
               minimum: 1,
-              description: 'Amount to stake in USDC (minimum 1)'
+              description: 'Amount to stake in USDC (minimum 1)',
             },
             transactionHash: {
               type: 'string',
               nullable: true,
-              description: 'Optional transaction hash for tracking'
-            }
-          }
+              description: 'Optional transaction hash for tracking',
+            },
+          },
         },
 
         RevealPredictionRequest: {
@@ -596,19 +631,19 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             predictedOutcome: {
               type: 'integer',
               enum: [0, 1],
-              description: '0 = outcomeA, 1 = outcomeB'
+              description: '0 = outcomeA, 1 = outcomeB',
             },
             salt: {
               type: 'string',
               minLength: 32,
-              description: 'Original salt used for commitment'
+              description: 'Original salt used for commitment',
             },
             revealTxHash: {
               type: 'string',
               nullable: true,
-              description: 'Optional reveal transaction hash'
-            }
-          }
+              description: 'Optional reveal transaction hash',
+            },
+          },
         },
 
         // ========== SHARE SCHEMAS ==========
@@ -621,50 +656,50 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             outcome: {
               type: 'integer',
               enum: [0, 1],
-              description: '0 = outcomeA shares, 1 = outcomeB shares'
+              description: '0 = outcomeA shares, 1 = outcomeB shares',
             },
             quantity: {
               type: 'number',
               format: 'float',
-              description: 'Number of shares held'
+              description: 'Number of shares held',
             },
             costBasis: {
               type: 'number',
               format: 'float',
-              description: 'Total cost of shares in USDC'
+              description: 'Total cost of shares in USDC',
             },
             acquiredAt: { type: 'string', format: 'date-time' },
             entryPrice: {
               type: 'number',
               format: 'float',
-              description: 'Average price per share'
+              description: 'Average price per share',
             },
             currentValue: {
               type: 'number',
               format: 'float',
-              description: 'Current market value'
+              description: 'Current market value',
             },
             unrealizedPnl: {
               type: 'number',
               format: 'float',
-              description: 'Unrealized profit/loss'
+              description: 'Unrealized profit/loss',
             },
             soldQuantity: {
               type: 'number',
               format: 'float',
-              description: 'Quantity sold so far'
+              description: 'Quantity sold so far',
             },
             soldAt: { type: 'string', format: 'date-time', nullable: true },
             realizedPnl: {
               type: 'number',
               format: 'float',
               nullable: true,
-              description: 'Realized profit/loss'
+              description: 'Realized profit/loss',
             },
             updatedAt: { type: 'string', format: 'date-time' },
             user: { $ref: '#/components/schemas/User' },
-            market: { $ref: '#/components/schemas/Market' }
-          }
+            market: { $ref: '#/components/schemas/Market' },
+          },
         },
 
         // ========== TRADE SCHEMAS ==========
@@ -676,48 +711,52 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             marketId: { type: 'string', format: 'uuid' },
             tradeType: {
               type: 'string',
-              enum: ['BUY', 'SELL', 'COMMIT', 'REVEAL', 'WINNINGS', 'REFUND']
+              enum: ['BUY', 'SELL', 'COMMIT', 'REVEAL', 'WINNINGS', 'REFUND'],
             },
             outcome: {
               type: 'integer',
               nullable: true,
               enum: [0, 1],
-              description: '0 = outcomeA, 1 = outcomeB'
+              description: '0 = outcomeA, 1 = outcomeB',
             },
             quantity: {
               type: 'number',
               format: 'float',
-              description: 'Quantity traded'
+              description: 'Quantity traded',
             },
             pricePerUnit: {
               type: 'number',
               format: 'float',
-              description: 'Price per unit in USDC'
+              description: 'Price per unit in USDC',
             },
             totalAmount: {
               type: 'number',
               format: 'float',
-              description: 'Total trade amount in USDC'
+              description: 'Total trade amount in USDC',
             },
             feeAmount: {
               type: 'number',
               format: 'float',
-              description: 'Platform fee in USDC'
+              description: 'Platform fee in USDC',
             },
             txHash: {
               type: 'string',
-              description: 'Stellar transaction hash'
+              description: 'Stellar transaction hash',
             },
             status: {
               type: 'string',
-              enum: ['PENDING', 'CONFIRMED', 'FAILED']
+              enum: ['PENDING', 'CONFIRMED', 'FAILED'],
             },
             createdAt: { type: 'string', format: 'date-time' },
-            confirmedAt: { type: 'string', format: 'date-time', nullable: true },
+            confirmedAt: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
             updatedAt: { type: 'string', format: 'date-time' },
             user: { $ref: '#/components/schemas/User' },
-            market: { $ref: '#/components/schemas/Market' }
-          }
+            market: { $ref: '#/components/schemas/Market' },
+          },
         },
 
         CreateTradeRequest: {
@@ -727,28 +766,28 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             marketId: { type: 'string', format: 'uuid' },
             tradeType: {
               type: 'string',
-              enum: ['BUY', 'SELL', 'COMMIT', 'REVEAL', 'WINNINGS', 'REFUND']
+              enum: ['BUY', 'SELL', 'COMMIT', 'REVEAL', 'WINNINGS', 'REFUND'],
             },
             outcome: {
               type: 'integer',
               enum: [0, 1],
-              description: '0 = outcomeA, 1 = outcomeB'
+              description: '0 = outcomeA, 1 = outcomeB',
             },
             quantity: {
               type: 'number',
               minimum: 0.000001,
-              description: 'Quantity to trade'
+              description: 'Quantity to trade',
             },
             pricePerUnit: {
               type: 'number',
               minimum: 0,
-              description: 'Price per unit in USDC'
+              description: 'Price per unit in USDC',
             },
             txHash: {
               type: 'string',
-              description: 'Stellar transaction hash'
-            }
-          }
+              description: 'Stellar transaction hash',
+            },
+          },
         },
 
         // ========== TRANSACTION SCHEMAS ==========
@@ -759,65 +798,75 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             userId: { type: 'string', format: 'uuid' },
             txType: {
               type: 'string',
-              enum: ['DEPOSIT', 'WITHDRAW', 'REWARD', 'REFUND']
+              enum: ['DEPOSIT', 'WITHDRAW', 'REWARD', 'REFUND'],
             },
             amountUsdc: {
               type: 'number',
               format: 'float',
-              description: 'Amount in USDC'
+              description: 'Amount in USDC',
             },
             status: {
               type: 'string',
-              enum: ['PENDING', 'CONFIRMED', 'FAILED']
+              enum: ['PENDING', 'CONFIRMED', 'FAILED'],
             },
             txHash: {
               type: 'string',
-              description: 'Stellar transaction hash'
+              description: 'Stellar transaction hash',
             },
             fromAddress: {
               type: 'string',
               pattern: '^G[A-Z0-9]{55}$',
-              description: 'Sender wallet address'
+              description: 'Sender wallet address',
             },
             toAddress: {
               type: 'string',
               pattern: '^G[A-Z0-9]{55}$',
-              description: 'Recipient wallet address'
+              description: 'Recipient wallet address',
             },
             createdAt: { type: 'string', format: 'date-time' },
-            confirmedAt: { type: 'string', format: 'date-time', nullable: true },
+            confirmedAt: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
             failedReason: { type: 'string', nullable: true },
             updatedAt: { type: 'string', format: 'date-time' },
-            user: { $ref: '#/components/schemas/User' }
-          }
+            user: { $ref: '#/components/schemas/User' },
+          },
         },
 
         CreateTransactionRequest: {
           type: 'object',
-          required: ['txType', 'amountUsdc', 'txHash', 'fromAddress', 'toAddress'],
+          required: [
+            'txType',
+            'amountUsdc',
+            'txHash',
+            'fromAddress',
+            'toAddress',
+          ],
           properties: {
             txType: {
               type: 'string',
-              enum: ['DEPOSIT', 'WITHDRAW', 'REWARD', 'REFUND']
+              enum: ['DEPOSIT', 'WITHDRAW', 'REWARD', 'REFUND'],
             },
             amountUsdc: {
               type: 'number',
               minimum: 0.01,
-              description: 'Minimum 0.01 USDC'
+              description: 'Minimum 0.01 USDC',
             },
             txHash: {
               type: 'string',
-              description: 'Stellar transaction hash'
+              description: 'Stellar transaction hash',
             },
             fromAddress: {
               type: 'string',
-              pattern: '^G[A-Z0-9]{55}$'
+              pattern: '^G[A-Z0-9]{55}$',
             },
             toAddress: {
               type: 'string',
-              pattern: '^G[A-Z0-9]{55}$'
-            }
-          }
+              pattern: '^G[A-Z0-9]{55}$',
+            },
+          },
         },
 
         // ========== LEADERBOARD SCHEMAS ==========
@@ -830,33 +879,37 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             allTimePnl: {
               type: 'number',
               format: 'float',
-              description: 'All-time profit/loss in USDC'
+              description: 'All-time profit/loss in USDC',
             },
             weeklyPnl: {
               type: 'number',
               format: 'float',
-              description: 'Weekly profit/loss in USDC'
+              description: 'Weekly profit/loss in USDC',
             },
             allTimeWinRate: {
               type: 'number',
               format: 'float',
-              description: 'All-time win rate percentage'
+              description: 'All-time win rate percentage',
             },
             weeklyWinRate: {
               type: 'number',
               format: 'float',
-              description: 'Weekly win rate percentage'
+              description: 'Weekly win rate percentage',
             },
             predictionCount: { type: 'integer' },
             streakLength: { type: 'integer' },
             streakType: {
               type: 'string',
-              enum: ['WIN', 'LOSS', 'NONE']
+              enum: ['WIN', 'LOSS', 'NONE'],
             },
-            lastPredictionAt: { type: 'string', format: 'date-time', nullable: true },
+            lastPredictionAt: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
             updatedAt: { type: 'string', format: 'date-time' },
-            user: { $ref: '#/components/schemas/User' }
-          }
+            user: { $ref: '#/components/schemas/User' },
+          },
         },
 
         // ========== ACHIEVEMENT SCHEMAS ==========
@@ -869,12 +922,12 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             description: { type: 'string' },
             tier: {
               type: 'string',
-              enum: ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM']
+              enum: ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'],
             },
             earnedAt: { type: 'string', format: 'date-time' },
             badgeUrl: { type: 'string' },
-            user: { $ref: '#/components/schemas/User' }
-          }
+            user: { $ref: '#/components/schemas/User' },
+          },
         },
 
         // ========== REFERRAL SCHEMAS ==========
@@ -888,10 +941,14 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             signupBonusClaimed: { type: 'boolean' },
             referrerBonusClaimed: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
-            referredSignupAt: { type: 'string', format: 'date-time', nullable: true },
+            referredSignupAt: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
             referrer: { $ref: '#/components/schemas/User' },
-            referredUser: { $ref: '#/components/schemas/User' }
-          }
+            referredUser: { $ref: '#/components/schemas/User' },
+          },
         },
 
         CreateReferralRequest: {
@@ -903,9 +960,9 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
               type: 'string',
               minLength: 8,
               maxLength: 20,
-              nullable: true
-            }
-          }
+              nullable: true,
+            },
+          },
         },
 
         // ========== DISPUTE SCHEMAS ==========
@@ -919,15 +976,15 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             evidenceUrl: { type: 'string', nullable: true },
             status: {
               type: 'string',
-              enum: ['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED']
+              enum: ['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED'],
             },
             resolution: { type: 'string', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },
             resolvedAt: { type: 'string', format: 'date-time', nullable: true },
             adminNotes: { type: 'string', nullable: true },
             market: { $ref: '#/components/schemas/Market' },
-            user: { $ref: '#/components/schemas/User' }
-          }
+            user: { $ref: '#/components/schemas/User' },
+          },
         },
 
         CreateDisputeRequest: {
@@ -939,15 +996,15 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
               type: 'string',
               minLength: 20,
               maxLength: 1000,
-              description: 'Detailed reason for dispute'
+              description: 'Detailed reason for dispute',
             },
             evidenceUrl: {
               type: 'string',
               format: 'uri',
               nullable: true,
-              description: 'URL to supporting evidence'
-            }
-          }
+              description: 'URL to supporting evidence',
+            },
+          },
         },
 
         UpdateDisputeRequest: {
@@ -956,19 +1013,19 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           properties: {
             status: {
               type: 'string',
-              enum: ['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED']
+              enum: ['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED'],
             },
             resolution: {
               type: 'string',
               maxLength: 1000,
-              nullable: true
+              nullable: true,
             },
             adminNotes: {
               type: 'string',
               maxLength: 2000,
-              nullable: true
-            }
-          }
+              nullable: true,
+            },
+          },
         },
 
         // ========== AUDIT LOG SCHEMAS ==========
@@ -985,8 +1042,8 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             ipAddress: { type: 'string' },
             userAgent: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
-            user: { $ref: '#/components/schemas/User', nullable: true }
-          }
+            user: { $ref: '#/components/schemas/User', nullable: true },
+          },
         },
 
         // ========== WALLET AUTH SCHEMAS ==========
@@ -997,9 +1054,9 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
             publicKey: {
               type: 'string',
               pattern: '^G[A-Z0-9]{55}$',
-              description: 'Stellar public key'
-            }
-          }
+              description: 'Stellar public key',
+            },
+          },
         },
 
         WalletChallengeResponse: {
@@ -1007,14 +1064,14 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           properties: {
             challenge: {
               type: 'string',
-              description: 'Random nonce to sign'
+              description: 'Random nonce to sign',
             },
             expiresAt: {
               type: 'string',
               format: 'date-time',
-              description: 'Challenge expiration time'
-            }
-          }
+              description: 'Challenge expiration time',
+            },
+          },
         },
 
         WalletAuthRequest: {
@@ -1023,18 +1080,18 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           properties: {
             publicKey: {
               type: 'string',
-              pattern: '^G[A-Z0-9]{55}$'
+              pattern: '^G[A-Z0-9]{55}$',
             },
             signature: {
               type: 'string',
-              description: 'Base64 encoded signature'
+              description: 'Base64 encoded signature',
             },
             signedPayload: {
               type: 'string',
-              description: 'Original payload that was signed'
-            }
-          }
-        }
+              description: 'Original payload that was signed',
+            },
+          },
+        },
       },
 
       // ========== STANDARD RESPONSES ==========
@@ -1043,66 +1100,66 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           description: 'Successful response',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
+              schema: { $ref: '#/components/schemas/SuccessResponse' },
+            },
+          },
         },
         BadRequest: {
           description: 'Bad request - Invalid parameters',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+            },
+          },
         },
         Unauthorized: {
           description: 'Unauthorized - Authentication required',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+            },
+          },
         },
         Forbidden: {
           description: 'Forbidden - Insufficient permissions',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+            },
+          },
         },
         NotFound: {
           description: 'Resource not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+            },
+          },
         },
         Conflict: {
           description: 'Resource conflict - Already exists',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+            },
+          },
         },
         TooManyRequests: {
           description: 'Rate limit exceeded',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+            },
+          },
         },
         InternalServerError: {
           description: 'Internal server error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
-        }
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+            },
+          },
+        },
       },
 
       // ========== PARAMETERS ==========
@@ -1111,68 +1168,68 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
           name: 'page',
           in: 'query',
           schema: { type: 'integer', minimum: 1, default: 1 },
-          description: 'Page number'
+          description: 'Page number',
         },
         PaginationLimit: {
           name: 'limit',
           in: 'query',
           schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-          description: 'Items per page'
+          description: 'Items per page',
         },
         UserId: {
           name: 'userId',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' }
+          schema: { type: 'string', format: 'uuid' },
         },
         MarketId: {
           name: 'marketId',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' }
+          schema: { type: 'string', format: 'uuid' },
         },
         PredictionId: {
           name: 'predictionId',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' }
+          schema: { type: 'string', format: 'uuid' },
         },
         TradeId: {
           name: 'tradeId',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' }
+          schema: { type: 'string', format: 'uuid' },
         },
         TransactionId: {
           name: 'transactionId',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' }
+          schema: { type: 'string', format: 'uuid' },
         },
         DisputeId: {
           name: 'disputeId',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' }
-        }
-      }
+          schema: { type: 'string', format: 'uuid' },
+        },
+      },
     },
 
     // ========== SECURITY ==========
     security: [
       {
-        bearerAuth: []
+        bearerAuth: [],
       },
       {
-        stellarAuth: []
-      }
-    ]
+        stellarAuth: [],
+      },
+    ],
   },
   apis: [
     join(__dirname, '../routes/**/*.ts'),
     join(__dirname, '../controllers/**/*.ts'),
-    join(__dirname, '../schemas/**/*.ts')
-  ]
+    join(__dirname, '../schemas/**/*.ts'),
+  ],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
@@ -1203,14 +1260,18 @@ const swaggerUiOptions = {
     persistAuthorization: true,
     tryItOutEnabled: true,
     syntaxHighlight: {
-      theme: 'monokai'
-    }
-  }
+      theme: 'monokai',
+    },
+  },
 };
 
 // Setup function
 export const setupSwagger = (app: Express): void => {
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+  app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, swaggerUiOptions)
+  );
 
   // JSON endpoint for programmatic access
   app.get('/api-docs.json', (req, res) => {

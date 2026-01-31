@@ -23,5 +23,5 @@ export {
   corsMiddleware,
   xssProtection,
   frameGuard,
-  noCache
+  noCache,
 } from './security.middleware';

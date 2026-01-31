@@ -24,7 +24,7 @@ export const errorHandler = (
     path: req.path,
     method: req.method,
     ip: req.ip,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 
   let statusCode = 500;
@@ -42,15 +42,24 @@ export const errorHandler = (
     statusCode = 400;
     code = 'VALIDATION_ERROR';
     message = 'Validation failed';
-  } else if (err.name === 'UnauthorizedError' || err.message.includes('Unauthorized')) {
+  } else if (
+    err.name === 'UnauthorizedError' ||
+    err.message.includes('Unauthorized')
+  ) {
     statusCode = 401;
     code = 'UNAUTHORIZED';
     message = 'Authentication required';
-  } else if (err.message.includes('Forbidden') || err.message.includes('permission')) {
+  } else if (
+    err.message.includes('Forbidden') ||
+    err.message.includes('permission')
+  ) {
     statusCode = 403;
     code = 'FORBIDDEN';
     message = 'Insufficient permissions';
-  } else if (err.message.includes('not found') || err.message.includes('Not found')) {
+  } else if (
+    err.message.includes('not found') ||
+    err.message.includes('Not found')
+  ) {
     statusCode = 404;
     code = 'NOT_FOUND';
     message = 'Resource not found';
@@ -58,15 +67,15 @@ export const errorHandler = (
 
   const isDevelopment = process.env.NODE_ENV === 'development';
   const response: any = {
-  success: false,
-  error: {
-    code,
-    message: err.message || message
-  },
-  meta: {
-    timestamp: new Date().toISOString()
-  }
-};
+    success: false,
+    error: {
+      code,
+      message: err.message || message,
+    },
+    meta: {
+      timestamp: new Date().toISOString(),
+    },
+  };
 
   if (details) {
     response.error.details = details;

@@ -1,5 +1,10 @@
 import { BaseRepository } from './base.repository.js';
-import { Distribution, DistributionType, DistributionStatus, PrismaClient } from '@prisma/client';
+import {
+  Distribution,
+  DistributionType,
+  DistributionStatus,
+  PrismaClient,
+} from '@prisma/client';
 
 export class DistributionRepository extends BaseRepository<Distribution> {
   constructor(prismaClient?: PrismaClient) {
@@ -36,7 +41,8 @@ export class DistributionRepository extends BaseRepository<Distribution> {
   ): Promise<Distribution> {
     return await this.update(id, {
       status,
-      completedAt: status === DistributionStatus.CONFIRMED ? new Date() : undefined,
+      completedAt:
+        status === DistributionStatus.CONFIRMED ? new Date() : undefined,
       failedReason,
     });
   }

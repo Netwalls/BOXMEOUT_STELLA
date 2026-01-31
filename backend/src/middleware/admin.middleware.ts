@@ -1,7 +1,9 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../types/auth.types.js';
 
-const ADMIN_WALLET_ADDRESSES = (process.env.ADMIN_WALLET_ADDRESSES || '').split(',').filter(Boolean);
+const ADMIN_WALLET_ADDRESSES = (process.env.ADMIN_WALLET_ADDRESSES || '')
+  .split(',')
+  .filter(Boolean);
 
 export async function requireAdmin(
   req: AuthenticatedRequest,
@@ -17,7 +19,10 @@ export async function requireAdmin(
       return;
     }
 
-    if (!req.user.publicKey || !ADMIN_WALLET_ADDRESSES.includes(req.user.publicKey)) {
+    if (
+      !req.user.publicKey ||
+      !ADMIN_WALLET_ADDRESSES.includes(req.user.publicKey)
+    ) {
       res.status(403).json({
         success: false,
         error: { code: 'FORBIDDEN', message: 'Admin access required' },

@@ -67,7 +67,9 @@ export const authRateLimiter: RateLimiterMiddleware = rateLimit({
   legacyHeaders: false, // Disable X-RateLimit-* headers
   store: createRedisStore('auth'),
   keyGenerator: (req: any) => getIpKey(req),
-  message: rateLimitMessage('Too many authentication attempts. Please try again in 15 minutes.'),
+  message: rateLimitMessage(
+    'Too many authentication attempts. Please try again in 15 minutes.'
+  ),
   skip: () => process.env.NODE_ENV === 'test', // Skip in tests
 });
 
@@ -87,7 +89,9 @@ export const challengeRateLimiter: RateLimiterMiddleware = rateLimit({
     // For challenge endpoint, use publicKey if available, otherwise IP
     return req.body?.publicKey || getIpKey(req);
   },
-  message: rateLimitMessage('Too many challenge requests. Please wait a moment.'),
+  message: rateLimitMessage(
+    'Too many challenge requests. Please wait a moment.'
+  ),
   skip: () => process.env.NODE_ENV === 'test',
 });
 

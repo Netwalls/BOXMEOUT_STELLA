@@ -35,10 +35,8 @@ router.get('/:id', optionalAuth, (req, res) =>
  * POST /api/markets/:id/pool - Create AMM pool for a market
  * Requires authentication and admin/operator privileges (uses admin signer)
  */
-router.post(
-    '/:id/pool',
-    requireAuth,
-    (req, res) => marketsController.createPool(req, res)
+router.post('/:id/pool', requireAuth, (req, res) =>
+  marketsController.createPool(req, res)
 );
 
 export default router;

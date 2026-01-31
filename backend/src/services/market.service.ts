@@ -19,15 +19,22 @@ export class MarketService {
     // Validate market exists and is OPEN
     const market = await this.marketRepository.findById(marketId);
     if (!market) throw new Error('Market not found');
-    if (market.status !== MarketStatus.OPEN) throw new Error('Market is not open');
+    if (market.status !== MarketStatus.OPEN)
+      throw new Error('Market is not open');
 
     // If pool already initialized in DB by checking yesLiquidity/noLiquidity > 0
-    if (Number(market.yesLiquidity || 0) > 0 || Number(market.noLiquidity || 0) > 0) {
+    if (
+      Number(market.yesLiquidity || 0) > 0 ||
+      Number(market.noLiquidity || 0) > 0
+    ) {
       throw new Error('duplicate pool');
     }
 
     // Call blockchain AMM to create pool
-    const chain = await ammService.createPool({ marketId: market.contractAddress, initialLiquidity });
+    const chain = await ammService.createPool({
+      marketId: market.contractAddress,
+      initialLiquidity,
+    });
 
     // Persist pool data and tx hash
     await this.marketRepository.updateLiquidity(
@@ -188,7 +195,10 @@ export class MarketService {
       throw new Error('Market not found');
     }
 
-    if (market.status !== MarketStatus.CLOSED && market.status !== MarketStatus.OPEN) {
+    if (
+      market.status !== MarketStatus.CLOSED &&
+      market.status !== MarketStatus.OPEN
+    ) {
       // Acceptance criteria might allow resolving from OPEN if closing time passed
       // but typically CLOSED is safer. Let's stick to implementation.
     }
@@ -215,7 +225,10 @@ export class MarketService {
   }
 
   async markWinningsClaimed(marketId: string, userId: string) {
-    const prediction = await this.predictionRepository.findByUserAndMarket(userId, marketId);
+    const prediction = await this.predictionRepository.findByUserAndMarket(
+      userId,
+      marketId
+    );
     if (!prediction) {
       throw new Error('Prediction not found');
     }
