@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { oracleController } from '../controllers/oracle.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/markets/:id/attest - Submit oracle attestation

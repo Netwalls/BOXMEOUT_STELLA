@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { marketsController } from '../controllers/markets.controller.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.middleware.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/markets - Create new market

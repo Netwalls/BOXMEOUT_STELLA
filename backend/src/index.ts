@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes.js';
 import marketRoutes from './routes/markets.routes.js';
 import oracleRoutes from './routes/oracle.js';
 import predictionRoutes from './routes/predictions.js';
+import tradingRoutes from './routes/trading.js';
 import treasuryRoutes from './routes/treasury.routes.js';
 
 // Import Redis initialization
@@ -44,7 +45,7 @@ import {
 import { setupSwagger } from './config/swagger.js';
 
 // Initialize Express app
-const app = express();
+const app: express.Express = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -204,6 +205,8 @@ app.use('/api/markets', oracleRoutes);
 // Prediction routes (commit-reveal flow)
 app.use('/api/markets', predictionRoutes);
 
+// Trading routes (buy/sell shares, odds)
+app.use('/api/markets', tradingRoutes);
 // Treasury routes
 app.use('/api/treasury', treasuryRoutes);
 

@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { predictionsController } from '../controllers/predictions.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/markets/:marketId/commit - Commit Prediction (Phase 1)

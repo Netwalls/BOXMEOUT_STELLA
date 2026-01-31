@@ -3,7 +3,7 @@ import { treasuryController } from '../controllers/treasury.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/admin.middleware.js';
 
-const router = Router();
+const router: Router = Router();
 
 router.get('/balances', requireAuth, (req, res) =>
   treasuryController.getBalances(req, res)

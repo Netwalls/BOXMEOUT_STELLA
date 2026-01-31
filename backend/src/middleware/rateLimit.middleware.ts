@@ -22,7 +22,7 @@ function createRedisStore(prefix: string) {
       }) as any,
       prefix: `rl:${prefix}:`,
     });
-  } catch (error) {
+  } catch {
     console.warn(
       `Failed to create Redis store for rate limiter (${prefix}), using memory store`
     );
@@ -46,49 +46,40 @@ const rateLimitMessage = (message: string) => ({
  */
 function getIpKey(req: any): string {
   try {
-    // Use the ipKeyGenerator helper function for proper IPv6 support
     return ipKeyGenerator(req, req.ip);
-  } catch (error) {
-    // Fallback if ipKeyGenerator fails
+  } catch {
     return req.ip || 'unknown';
   }
 }
 
 /**
  * Rate limiter for authentication endpoints (strict)
- * Prevents brute force attacks on login
- *
  * Limits: 10 attempts per 15 minutes per IP
  */
 export const authRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 10,
-  standardHeaders: true, // Return rate limit info in RateLimit-* headers
-  legacyHeaders: false, // Disable X-RateLimit-* headers
+  standardHeaders: true,
+  legacyHeaders: false,
   store: createRedisStore('auth'),
   keyGenerator: (req: any) => getIpKey(req),
   message: rateLimitMessage(
     'Too many authentication attempts. Please try again in 15 minutes.'
   ),
-  skip: () => process.env.NODE_ENV === 'test', // Skip in tests
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 /**
  * Rate limiter for challenge endpoint (moderate)
- * Prevents nonce generation spam
- *
  * Limits: 5 requests per minute per public key or IP
  */
 export const challengeRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   store: createRedisStore('challenge'),
-  keyGenerator: (req: any) => {
-    // For challenge endpoint, use publicKey if available, otherwise IP
-    return req.body?.publicKey || getIpKey(req);
-  },
+  keyGenerator: (req: any) => req.body?.publicKey || getIpKey(req),
   message: rateLimitMessage(
     'Too many challenge requests. Please wait a moment.'
   ),
@@ -97,12 +88,10 @@ export const challengeRateLimiter: RateLimiterMiddleware = rateLimit({
 
 /**
  * Rate limiter for general API endpoints (lenient)
- * Protects against API abuse while allowing normal usage
- *
  * Limits: 100 requests per minute per user or IP
  */
 export const apiRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
@@ -111,18 +100,17 @@ export const apiRateLimiter: RateLimiterMiddleware = rateLimit({
     const authReq = req as AuthenticatedRequest;
     return authReq.user?.userId || getIpKey(req);
   },
+  validate: { ip: false },
   message: rateLimitMessage('Too many requests. Please slow down.'),
   skip: () => process.env.NODE_ENV === 'test',
 });
 
 /**
  * Rate limiter for refresh token endpoint
- * Prevents token refresh spam
- *
  * Limits: 10 refreshes per minute per IP
  */
 export const refreshRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
@@ -134,12 +122,10 @@ export const refreshRateLimiter: RateLimiterMiddleware = rateLimit({
 
 /**
  * Rate limiter for sensitive operations (very strict)
- * Use for actions like changing email, connecting new wallet, etc.
- *
  * Limits: 5 requests per hour per user
  */
 export const sensitiveOperationRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
@@ -148,6 +134,7 @@ export const sensitiveOperationRateLimiter: RateLimiterMiddleware = rateLimit({
     const authReq = req as AuthenticatedRequest;
     return authReq.user?.userId || getIpKey(req);
   },
+  validate: { ip: false },
   message: rateLimitMessage(
     'Too many sensitive operations. Please try again later.'
   ),
@@ -155,8 +142,7 @@ export const sensitiveOperationRateLimiter: RateLimiterMiddleware = rateLimit({
 });
 
 /**
- * Create a custom rate limiter with specified options
- * Useful for endpoints with special requirements
+ * Create a custom rate limiter
  */
 export function createRateLimiter(options: {
   windowMs: number;
@@ -174,7 +160,7 @@ export function createRateLimiter(options: {
       const authReq = req as AuthenticatedRequest;
       return authReq.user?.userId || getIpKey(req);
     },
-    message: rateLimitMessage(options.message || 'Rate limit exceeded.'),
+    message: rateLimitMessage(options.message || 'Too many requests.'),
     skip: () => process.env.NODE_ENV === 'test',
   });
 }
