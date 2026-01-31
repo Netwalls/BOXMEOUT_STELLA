@@ -135,6 +135,9 @@ impl Treasury {
 
     /// Deposit fees into treasury and split across pools
     pub fn deposit_fees(env: Env, source: Address, amount: i128) {
+        // Require authorization from the source
+        source.require_auth();
+
         // Validate amount > 0
         if amount <= 0 {
             panic!("Amount must be positive");
@@ -215,8 +218,68 @@ impl Treasury {
     }
 
     /// Distribute rewards to leaderboard winners
-    pub fn distribute_leaderboard_rewards(env: Env) {
-        todo!("Leaderboard distribution logic not yet implemented")
+    pub fn distribute_leaderboard_rewards(
+        env: Env,
+        admin: Address,
+        distributions: soroban_sdk::Vec<(Address, u32)>,
+    ) {
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, ADMIN_KEY))
+            .expect("Admin not set");
+
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can distribute rewards");
+        }
+
+        // Validate total shares = 100%
+        let mut total_shares = 0u32;
+        for dist in distributions.iter() {
+            total_shares += dist.1;
+        }
+        if total_shares != 100 {
+            panic!("Total shares must equal 100");
+        }
+
+        let leaderboard_pool: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, LEADERBOARD_FEES_KEY))
+            .unwrap_or(0);
+
+        if leaderboard_pool <= 0 {
+            panic!("No funds in leaderboard pool");
+        }
+
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not set");
+
+        let token_client = token::Client::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+
+        // Distribute to users based on shares
+        for dist in distributions.iter() {
+            let (user, share) = dist;
+            let amount = (leaderboard_pool * share as i128) / 100;
+            token_client.transfer(&contract_address, &user, &amount);
+        }
+
+        // Reset leaderboard pool
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, LEADERBOARD_FEES_KEY), &0i128);
+
+        // Emit event
+        env.events().publish(
+            (Symbol::new(&env, "LeaderboardDistributed"),),
+            (leaderboard_pool, distributions.len()),
+        );
     }
 
     /// Distribute rewards to creators
@@ -382,6 +445,9 @@ mod tests {
         // Mint tokens to source
         usdc.mint(&source, &1000);
 
+        // Mock all auths for the deposit operation
+        env.mock_all_auths();
+
         // Deposit 1000 USDC
         // Default ratios: 50% Platform, 30% Leaderboard, 20% Creator
         treasury.deposit_fees(&source, &1000);
@@ -401,9 +467,11 @@ mod tests {
         let source = Address::generate(&env);
 
         // Update ratios: 40% Platform, 40% Leaderboard, 20% Creator
+        env.mock_all_auths();
         treasury.set_fee_distribution(&40, &40, &20);
 
         usdc.mint(&source, &1000);
+        env.mock_all_auths();
         treasury.deposit_fees(&source, &1000);
 
         assert_eq!(treasury.get_platform_fees(), 400);
@@ -416,6 +484,7 @@ mod tests {
     fn test_set_fee_distribution_invalid_sum() {
         let env = Env::default();
         let (treasury, _, _, _, _) = setup_treasury(&env);
+        env.mock_all_auths();
         treasury.set_fee_distribution(&50, &50, &10); // 110%
     }
 
@@ -428,12 +497,14 @@ mod tests {
         let creator2 = Address::generate(&env);
 
         usdc.mint(&source, &1000);
+        env.mock_all_auths();
         treasury.deposit_fees(&source, &1000); // 200 goes to creator pool
 
         let mut distributions = soroban_sdk::Vec::new(&env);
         distributions.push_back((creator1.clone(), 150));
         distributions.push_back((creator2.clone(), 50));
 
+        env.mock_all_auths();
         treasury.distribute_creator_rewards(&admin, &distributions);
 
         assert_eq!(usdc.balance(&creator1), 150);
@@ -450,11 +521,96 @@ mod tests {
         let source = Address::generate(&env);
 
         usdc.mint(&source, &1000);
+        env.mock_all_auths();
         treasury.deposit_fees(&source, &1000);
 
+        env.mock_all_auths();
         treasury.emergency_withdraw(&admin, &recipient, &500);
 
         assert_eq!(usdc.balance(&recipient), 500);
         assert_eq!(treasury.get_treasury_balance(), 500);
+    }
+
+    #[test]
+    fn test_distribute_leaderboard_rewards_happy_path() {
+        let env = Env::default();
+        let (treasury, usdc, admin, _, _) = setup_treasury(&env);
+        let source = Address::generate(&env);
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        let user3 = Address::generate(&env);
+
+        usdc.mint(&source, &1000);
+        env.mock_all_auths();
+        treasury.deposit_fees(&source, &1000); // 300 goes to leaderboard pool
+
+        let mut distributions = soroban_sdk::Vec::new(&env);
+        distributions.push_back((user1.clone(), 50)); // 50%
+        distributions.push_back((user2.clone(), 30)); // 30%
+        distributions.push_back((user3.clone(), 20)); // 20%
+
+        env.mock_all_auths();
+        treasury.distribute_leaderboard_rewards(&admin, &distributions);
+
+        assert_eq!(usdc.balance(&user1), 150); // 50% of 300
+        assert_eq!(usdc.balance(&user2), 90);  // 30% of 300
+        assert_eq!(usdc.balance(&user3), 60);  // 20% of 300
+        assert_eq!(treasury.get_leaderboard_fees(), 0);
+        assert_eq!(treasury.get_treasury_balance(), 700); // 1000 - 300 distributed
+    }
+
+    #[test]
+    #[should_panic(expected = "Unauthorized: only admin can distribute rewards")]
+    fn test_distribute_leaderboard_rewards_only_admin() {
+        let env = Env::default();
+        let (treasury, usdc, admin, _, _) = setup_treasury(&env);
+        let source = Address::generate(&env);
+        let non_admin = Address::generate(&env);
+        let user1 = Address::generate(&env);
+
+        usdc.mint(&source, &1000);
+        env.mock_all_auths();
+        treasury.deposit_fees(&source, &1000);
+
+        let mut distributions = soroban_sdk::Vec::new(&env);
+        distributions.push_back((user1, 100));
+
+        // Don't mock auth for this call - we want it to fail
+        treasury.distribute_leaderboard_rewards(&non_admin, &distributions);
+    }
+
+    #[test]
+    #[should_panic(expected = "Total shares must equal 100")]
+    fn test_distribute_leaderboard_rewards_invalid_shares() {
+        let env = Env::default();
+        let (treasury, usdc, admin, _, _) = setup_treasury(&env);
+        let source = Address::generate(&env);
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+
+        usdc.mint(&source, &1000);
+        env.mock_all_auths();
+        treasury.deposit_fees(&source, &1000);
+
+        let mut distributions = soroban_sdk::Vec::new(&env);
+        distributions.push_back((user1, 60));
+        distributions.push_back((user2, 50)); // Total = 110%
+
+        env.mock_all_auths();
+        treasury.distribute_leaderboard_rewards(&admin, &distributions);
+    }
+
+    #[test]
+    #[should_panic(expected = "No funds in leaderboard pool")]
+    fn test_distribute_leaderboard_rewards_empty_pool() {
+        let env = Env::default();
+        let (treasury, _, admin, _, _) = setup_treasury(&env);
+        let user1 = Address::generate(&env);
+
+        let mut distributions = soroban_sdk::Vec::new(&env);
+        distributions.push_back((user1, 100));
+
+        env.mock_all_auths();
+        treasury.distribute_leaderboard_rewards(&admin, &distributions);
     }
 }
