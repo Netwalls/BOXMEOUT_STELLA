@@ -572,7 +572,8 @@ fn test_reveal_prediction_yes_and_no_outcomes() {
     assert!(result.is_ok());
 
     // Reveal YES prediction
-    let result = client.try_reveal_prediction(&user_yes, &market_id, &outcome_yes, &amount, &salt_yes);
+    let result =
+        client.try_reveal_prediction(&user_yes, &market_id, &outcome_yes, &amount, &salt_yes);
     assert!(result.is_ok());
 
     // Test NO outcome (0)

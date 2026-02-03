@@ -2,8 +2,8 @@
 // Handles predictions, bet commitment/reveal, market resolution, and winnings claims
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token, Address, Bytes, BytesN, Env, Map, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, token, Address, Bytes, BytesN, Env, Map,
+    Symbol, Vec,
 };
 
 // Storage keys
@@ -380,9 +380,10 @@ impl PredictionMarket {
             .persistent()
             .get(&Symbol::new(&env, TOTAL_VOLUME_KEY))
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&Symbol::new(&env, TOTAL_VOLUME_KEY), &(total_volume + amount));
+        env.storage().persistent().set(
+            &Symbol::new(&env, TOTAL_VOLUME_KEY),
+            &(total_volume + amount),
+        );
 
         // Store prediction record in predictions map
         let prediction = Prediction {

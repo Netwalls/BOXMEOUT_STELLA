@@ -296,9 +296,24 @@ fn test_commit_reveal_flow_with_pool_updates() {
     usdc_client.mint(&user3, &amount3);
 
     // Approve spending
-    usdc_client.approve(&user1, &market_contract_id, &amount1, &(env.ledger().sequence() + 100));
-    usdc_client.approve(&user2, &market_contract_id, &amount2, &(env.ledger().sequence() + 100));
-    usdc_client.approve(&user3, &market_contract_id, &amount3, &(env.ledger().sequence() + 100));
+    usdc_client.approve(
+        &user1,
+        &market_contract_id,
+        &amount1,
+        &(env.ledger().sequence() + 100),
+    );
+    usdc_client.approve(
+        &user2,
+        &market_contract_id,
+        &amount2,
+        &(env.ledger().sequence() + 100),
+    );
+    usdc_client.approve(
+        &user3,
+        &market_contract_id,
+        &amount3,
+        &(env.ledger().sequence() + 100),
+    );
 
     market_client.commit_prediction(&user1, &commit_hash1, &amount1);
     market_client.commit_prediction(&user2, &commit_hash2, &amount2);
