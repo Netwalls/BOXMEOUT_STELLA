@@ -70,6 +70,7 @@ pub struct Prediction {
     pub amount: i128,
     pub commit_timestamp: u64,
     pub reveal_timestamp: u64,
+    pub claimed: bool,
 }
 
 /// PREDICTION MARKET - Manages individual market logic
@@ -392,6 +393,7 @@ impl PredictionMarket {
             amount,
             commit_timestamp: commitment.timestamp,
             reveal_timestamp: current_time,
+            claimed: false,
         };
 
         let prediction_key = (Symbol::new(&env, PREDICTIONS_PREFIX), user.clone());
@@ -632,8 +634,8 @@ impl PredictionMarket {
         }
 
         // 2. Get User Prediction
-        let prediction_key = (Symbol::new(&env, PREDICTION_PREFIX), user.clone());
-        let mut prediction: UserPrediction = env
+        let prediction_key = (Symbol::new(&env, PREDICTIONS_PREFIX), user.clone());
+        let mut prediction: Prediction = env
             .storage()
             .persistent()
             .get(&prediction_key)
@@ -837,14 +839,16 @@ impl PredictionMarket {
 
     /// Test helper: Set a user's prediction directly (bypasses commit/reveal)
     pub fn test_set_prediction(env: Env, user: Address, outcome: u32, amount: i128) {
-        let prediction = UserPrediction {
+        let now = env.ledger().timestamp();
+        let prediction = Prediction {
             user: user.clone(),
             outcome,
             amount,
+            commit_timestamp: now,
+            reveal_timestamp: now,
             claimed: false,
-            timestamp: env.ledger().timestamp(),
         };
-        let key = (Symbol::new(&env, PREDICTION_PREFIX), user);
+        let key = (Symbol::new(&env, PREDICTIONS_PREFIX), user);
         env.storage().persistent().set(&key, &prediction);
     }
 
@@ -871,8 +875,8 @@ impl PredictionMarket {
     }
 
     /// Test helper: Get user's prediction
-    pub fn test_get_prediction(env: Env, user: Address) -> Option<UserPrediction> {
-        let key = (Symbol::new(&env, PREDICTION_PREFIX), user);
+    pub fn test_get_prediction(env: Env, user: Address) -> Option<Prediction> {
+        let key = (Symbol::new(&env, PREDICTIONS_PREFIX), user);
         env.storage().persistent().get(&key)
     }
 
