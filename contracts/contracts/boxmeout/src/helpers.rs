@@ -1,6 +1,8 @@
 // File for resuable helper functions
 
-use soroban_sdk::{token::StellarAssetClient, Address, BytesN, Env, Symbol};
+#![allow(dead_code)]
+
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 // use crate::helpers::*;
 
 const POOL_YES_RESERVE: &str = "pool_yes_reserve";
