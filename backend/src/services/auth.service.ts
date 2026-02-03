@@ -44,7 +44,11 @@ export class AuthService {
   async generateChallenge(publicKey: string): Promise<ChallengeResponse> {
     // Validate public key format before creating nonce
     if (!this.stellarSvc.isValidPublicKey(publicKey)) {
-      throw new AuthError('INVALID_PUBLIC_KEY', 'Invalid Stellar public key format', 400);
+      throw new AuthError(
+        'INVALID_PUBLIC_KEY',
+        'Invalid Stellar public key format',
+        400
+      );
     }
 
     // Create nonce (stored in Redis with 5-minute TTL)
@@ -75,20 +79,36 @@ export class AuthService {
 
     // STEP 1: Validate public key format
     if (!this.stellarSvc.isValidPublicKey(publicKey)) {
-      throw new AuthError('INVALID_PUBLIC_KEY', 'Invalid Stellar public key format', 400);
+      throw new AuthError(
+        'INVALID_PUBLIC_KEY',
+        'Invalid Stellar public key format',
+        400
+      );
     }
 
     // STEP 2: Consume nonce (atomic - prevents replay attacks)
     const nonceData = await this.sessionSvc.consumeNonce(publicKey, nonce);
     if (!nonceData) {
-      throw new AuthError('INVALID_NONCE', 'Nonce expired, already used, or invalid', 401);
+      throw new AuthError(
+        'INVALID_NONCE',
+        'Nonce expired, already used, or invalid',
+        401
+      );
     }
 
     // STEP 3: Verify signature against the challenge message
-    const isValid = this.stellarSvc.verifySignature(publicKey, nonceData.message, signature);
+    const isValid = this.stellarSvc.verifySignature(
+      publicKey,
+      nonceData.message,
+      signature
+    );
 
     if (!isValid) {
-      throw new AuthError('INVALID_SIGNATURE', 'Wallet signature verification failed', 401);
+      throw new AuthError(
+        'INVALID_SIGNATURE',
+        'Wallet signature verification failed',
+        401
+      );
     }
 
     // STEP 4: Find or create user (auto-create on first wallet login)
@@ -96,9 +116,11 @@ export class AuthService {
 
     if (!user) {
       // Auto-create user on first wallet login
-      const shortKey = this.stellarSvc.shortenPublicKey(publicKey).replace(/\./g, '');
+      const shortKey = this.stellarSvc
+        .shortenPublicKey(publicKey)
+        .replace(/\./g, '');
       const timestamp = Date.now().toString(36);
-      
+
       user = await this.userRepository.createUser({
         // Generate unique email for wallet users (required by schema)
         email: `${publicKey.toLowerCase().slice(0, 16)}.${timestamp}@wallet.boxmeout.io`,
@@ -172,11 +194,17 @@ export class AuthService {
     // STEP 2: Check if session exists
     const session = await this.sessionSvc.getSession(payload.tokenId);
     if (!session) {
-      throw new AuthError('SESSION_NOT_FOUND', 'Session expired or invalidated', 401);
+      throw new AuthError(
+        'SESSION_NOT_FOUND',
+        'Session expired or invalidated',
+        401
+      );
     }
 
     // STEP 3: Check if token is blacklisted (manual logout)
-    const isBlacklisted = await this.sessionSvc.isTokenBlacklisted(payload.tokenId);
+    const isBlacklisted = await this.sessionSvc.isTokenBlacklisted(
+      payload.tokenId
+    );
     if (isBlacklisted) {
       throw new AuthError('TOKEN_REVOKED', 'Token has been revoked', 401);
     }

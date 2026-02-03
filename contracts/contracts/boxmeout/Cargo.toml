@@ -4,7 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+# Features: Use these to build different contracts
+# cargo build --target wasm32-unknown-unknown --release --features market
+# cargo build --target wasm32-unknown-unknown --release --features oracle
+# cargo build --target wasm32-unknown-unknown --release --features amm
+# cargo build --target wasm32-unknown-unknown --release --features factory
+# cargo build --target wasm32-unknown-unknown --release --features treasury
+[features]
+# No default - you MUST specify which contract to build
+market = []
+oracle = []
+amm = []
+factory = []
+treasury = []
 
 [dependencies]
 soroban-sdk = { workspace = true }
@@ -14,8 +28,8 @@ soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"
-overflow-checks = true
 debug = false
-panic = "abort"
+overflow-checks = true
 lto = true
+panic = "abort"
 codegen-units = 1

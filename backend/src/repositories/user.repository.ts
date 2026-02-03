@@ -76,7 +76,10 @@ export class UserRepository extends BaseRepository<User> {
     });
   }
 
-  async searchUsers(query: string, limit: number = 10): Promise<Partial<User>[]> {
+  async searchUsers(
+    query: string,
+    limit: number = 10
+  ): Promise<Partial<User>[]> {
     return await this.prisma.user.findMany({
       where: {
         OR: [

@@ -1,9 +1,16 @@
-import { randomBytes, createHash, createCipheriv, createDecipheriv } from 'crypto';
+import {
+  randomBytes,
+  createHash,
+  createCipheriv,
+  createDecipheriv,
+} from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 // Encryption configuration
 const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-32-byte-secret-key-change-in-production!!'; // Must be 32 bytes
+const ENCRYPTION_KEY =
+  process.env.ENCRYPTION_KEY ||
+  'your-32-byte-secret-key-change-in-production!!'; // Must be 32 bytes
 
 /**
  * Generate a cryptographically secure nonce using UUID v4
@@ -83,10 +90,10 @@ export function encrypt(text: string): { encrypted: string; iv: string } {
   const iv = randomBytes(16);
   const key = Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32));
   const cipher = createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
-  
+
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  
+
   return {
     encrypted,
     iv: iv.toString('hex'),
@@ -100,10 +107,10 @@ export function decrypt(encrypted: string, ivHex: string): string {
   const iv = Buffer.from(ivHex, 'hex');
   const key = Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32));
   const decipher = createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
-  
+
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
-  
+
   return decrypted;
 }
 
@@ -113,4 +120,3 @@ export function decrypt(encrypted: string, ivHex: string): string {
 export function sha256(data: string): string {
   return createHash('sha256').update(data).digest('hex');
 }
-

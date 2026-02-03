@@ -1,37 +1,51 @@
 import jwt, { SignOptions, JwtPayload, Secret } from 'jsonwebtoken';
 import ms, { StringValue } from 'ms';
-import { AccessTokenPayload, RefreshTokenPayload, AuthError } from '../types/auth.types.js';
+import {
+  AccessTokenPayload,
+  RefreshTokenPayload,
+  AuthError,
+} from '../types/auth.types.js';
 
 // Validate JWT secrets are configured
 function getJwtSecret(envVar: string, name: string): Secret {
   const secret = process.env[envVar];
-  
+
   if (!secret) {
     throw new Error(
       `${name} is not configured. Set ${envVar} environment variable. ` +
-      'Minimum 32 characters recommended for production.'
+        'Minimum 32 characters recommended for production.'
     );
   }
-  
+
   if (process.env.NODE_ENV === 'production' && secret.length < 32) {
     throw new Error(
       `${name} is too short. Use at least 32 characters in production.`
     );
   }
-  
+
   return secret;
 }
 
 // Environment configuration with defaults for development
-const ACCESS_SECRET: Secret =  getJwtSecret('JWT_ACCESS_SECRET', 'JWT_ACCESS_SECRET');
-const REFRESH_SECRET: Secret = getJwtSecret('JWT_REFRESH_SECRET', 'JWT_REFRESH_SECRET');
-const ACCESS_TTL: StringValue = (process.env.JWT_ACCESS_TTL || '15m') as StringValue;
-const REFRESH_TTL: StringValue = (process.env.JWT_REFRESH_TTL || '7d') as StringValue;
+const ACCESS_SECRET: Secret = getJwtSecret(
+  'JWT_ACCESS_SECRET',
+  'JWT_ACCESS_SECRET'
+);
+const REFRESH_SECRET: Secret = getJwtSecret(
+  'JWT_REFRESH_SECRET',
+  'JWT_REFRESH_SECRET'
+);
+const ACCESS_TTL: StringValue = (process.env.JWT_ACCESS_TTL ||
+  '15m') as StringValue;
+const REFRESH_TTL: StringValue = (process.env.JWT_REFRESH_TTL ||
+  '7d') as StringValue;
 
 // Warn if using default secrets in non-development environment
 if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
   if (!process.env.JWT_ACCESS_SECRET || !process.env.JWT_REFRESH_SECRET) {
-    console.warn('⚠️  WARNING: Using default JWT secrets in production. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET!');
+    console.warn(
+      '⚠️  WARNING: Using default JWT secrets in production. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET!'
+    );
   }
 }
 

@@ -2,7 +2,8 @@
 // Database: PostgreSQL
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-1.1.x"]
 }
 
 datasource db {
@@ -15,39 +16,39 @@ datasource db {
 // ============================================================================
 
 model User {
-  id               String    @id @default(uuid())
-  email            String    @unique
-  username         String    @unique
-  passwordHash     String    @map("password_hash")
-  walletAddress    String?   @unique @map("wallet_address")
-  usdcBalance      Decimal   @default(0) @map("usdc_balance") @db.Decimal(18, 6)
-  xlmBalance       Decimal   @default(0) @map("xlm_balance") @db.Decimal(18, 6)
-  tier             UserTier  @default(BEGINNER)
-  reputationScore  Int       @default(0) @map("reputation_score")
-  avatarUrl        String?   @map("avatar_url")
-  bio              String?   @db.VarChar(500)
-  displayName      String?   @map("display_name")
-  emailVerified    Boolean   @default(false) @map("email_verified")
-  twoFaEnabled     Boolean   @default(false) @map("two_fa_enabled")
-  twoFaSecret      String?   @map("two_fa_secret")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  lastLogin        DateTime? @map("last_login")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  isActive         Boolean   @default(true) @map("is_active")
+  id              String    @id @default(uuid())
+  email           String    @unique
+  username        String    @unique
+  passwordHash    String    @map("password_hash")
+  walletAddress   String?   @unique @map("wallet_address")
+  usdcBalance     Decimal   @default(0) @map("usdc_balance") @db.Decimal(18, 6)
+  xlmBalance      Decimal   @default(0) @map("xlm_balance") @db.Decimal(18, 6)
+  tier            UserTier  @default(BEGINNER)
+  reputationScore Int       @default(0) @map("reputation_score")
+  avatarUrl       String?   @map("avatar_url")
+  bio             String?   @db.VarChar(500)
+  displayName     String?   @map("display_name")
+  emailVerified   Boolean   @default(false) @map("email_verified")
+  twoFaEnabled    Boolean   @default(false) @map("two_fa_enabled")
+  twoFaSecret     String?   @map("two_fa_secret")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  lastLogin       DateTime? @map("last_login")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  isActive        Boolean   @default(true) @map("is_active")
 
   // Relations
-  createdMarkets   Market[]      @relation("MarketCreator")
-  predictions      Prediction[]
-  shares           Share[]
-  trades           Trade[]
-  transactions     Transaction[]
-  achievements     Achievement[]
-  leaderboard      Leaderboard?
-  referralsGiven   Referral[]    @relation("Referrer")
-  referralsReceived Referral[]   @relation("Referred")
-  refreshTokens    RefreshToken[]
-  disputes         Dispute[]
-  auditLogs        AuditLog[]
+  createdMarkets    Market[]       @relation("MarketCreator")
+  predictions       Prediction[]
+  shares            Share[]
+  trades            Trade[]
+  transactions      Transaction[]
+  achievements      Achievement[]
+  leaderboard       Leaderboard?
+  referralsGiven    Referral[]     @relation("Referrer")
+  referralsReceived Referral[]     @relation("Referred")
+  refreshTokens     RefreshToken[]
+  disputes          Dispute[]
+  auditLogs         AuditLog[]
 
   @@index([email])
   @@index([username])
@@ -68,35 +69,36 @@ enum UserTier {
 // ============================================================================
 
 model Market {
-  id                String        @id @default(uuid())
-  contractAddress   String        @unique @map("contract_address")
-  title             String        @db.VarChar(200)
-  description       String        @db.Text
-  category          MarketCategory
-  status            MarketStatus  @default(OPEN)
-  creatorId         String        @map("creator_id")
-  outcomeA          String        @map("outcome_a") @db.VarChar(100)
-  outcomeB          String        @map("outcome_b") @db.VarChar(100)
-  winningOutcome    Int?          @map("winning_outcome")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  closingAt         DateTime      @map("closing_at")
-  closedAt          DateTime?     @map("closed_at")
-  resolvedAt        DateTime?     @map("resolved_at")
-  totalVolume       Decimal       @default(0) @map("total_volume") @db.Decimal(18, 6)
-  participantCount  Int           @default(0) @map("participant_count")
-  yesLiquidity      Decimal       @default(0) @map("yes_liquidity") @db.Decimal(18, 6)
-  noLiquidity       Decimal       @default(0) @map("no_liquidity") @db.Decimal(18, 6)
-  feesCollected     Decimal       @default(0) @map("fees_collected") @db.Decimal(18, 6)
-  disputeReason     String?       @map("dispute_reason") @db.Text
-  resolutionSource  String?       @map("resolution_source")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  id               String         @id @default(uuid())
+  contractAddress  String         @unique @map("contract_address")
+  title            String         @db.VarChar(200)
+  description      String         @db.Text
+  category         MarketCategory
+  status           MarketStatus   @default(OPEN)
+  creatorId        String         @map("creator_id")
+  outcomeA         String         @map("outcome_a") @db.VarChar(100)
+  outcomeB         String         @map("outcome_b") @db.VarChar(100)
+  winningOutcome   Int?           @map("winning_outcome")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  closingAt        DateTime       @map("closing_at")
+  closedAt         DateTime?      @map("closed_at")
+  resolvedAt       DateTime?      @map("resolved_at")
+  totalVolume      Decimal        @default(0) @map("total_volume") @db.Decimal(18, 6)
+  participantCount Int            @default(0) @map("participant_count")
+  yesLiquidity     Decimal        @default(0) @map("yes_liquidity") @db.Decimal(18, 6)
+  noLiquidity      Decimal        @default(0) @map("no_liquidity") @db.Decimal(18, 6)
+  feesCollected    Decimal        @default(0) @map("fees_collected") @db.Decimal(18, 6)
+  disputeReason    String?        @map("dispute_reason") @db.Text
+  resolutionSource String?        @map("resolution_source")
+  poolTxHash       String?        @map("pool_tx_hash")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
 
   // Relations
-  creator           User          @relation("MarketCreator", fields: [creatorId], references: [id])
-  predictions       Prediction[]
-  shares            Share[]
-  trades            Trade[]
-  disputes          Dispute[]
+  creator     User         @relation("MarketCreator", fields: [creatorId], references: [id])
+  predictions Prediction[]
+  shares      Share[]
+  trades      Trade[]
+  disputes    Dispute[]
 
   @@index([contractAddress])
   @@index([category])
@@ -130,28 +132,28 @@ enum MarketStatus {
 // ============================================================================
 
 model Prediction {
-  id                String           @id @default(uuid())
-  userId            String           @map("user_id")
-  marketId          String           @map("market_id")
-  commitmentHash    String           @map("commitment_hash")
-  encryptedSalt     String?          @map("encrypted_salt")
-  saltIv            String?          @map("salt_iv")
-  predictedOutcome  Int?             @map("predicted_outcome")
-  amountUsdc        Decimal          @map("amount_usdc") @db.Decimal(18, 6)
-  transactionHash   String?          @map("transaction_hash")
-  revealTxHash      String?          @map("reveal_tx_hash")
-  status            PredictionStatus @default(COMMITTED)
-  createdAt         DateTime         @default(now()) @map("created_at")
-  revealedAt        DateTime?        @map("revealed_at")
-  settledAt         DateTime?        @map("settled_at")
-  pnlUsd            Decimal?         @map("pnl_usd") @db.Decimal(18, 6)
-  isWinner          Boolean?         @map("is_winner")
-  winningsClaimed   Boolean          @default(false) @map("winnings_claimed")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
+  id               String           @id @default(uuid())
+  userId           String           @map("user_id")
+  marketId         String           @map("market_id")
+  commitmentHash   String           @map("commitment_hash")
+  encryptedSalt    String?          @map("encrypted_salt")
+  saltIv           String?          @map("salt_iv")
+  predictedOutcome Int?             @map("predicted_outcome")
+  amountUsdc       Decimal          @map("amount_usdc") @db.Decimal(18, 6)
+  transactionHash  String?          @map("transaction_hash")
+  revealTxHash     String?          @map("reveal_tx_hash")
+  status           PredictionStatus @default(COMMITTED)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  revealedAt       DateTime?        @map("revealed_at")
+  settledAt        DateTime?        @map("settled_at")
+  pnlUsd           Decimal?         @map("pnl_usd") @db.Decimal(18, 6)
+  isWinner         Boolean?         @map("is_winner")
+  winningsClaimed  Boolean          @default(false) @map("winnings_claimed")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
 
   // Relations
-  user              User             @relation(fields: [userId], references: [id])
-  market            Market           @relation(fields: [marketId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  market Market @relation(fields: [marketId], references: [id])
 
   @@unique([userId, marketId, commitmentHash])
   @@index([userId])
@@ -173,24 +175,24 @@ enum PredictionStatus {
 // ============================================================================
 
 model Share {
-  id              String    @id @default(uuid())
-  userId          String    @map("user_id")
-  marketId        String    @map("market_id")
-  outcome         Int
-  quantity        Decimal   @db.Decimal(18, 6)
-  costBasis       Decimal   @map("cost_basis") @db.Decimal(18, 6)
-  acquiredAt      DateTime  @default(now()) @map("acquired_at")
-  entryPrice      Decimal   @map("entry_price") @db.Decimal(18, 6)
-  currentValue    Decimal   @map("current_value") @db.Decimal(18, 6)
-  unrealizedPnl   Decimal   @map("unrealized_pnl") @db.Decimal(18, 6)
-  soldQuantity    Decimal   @default(0) @map("sold_quantity") @db.Decimal(18, 6)
-  soldAt          DateTime? @map("sold_at")
-  realizedPnl     Decimal?  @map("realized_pnl") @db.Decimal(18, 6)
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  marketId      String    @map("market_id")
+  outcome       Int
+  quantity      Decimal   @db.Decimal(18, 6)
+  costBasis     Decimal   @map("cost_basis") @db.Decimal(18, 6)
+  acquiredAt    DateTime  @default(now()) @map("acquired_at")
+  entryPrice    Decimal   @map("entry_price") @db.Decimal(18, 6)
+  currentValue  Decimal   @map("current_value") @db.Decimal(18, 6)
+  unrealizedPnl Decimal   @map("unrealized_pnl") @db.Decimal(18, 6)
+  soldQuantity  Decimal   @default(0) @map("sold_quantity") @db.Decimal(18, 6)
+  soldAt        DateTime? @map("sold_at")
+  realizedPnl   Decimal?  @map("realized_pnl") @db.Decimal(18, 6)
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  user            User      @relation(fields: [userId], references: [id])
-  market          Market    @relation(fields: [marketId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  market Market @relation(fields: [marketId], references: [id])
 
   @@index([userId])
   @@index([marketId])
@@ -200,24 +202,24 @@ model Share {
 }
 
 model Trade {
-  id              String      @id @default(uuid())
-  userId          String      @map("user_id")
-  marketId        String      @map("market_id")
-  tradeType       TradeType   @map("trade_type")
-  outcome         Int?
-  quantity        Decimal     @db.Decimal(18, 6)
-  pricePerUnit    Decimal     @map("price_per_unit") @db.Decimal(18, 6)
-  totalAmount     Decimal     @map("total_amount") @db.Decimal(18, 6)
-  feeAmount       Decimal     @map("fee_amount") @db.Decimal(18, 6)
-  txHash          String      @map("tx_hash")
-  status          TradeStatus @default(PENDING)
-  createdAt       DateTime    @default(now()) @map("created_at")
-  confirmedAt     DateTime?   @map("confirmed_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  id           String      @id @default(uuid())
+  userId       String      @map("user_id")
+  marketId     String      @map("market_id")
+  tradeType    TradeType   @map("trade_type")
+  outcome      Int?
+  quantity     Decimal     @db.Decimal(18, 6)
+  pricePerUnit Decimal     @map("price_per_unit") @db.Decimal(18, 6)
+  totalAmount  Decimal     @map("total_amount") @db.Decimal(18, 6)
+  feeAmount    Decimal     @map("fee_amount") @db.Decimal(18, 6)
+  txHash       String      @map("tx_hash")
+  status       TradeStatus @default(PENDING)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  confirmedAt  DateTime?   @map("confirmed_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
 
   // Relations
-  user            User        @relation(fields: [userId], references: [id])
-  market          Market      @relation(fields: [marketId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  market Market @relation(fields: [marketId], references: [id])
 
   @@index([userId])
   @@index([marketId])
@@ -247,21 +249,21 @@ enum TradeStatus {
 // ============================================================================
 
 model Transaction {
-  id              String            @id @default(uuid())
-  userId          String            @map("user_id")
-  txType          TransactionType   @map("tx_type")
-  amountUsdc      Decimal           @map("amount_usdc") @db.Decimal(18, 6)
-  status          TransactionStatus @default(PENDING)
-  txHash          String            @map("tx_hash")
-  fromAddress     String            @map("from_address")
-  toAddress       String            @map("to_address")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  confirmedAt     DateTime?         @map("confirmed_at")
-  failedReason    String?           @map("failed_reason")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  id           String            @id @default(uuid())
+  userId       String            @map("user_id")
+  txType       TransactionType   @map("tx_type")
+  amountUsdc   Decimal           @map("amount_usdc") @db.Decimal(18, 6)
+  status       TransactionStatus @default(PENDING)
+  txHash       String            @map("tx_hash")
+  fromAddress  String            @map("from_address")
+  toAddress    String            @map("to_address")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  confirmedAt  DateTime?         @map("confirmed_at")
+  failedReason String?           @map("failed_reason")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
 
   // Relations
-  user            User              @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([txType])
@@ -288,21 +290,21 @@ enum TransactionStatus {
 // ============================================================================
 
 model Leaderboard {
-  userId            String   @id @map("user_id")
-  globalRank        Int      @map("global_rank")
-  weeklyRank        Int      @map("weekly_rank")
-  allTimePnl        Decimal  @map("all_time_pnl") @db.Decimal(18, 6)
-  weeklyPnl         Decimal  @map("weekly_pnl") @db.Decimal(18, 6)
-  allTimeWinRate    Decimal  @map("all_time_win_rate") @db.Decimal(5, 2)
-  weeklyWinRate     Decimal  @map("weekly_win_rate") @db.Decimal(5, 2)
-  predictionCount   Int      @map("prediction_count")
-  streakLength      Int      @map("streak_length")
-  streakType        StreakType @map("streak_type")
-  lastPredictionAt  DateTime? @map("last_prediction_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  userId           String     @id @map("user_id")
+  globalRank       Int        @map("global_rank")
+  weeklyRank       Int        @map("weekly_rank")
+  allTimePnl       Decimal    @map("all_time_pnl") @db.Decimal(18, 6)
+  weeklyPnl        Decimal    @map("weekly_pnl") @db.Decimal(18, 6)
+  allTimeWinRate   Decimal    @map("all_time_win_rate") @db.Decimal(5, 2)
+  weeklyWinRate    Decimal    @map("weekly_win_rate") @db.Decimal(5, 2)
+  predictionCount  Int        @map("prediction_count")
+  streakLength     Int        @map("streak_length")
+  streakType       StreakType @map("streak_type")
+  lastPredictionAt DateTime?  @map("last_prediction_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
   // Relations
-  user              User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([globalRank])
   @@index([weeklyRank])
@@ -318,16 +320,16 @@ enum StreakType {
 }
 
 model Achievement {
-  id                String   @id @default(uuid())
-  userId            String   @map("user_id")
-  achievementName   String   @map("achievement_name")
-  description       String
-  tier              AchievementTier
-  earnedAt          DateTime @default(now()) @map("earned_at")
-  badgeUrl          String   @map("badge_url")
+  id              String          @id @default(uuid())
+  userId          String          @map("user_id")
+  achievementName String          @map("achievement_name")
+  description     String
+  tier            AchievementTier
+  earnedAt        DateTime        @default(now()) @map("earned_at")
+  badgeUrl        String          @map("badge_url")
 
   // Relations
-  user              User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, achievementName])
   @@index([userId])
@@ -348,18 +350,18 @@ enum AchievementTier {
 // ============================================================================
 
 model Referral {
-  id                    String    @id @default(uuid())
-  referrerId            String    @map("referrer_id")
-  referredUserId        String    @map("referred_user_id")
-  referralCode          String    @unique @map("referral_code")
-  signupBonusClaimed    Boolean   @default(false) @map("signup_bonus_claimed")
-  referrerBonusClaimed  Boolean   @default(false) @map("referrer_bonus_claimed")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  referredSignupAt      DateTime? @map("referred_signup_at")
+  id                   String    @id @default(uuid())
+  referrerId           String    @map("referrer_id")
+  referredUserId       String    @map("referred_user_id")
+  referralCode         String    @unique @map("referral_code")
+  signupBonusClaimed   Boolean   @default(false) @map("signup_bonus_claimed")
+  referrerBonusClaimed Boolean   @default(false) @map("referrer_bonus_claimed")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  referredSignupAt     DateTime? @map("referred_signup_at")
 
   // Relations
-  referrer              User      @relation("Referrer", fields: [referrerId], references: [id])
-  referredUser          User      @relation("Referred", fields: [referredUserId], references: [id])
+  referrer     User @relation("Referrer", fields: [referrerId], references: [id])
+  referredUser User @relation("Referred", fields: [referredUserId], references: [id])
 
   @@unique([referrerId, referredUserId])
   @@index([referralCode])
@@ -373,16 +375,16 @@ model Referral {
 // ============================================================================
 
 model RefreshToken {
-  id          String    @id @default(uuid())
-  userId      String    @map("user_id")
-  tokenHash   String    @map("token_hash")
-  expiresAt   DateTime  @map("expires_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  revokedAt   DateTime? @map("revoked_at")
-  isValid     Boolean   @default(true) @map("is_valid")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+  isValid   Boolean   @default(true) @map("is_valid")
 
   // Relations
-  user        User      @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([tokenHash])
@@ -395,20 +397,20 @@ model RefreshToken {
 // ============================================================================
 
 model Dispute {
-  id            String        @id @default(uuid())
-  marketId      String        @map("market_id")
-  userId        String        @map("user_id")
-  reason        String
-  evidenceUrl   String?       @map("evidence_url")
-  status        DisputeStatus @default(OPEN)
-  resolution    String?
-  createdAt     DateTime      @default(now()) @map("created_at")
-  resolvedAt    DateTime?     @map("resolved_at")
-  adminNotes    String?       @map("admin_notes") @db.Text
+  id          String        @id @default(uuid())
+  marketId    String        @map("market_id")
+  userId      String        @map("user_id")
+  reason      String
+  evidenceUrl String?       @map("evidence_url")
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  createdAt   DateTime      @default(now()) @map("created_at")
+  resolvedAt  DateTime?     @map("resolved_at")
+  adminNotes  String?       @map("admin_notes") @db.Text
 
   // Relations
-  market        Market        @relation(fields: [marketId], references: [id])
-  user          User          @relation(fields: [userId], references: [id])
+  market Market @relation(fields: [marketId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   @@index([marketId])
   @@index([userId])
@@ -429,23 +431,58 @@ enum DisputeStatus {
 // ============================================================================
 
 model AuditLog {
-  id            BigInt    @id @default(autoincrement())
-  userId        String?   @map("user_id")
-  action        String
-  resourceType  String    @map("resource_type")
-  resourceId    String    @map("resource_id")
-  oldValue      Json?     @map("old_value")
-  newValue      Json?     @map("new_value")
-  ipAddress     String    @map("ip_address")
-  userAgent     String    @map("user_agent")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  id           BigInt   @id @default(autoincrement())
+  userId       String?  @map("user_id")
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id")
+  oldValue     Json?    @map("old_value")
+  newValue     Json?    @map("new_value")
+  ipAddress    String   @map("ip_address")
+  userAgent    String   @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
-  user          User?     @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([action])
   @@index([resourceType])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================================================
+// TREASURY
+// ============================================================================
+
+model Distribution {
+  id               String             @id @default(uuid())
+  distributionType DistributionType   @map("distribution_type")
+  totalAmount      Decimal            @map("total_amount") @db.Decimal(18, 6)
+  recipientCount   Int                @map("recipient_count")
+  txHash           String             @map("tx_hash")
+  status           DistributionStatus @default(PENDING)
+  initiatedBy      String             @map("initiated_by")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  completedAt      DateTime?          @map("completed_at")
+  failedReason     String?            @map("failed_reason")
+  metadata         Json?
+
+  @@index([distributionType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([txHash])
+  @@map("distributions")
+}
+
+enum DistributionType {
+  LEADERBOARD
+  CREATOR
+}
+
+enum DistributionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
 }

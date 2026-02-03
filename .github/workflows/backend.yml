@@ -84,6 +84,20 @@ jobs:
           cd backend
           npm ci
 
+      - name: Run migrations
+        run: |
+          cd backend
+          npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/boxmeout_test
+
+      - name: Generate Prisma client
+        run: |
+          cd backend
+          npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/boxmeout_test
+
       - name: Run tests with coverage
         run: |
           cd backend

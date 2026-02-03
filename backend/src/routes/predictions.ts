@@ -11,20 +11,16 @@ const router = Router();
  * POST /api/markets/:marketId/commit - Commit Prediction (Phase 1)
  * Server generates and stores salt securely
  */
-router.post(
-  '/:marketId/commit',
-  requireAuth,
-  (req, res) => predictionsController.commitPrediction(req, res)
+router.post('/:marketId/commit', requireAuth, (req, res) =>
+  predictionsController.commitPrediction(req, res)
 );
 
 /**
  * POST /api/markets/:marketId/reveal - Reveal Prediction (Phase 2)
  * Server provides stored salt for blockchain verification
  */
-router.post(
-  '/:marketId/reveal',
-  requireAuth,
-  (req, res) => predictionsController.revealPrediction(req, res)
+router.post('/:marketId/reveal', requireAuth, (req, res) =>
+  predictionsController.revealPrediction(req, res)
 );
 
 export default router;
@@ -167,4 +163,4 @@ TODO: WebSocket Events - Real-Time Prediction Updates
 - Update every second or on significant change
 */
 
-export default {};
+// export default {};

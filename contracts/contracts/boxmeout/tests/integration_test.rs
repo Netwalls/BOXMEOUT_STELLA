@@ -6,8 +6,8 @@ use soroban_sdk::{
 };
 
 use boxmeout::{
-    AMM, AMMClient, MarketFactory, MarketFactoryClient, PredictionMarket,
-    PredictionMarketClient, OracleManager, OracleManagerClient, Treasury, TreasuryClient,
+    AMMClient, MarketFactory, MarketFactoryClient, OracleManager, OracleManagerClient,
+    PredictionMarket, PredictionMarketClient, Treasury, TreasuryClient, AMM,
 };
 
 /// Integration test: Complete user flow from market creation to resolution

@@ -4,11 +4,11 @@ import { MarketRepository } from '../repositories/market.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import { MarketStatus, PredictionStatus } from '@prisma/client';
 import { executeTransaction } from '../database/transaction.js';
-import { 
-  generateSalt, 
-  createCommitmentHash, 
-  encrypt, 
-  decrypt 
+import {
+  generateSalt,
+  createCommitmentHash,
+  encrypt,
+  decrypt,
 } from '../utils/crypto.js';
 
 export class PredictionService {
@@ -89,8 +89,8 @@ export class PredictionService {
 
     // TODO: Call blockchain contract - Market.commit_prediction()
     // const txHash = await blockchainService.commitPrediction(
-    //   marketId, 
-    //   commitmentHash, 
+    //   marketId,
+    //   commitmentHash,
     //   amountUsdc
     // );
     const txHash = 'mock-tx-hash-' + Date.now(); // Mock for now
@@ -190,7 +190,9 @@ export class PredictionService {
     }
 
     if (predictedOutcome === null) {
-      throw new Error('Invalid commitment hash - cannot determine predicted outcome');
+      throw new Error(
+        'Invalid commitment hash - cannot determine predicted outcome'
+      );
     }
 
     // Update prediction to revealed status

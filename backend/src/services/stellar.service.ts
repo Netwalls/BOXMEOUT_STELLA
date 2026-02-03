@@ -43,15 +43,27 @@ export class StellarService {
    * @returns true if signature is valid, false otherwise
    * @throws AuthError if public key or signature format is invalid
    */
-  verifySignature(publicKey: string, message: string, signature: string): boolean {
+  verifySignature(
+    publicKey: string,
+    message: string,
+    signature: string
+  ): boolean {
     // Validate public key format
     if (!this.isValidPublicKey(publicKey)) {
-      throw new AuthError('INVALID_PUBLIC_KEY', 'Invalid Stellar public key format', 400);
+      throw new AuthError(
+        'INVALID_PUBLIC_KEY',
+        'Invalid Stellar public key format',
+        400
+      );
     }
 
     // Validate signature format (should be base64 encoded)
     if (!signature || typeof signature !== 'string') {
-      throw new AuthError('INVALID_SIGNATURE_FORMAT', 'Signature must be a non-empty string', 400);
+      throw new AuthError(
+        'INVALID_SIGNATURE_FORMAT',
+        'Signature must be a non-empty string',
+        400
+      );
     }
 
     try {
@@ -94,7 +106,11 @@ export class StellarService {
    * Extract shortened display format from public key
    * Example: "GBXXXX...XXXXXX" for UI display
    */
-  shortenPublicKey(publicKey: string, prefixLength: number = 6, suffixLength: number = 6): string {
+  shortenPublicKey(
+    publicKey: string,
+    prefixLength: number = 6,
+    suffixLength: number = 6
+  ): string {
     if (!publicKey || publicKey.length < prefixLength + suffixLength + 3) {
       return publicKey;
     }

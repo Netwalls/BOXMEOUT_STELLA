@@ -43,7 +43,11 @@ export class SessionService {
     const nonce = generateNonce();
     const timestamp = Math.floor(Date.now() / 1000);
     const expiresAt = timestamp + this.NONCE_TTL_SECONDS;
-    const message = buildSignatureMessage(nonce, timestamp, this.NONCE_TTL_SECONDS);
+    const message = buildSignatureMessage(
+      nonce,
+      timestamp,
+      this.NONCE_TTL_SECONDS
+    );
 
     const nonceData: NonceData = {
       nonce,
@@ -57,7 +61,11 @@ export class SessionService {
     // Key format: auth:nonce:{publicKey}:{nonce}
     const key = `${this.NONCE_PREFIX}${publicKey}:${nonce}`;
 
-    await this.redis.setex(key, this.NONCE_TTL_SECONDS, JSON.stringify(nonceData));
+    await this.redis.setex(
+      key,
+      this.NONCE_TTL_SECONDS,
+      JSON.stringify(nonceData)
+    );
 
     return nonceData;
   }
@@ -70,7 +78,10 @@ export class SessionService {
    *
    * @returns NonceData if valid, null if nonce doesn't exist or already consumed
    */
-  async consumeNonce(publicKey: string, nonce: string): Promise<NonceData | null> {
+  async consumeNonce(
+    publicKey: string,
+    nonce: string
+  ): Promise<NonceData | null> {
     const key = `${this.NONCE_PREFIX}${publicKey}:${nonce}`;
 
     // Atomic operation: Get and Delete in one transaction
@@ -216,7 +227,10 @@ export class SessionService {
    * Blacklist a token (for logout before natural expiry)
    * Token is blacklisted for its remaining TTL
    */
-  async blacklistToken(tokenId: string, expiresInSeconds: number): Promise<void> {
+  async blacklistToken(
+    tokenId: string,
+    expiresInSeconds: number
+  ): Promise<void> {
     const key = `${this.BLACKLIST_PREFIX}${tokenId}`;
     await this.redis.setex(key, expiresInSeconds, '1');
   }
@@ -238,7 +252,10 @@ export class SessionService {
    * Rotate a refresh token session (delete old, create new)
    * Used when refreshing tokens for enhanced security
    */
-  async rotateSession(oldTokenId: string, newSessionData: SessionData): Promise<void> {
+  async rotateSession(
+    oldTokenId: string,
+    newSessionData: SessionData
+  ): Promise<void> {
     // Get old session to find user ID
     const oldSession = await this.getSession(oldTokenId);
 

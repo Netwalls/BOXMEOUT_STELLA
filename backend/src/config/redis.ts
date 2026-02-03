@@ -60,21 +60,26 @@ export function getRedisClient(): Redis {
  */
 export async function initializeRedis(): Promise<void> {
   const client = getRedisClient();
-  
+
+  // Check if already connected
+  if (client.status === 'ready' || client.status === 'connecting') {
+    console.log('✅ Redis already connected/connecting');
+    return;
+  }
+
   try {
+    console.log('🔌 Connecting to Redis...');
     await client.connect();
+
     // Test the connection
     const pong = await client.ping();
     if (pong !== 'PONG') {
       throw new Error('Redis ping failed');
     }
+    console.log('✅ Redis connected successfully');
   } catch (error) {
-    // If already connected, ping will still work
-    try {
-      await client.ping();
-    } catch {
-      throw error;
-    }
+    console.error('❌ Failed to connect to Redis:', error);
+    throw error;
   }
 }
 

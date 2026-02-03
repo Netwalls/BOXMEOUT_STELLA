@@ -1,13 +1,22 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
   test: {
     environment: 'node',
-    setupFiles: ['./tests/setup.ts'],
+    setupFiles: ['./tests/setup.ts'], // Default setup for all tests
+    include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'dist/', 'tests/'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        'tests/',
+        '**/*.d.ts',
+        'src/index.ts',
+        'src/config/swagger.ts'
+      ],
       thresholds: {
         global: {
           branches: 80,
@@ -17,5 +26,19 @@ export default defineConfig({
         },
       },
     },
+    // Test-specific configurations
+    testTimeout: 30000, // 30 seconds for integration tests
+    hookTimeout: 10000, // 10 seconds for beforeAll/afterAll
   },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@middleware': path.resolve(__dirname, './src/middleware'),
+      '@utils': path.resolve(__dirname, './src/utils'),
+      '@config': path.resolve(__dirname, './src/config'),
+      '@routes': path.resolve(__dirname, './src/routes'),
+      '@controllers': path.resolve(__dirname, './src/controllers'),
+      '@services': path.resolve(__dirname, './src/services'),
+    }
+  }
 });

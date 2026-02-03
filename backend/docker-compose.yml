@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  backend:
+    build: .
+    container_name: boxmeout_backend
+    env_file:
+      - .env.docker
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - boxmeout_network
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: boxmeout_postgres
@@ -14,10 +30,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - boxmeout_network
 
   postgres_test:
     image: postgres:16-alpine
@@ -32,10 +50,12 @@ services:
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - boxmeout_network
 
   redis:
     image: redis:7-alpine
@@ -46,10 +66,16 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - boxmeout_network
+
+networks:
+  boxmeout_network:
+    driver: bridge
 
 volumes:
   postgres_data:

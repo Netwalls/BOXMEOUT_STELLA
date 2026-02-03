@@ -19,6 +19,7 @@ const POOL_EXISTS_KEY: &str = "pool_exists";
 const POOL_K_KEY: &str = "pool_k";
 const POOL_LP_SUPPLY_KEY: &str = "pool_lp_supply";
 const POOL_LP_TOKENS_KEY: &str = "pool_lp_tokens";
+const USER_SHARES_KEY: &str = "user_shares";
 
 // Pool data structure
 #[derive(Clone)]
@@ -91,7 +92,10 @@ impl AMM {
     }
 
     /// Create new liquidity pool for market
-    pub fn create_pool(env: Env, market_id: BytesN<32>, initial_liquidity: u128) {
+    pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+        // Require creator auth to transfer USDC
+        creator.require_auth();
+
         // Check if pool already exists
         let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
         if env.storage().persistent().has(&pool_exists_key) {
@@ -107,15 +111,46 @@ impl AMM {
         let yes_reserve = initial_liquidity / 2;
         let no_reserve = initial_liquidity / 2;
 
-        // Store pool reserves using tuple keys
+        // Calculate constant product k = x * y
+        let k = yes_reserve * no_reserve;
+
+        // Create storage keys for this pool using tuples
         let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
         let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id.clone());
+        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            market_id.clone(),
+            creator.clone(),
+        );
 
+        // Store reserves
         env.storage().persistent().set(&yes_key, &yes_reserve);
         env.storage().persistent().set(&no_key, &no_reserve);
+        env.storage().persistent().set(&k_key, &k);
         env.storage().persistent().set(&pool_exists_key, &true);
 
-        // Emit pool creation event
+        // Mint LP tokens to creator (equal to initial_liquidity for first LP)
+        let lp_tokens = initial_liquidity;
+        env.storage().persistent().set(&lp_supply_key, &lp_tokens);
+        env.storage().persistent().set(&lp_balance_key, &lp_tokens);
+
+        // Transfer USDC from creator to contract
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("usdc token not set");
+
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(
+            &creator,
+            &env.current_contract_address(),
+            &(initial_liquidity as i128),
+        );
+
+        // Emit PoolCreated event
         env.events().publish(
             (Symbol::new(&env, "pool_created"),),
             (market_id, initial_liquidity, yes_reserve, no_reserve),
@@ -174,7 +209,7 @@ impl AMM {
         // CPMM calculation: shares_out = (amount_in * reserve_out) / (reserve_in + amount_in)
         let (reserve_in, reserve_out, new_reserve_in, new_reserve_out) = if outcome == 1 {
             // Buying YES shares: pay with USDC, get YES shares
-            // Input reserve is NO (what we're paying with conceptually)
+            // Input reserve is NO (what we're paying with conceptually in CPMM mapping)
             // Output reserve is YES (what we're getting)
             let shares_out = (amount_after_fee * yes_reserve) / (no_reserve + amount_after_fee);
             (
@@ -198,10 +233,13 @@ impl AMM {
 
         // Slippage protection
         if shares_out < min_shares {
-            panic!("slippage exceeded");
+            panic!(
+                "Slippage exceeded: would receive {} shares, minimum is {}",
+                shares_out, min_shares
+            );
         }
 
-        // Verify CPMM invariant (k should increase due to fees)
+        // Verify CPMM invariant (k should increase due to fees, never decrease)
         let old_k = yes_reserve * no_reserve;
         let new_k = new_reserve_in * new_reserve_out;
         if new_k < old_k {
@@ -227,10 +265,32 @@ impl AMM {
                 .set(&no_key, &(no_reserve - shares_out));
         }
 
-        // Emit trade event
+        // Transfer USDC from buyer to contract
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("usdc token not set");
+
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(&buyer, &env.current_contract_address(), &(amount as i128));
+
+        // Update User Shares Balance
+        let user_share_key = (
+            Symbol::new(&env, USER_SHARES_KEY),
+            market_id.clone(),
+            buyer.clone(),
+            outcome,
+        );
+        let current_shares: u128 = env.storage().persistent().get(&user_share_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&user_share_key, &(current_shares + shares_out));
+
+        // Record trade (Optional: Simplified to event only for this resolution)
         env.events().publish(
             (Symbol::new(&env, "buy_shares"),),
-            (buyer, market_id, outcome, amount, shares_out, fee_amount),
+            (buyer, market_id, outcome, shares_out, amount, fee_amount),
         );
 
         shares_out
@@ -246,21 +306,31 @@ impl AMM {
         shares: u128,
         min_payout: u128,
     ) -> u128 {
-        // Require seller authentication
         seller.require_auth();
 
-        // Validate inputs
         if outcome > 1 {
-            panic!("outcome must be 0 (NO) or 1 (YES)");
+            panic!("Invalid outcome: must be 0 (NO) or 1 (YES)");
         }
         if shares == 0 {
-            panic!("shares must be greater than 0");
+            panic!("Shares execution amount must be positive");
         }
 
         // Check if pool exists
         let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             panic!("pool does not exist");
+        }
+
+        // Check user share balance
+        let user_share_key = (
+            Symbol::new(&env, USER_SHARES_KEY),
+            market_id.clone(),
+            seller.clone(),
+            outcome,
+        );
+        let user_shares: u128 = env.storage().persistent().get(&user_share_key).unwrap_or(0);
+        if user_shares < shares {
+            panic!("Insufficient shares balance");
         }
 
         // Get current reserves
@@ -297,7 +367,10 @@ impl AMM {
 
         // Slippage protection
         if payout_after_fee < min_payout {
-            panic!("slippage exceeded");
+            panic!(
+                "Slippage exceeded: would receive {} USDC, minimum is {}",
+                payout_after_fee, min_payout
+            );
         }
 
         // Update reserves
@@ -327,7 +400,26 @@ impl AMM {
             panic!("insufficient pool liquidity");
         }
 
-        // Emit trade event
+        // Burn user shares
+        env.storage()
+            .persistent()
+            .set(&user_share_key, &(user_shares - shares));
+
+        // Transfer USDC to seller
+        let usdc_address: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not configured");
+        let usdc_client = soroban_sdk::token::Client::new(&env, &usdc_address);
+
+        usdc_client.transfer(
+            &env.current_contract_address(),
+            &seller,
+            &(payout_after_fee as i128),
+        );
+
+        // Emit SellShares event
         env.events().publish(
             (Symbol::new(&env, "sell_shares"),),
             (
@@ -525,7 +617,7 @@ impl AMM {
 
         // Emit LiquidityRemoved event
         env.events().publish(
-            (Symbol::new(&env, "LiquidityRemoved"),),
+            (Symbol::new(&env, "liquidity_removed"),),
             (market_id, lp_provider, lp_tokens, yes_amount, no_amount),
         );
 
@@ -561,7 +653,4 @@ impl AMM {
     // - get_lp_position() / claim_lp_fees()
     // - calculate_spot_price()
     // - get_trade_history()
-    // - rebalance_pool()
-    // - drain_pool()
-    // - get_amm_analytics()
 }

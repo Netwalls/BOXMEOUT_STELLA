@@ -30,7 +30,11 @@ export async function requireAuth(
     const parts = authHeader.split(' ');
 
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      throw new AuthError('INVALID_FORMAT', 'Authorization header must be: Bearer <token>', 401);
+      throw new AuthError(
+        'INVALID_FORMAT',
+        'Authorization header must be: Bearer <token>',
+        401
+      );
     }
 
     const token = parts[1];
@@ -132,7 +136,11 @@ export async function optionalAuth(
  *   router.post('/admin/action', requireAuth, requireTier('LEGENDARY', 'EXPERT'), handler);
  */
 export function requireTier(...allowedTiers: UserTier[]) {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  return (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+  ): void => {
     if (!req.user) {
       res.status(401).json({
         success: false,

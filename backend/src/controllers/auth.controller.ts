@@ -63,7 +63,11 @@ export class AuthController {
       const loginRequest = req.body as LoginRequest;
 
       // Validate required fields
-      if (!loginRequest.publicKey || !loginRequest.signature || !loginRequest.nonce) {
+      if (
+        !loginRequest.publicKey ||
+        !loginRequest.signature ||
+        !loginRequest.nonce
+      ) {
         res.status(400).json({
           success: false,
           error: {

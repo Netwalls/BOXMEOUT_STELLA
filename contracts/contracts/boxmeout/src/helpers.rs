@@ -1,8 +1,7 @@
 // File for resuable helper functions
 
-use soroban_sdk::{Address, BytesN, Env, Symbol, token::StellarAssetClient};
+use soroban_sdk::{token::StellarAssetClient, Address, BytesN, Env, Symbol};
 // use crate::helpers::*;
-
 
 const POOL_YES_RESERVE: &str = "pool_yes_reserve";
 const POOL_NO_RESERVE: &str = "pool_no_reserve";
@@ -12,10 +11,11 @@ const TRADE_COUNT: &str = "trade_count";
 const USER_SHARES_YES: &str = "user_shares_yes";
 const USER_SHARES_NO: &str = "user_shares_no";
 
+/// Create test environment (test-only utility)
+/// Note: Call env.mock_all_auths() manually in your tests after creating the env
+#[cfg(test)]
 pub fn create_test_env() -> Env {
-    let env = Env::default();
-    env.mock_all_auths();
-    env
+    Env::default()
 }
 
 /// Get pool reserves for a market
@@ -61,19 +61,41 @@ pub fn set_pool_reserves(env: &Env, market_id: &BytesN<32>, yes_reserve: u128, n
 /// Get user's share balance for a specific outcome
 pub fn get_user_shares(env: &Env, user: &Address, market_id: &BytesN<32>, outcome: u32) -> u128 {
     let key = if outcome == 1 {
-        (Symbol::new(env, USER_SHARES_YES), user.clone(), market_id.clone())
+        (
+            Symbol::new(env, USER_SHARES_YES),
+            user.clone(),
+            market_id.clone(),
+        )
     } else {
-        (Symbol::new(env, USER_SHARES_NO), user.clone(), market_id.clone())
+        (
+            Symbol::new(env, USER_SHARES_NO),
+            user.clone(),
+            market_id.clone(),
+        )
     };
     env.storage().persistent().get(&key).unwrap_or(0)
 }
 
 /// Update user's share balance for a specific outcome
-pub fn set_user_shares(env: &Env, user: &Address, market_id: &BytesN<32>, outcome: u32, shares: u128) {
+pub fn set_user_shares(
+    env: &Env,
+    user: &Address,
+    market_id: &BytesN<32>,
+    outcome: u32,
+    shares: u128,
+) {
     let key = if outcome == 1 {
-        (Symbol::new(env, USER_SHARES_YES), user.clone(), market_id.clone())
+        (
+            Symbol::new(env, USER_SHARES_YES),
+            user.clone(),
+            market_id.clone(),
+        )
     } else {
-        (Symbol::new(env, USER_SHARES_NO), user.clone(), market_id.clone())
+        (
+            Symbol::new(env, USER_SHARES_NO),
+            user.clone(),
+            market_id.clone(),
+        )
     };
     env.storage().persistent().set(&key, &shares);
 }
@@ -99,7 +121,12 @@ pub fn increment_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
 /// When buying YES: input goes to NO reserve, output from YES reserve
 /// When buying NO: input goes to YES reserve, output from NO reserve
 /// shares_out = reserve_out - (k / (reserve_in + amount_in))
-pub fn calculate_shares_out(yes_reserve: u128, no_reserve: u128, outcome: u32, amount_in: u128,) -> u128 {
+pub fn calculate_shares_out(
+    yes_reserve: u128,
+    no_reserve: u128,
+    outcome: u32,
+    amount_in: u128,
+) -> u128 {
     let k = yes_reserve * no_reserve;
 
     if outcome == 1 {
@@ -112,5 +139,30 @@ pub fn calculate_shares_out(yes_reserve: u128, no_reserve: u128, outcome: u32, a
         let new_yes_reserve = yes_reserve + amount_in;
         let new_no_reserve = k / new_yes_reserve;
         no_reserve - new_no_reserve
+    }
+}
+
+/// Calculate payout when selling shares
+/// When selling YES: input adds to YES pool, payout from NO pool
+/// When selling NO: input adds to NO pool, payout from YES pool
+/// payout = reserve_out - (k / (reserve_in + shares_in))
+pub fn calculate_payout(
+    yes_reserve: u128,
+    no_reserve: u128,
+    outcome: u32,
+    shares_in: u128,
+) -> u128 {
+    let k = yes_reserve * no_reserve;
+
+    if outcome == 1 {
+        // Selling YES: input adds to YES pool, payout from NO pool
+        let new_yes_reserve = yes_reserve + shares_in;
+        let new_no_reserve = k / new_yes_reserve;
+        no_reserve - new_no_reserve
+    } else {
+        // Selling NO: input adds to NO pool, payout from YES pool
+        let new_no_reserve = no_reserve + shares_in;
+        let new_yes_reserve = k / new_no_reserve;
+        yes_reserve - new_yes_reserve
     }
 }

@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -45,19 +45,41 @@ jobs:
           cd contracts/contracts/boxmeout
           cargo clippy -- -D warnings
       
-      - name: Build contracts
+      - name: Build all contracts
         run: |
           cd contracts/contracts/boxmeout
-          cargo build --release --target wasm32-unknown-unknown
+          
+          echo "🏗️  Building Market contract..."
+          cargo build --release --target wasm32-unknown-unknown --features market --no-default-features
+          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../market.wasm
+          
+          echo "🏗️  Building Oracle contract..."
+          cargo build --release --target wasm32-unknown-unknown --features oracle --no-default-features
+          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../oracle.wasm
+          
+          echo "🏗️  Building AMM contract..."
+          cargo build --release --target wasm32-unknown-unknown --features amm --no-default-features
+          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../amm.wasm
+          
+          echo "🏗️  Building Factory contract..."
+          cargo build --release --target wasm32-unknown-unknown --features factory --no-default-features
+          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../factory.wasm
+          
+          echo "🏗️  Building Treasury contract..."
+          cargo build --release --target wasm32-unknown-unknown --features treasury --no-default-features
+          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../treasury.wasm
+          
+          echo " All 5 contracts built successfully!"
+          ls -lh ../../../*.wasm
       
       - name: Run tests
         run: |
           cd contracts/contracts/boxmeout
           cargo test --all-features
       
-      - name: Upload test results
+      - name: Upload WASM artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: contract-test-results
-          path: contracts/contracts/boxmeout/target/
+          name: contract-wasm-files
+          path: contracts/*.wasm
