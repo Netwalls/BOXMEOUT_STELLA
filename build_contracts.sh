@@ -9,7 +9,9 @@ echo ""
 
 # Navigate to contract directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONTRACT_DIR="$SCRIPT_DIR/contracts/contracts/boxmeout"
+WORKSPACE_DIR="$SCRIPT_DIR/contracts"
+CONTRACT_DIR="$WORKSPACE_DIR/contracts/boxmeout"
+TARGET_DIR="$WORKSPACE_DIR/target/wasm32-unknown-unknown/release"
 cd "$CONTRACT_DIR"
 
 echo "📍 Working directory: $(pwd)"
@@ -20,8 +22,8 @@ echo "📦 Building Market Contract..."
 cargo build --target wasm32-unknown-unknown --release --features market
 if [ $? -eq 0 ]; then
     echo "✅ Market contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
-        cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/market.wasm
+    if [ -f "$TARGET_DIR/boxmeout.wasm" ]; then
+        cp "$TARGET_DIR/boxmeout.wasm" "$TARGET_DIR/market.wasm"
         echo "   📄 Saved as market.wasm"
     fi
 else
@@ -35,8 +37,8 @@ echo "📦 Building Oracle Contract..."
 cargo build --target wasm32-unknown-unknown --release --features oracle
 if [ $? -eq 0 ]; then
     echo "✅ Oracle contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
-        cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/oracle.wasm
+    if [ -f "$TARGET_DIR/boxmeout.wasm" ]; then
+        cp "$TARGET_DIR/boxmeout.wasm" "$TARGET_DIR/oracle.wasm"
         echo "   📄 Saved as oracle.wasm"
     fi
 else
@@ -50,8 +52,8 @@ echo "📦 Building AMM Contract..."
 cargo build --target wasm32-unknown-unknown --release --features amm
 if [ $? -eq 0 ]; then
     echo "✅ AMM contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
-        cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/amm.wasm
+    if [ -f "$TARGET_DIR/boxmeout.wasm" ]; then
+        cp "$TARGET_DIR/boxmeout.wasm" "$TARGET_DIR/amm.wasm"
         echo "   📄 Saved as amm.wasm"
     fi
 else
@@ -65,8 +67,8 @@ echo "📦 Building Factory Contract..."
 cargo build --target wasm32-unknown-unknown --release --features factory
 if [ $? -eq 0 ]; then
     echo "✅ Factory contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
-        cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/factory.wasm
+    if [ -f "$TARGET_DIR/boxmeout.wasm" ]; then
+        cp "$TARGET_DIR/boxmeout.wasm" "$TARGET_DIR/factory.wasm"
         echo "   📄 Saved as factory.wasm"
     fi
 else
@@ -80,8 +82,8 @@ echo "📦 Building Treasury Contract..."
 cargo build --target wasm32-unknown-unknown --release --features treasury
 if [ $? -eq 0 ]; then
     echo "✅ Treasury contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
-        cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/treasury.wasm
+    if [ -f "$TARGET_DIR/boxmeout.wasm" ]; then
+        cp "$TARGET_DIR/boxmeout.wasm" "$TARGET_DIR/treasury.wasm"
         echo "   📄 Saved as treasury.wasm"
     fi
 else
@@ -93,7 +95,7 @@ echo ""
 echo "🎉 All 5 contracts built successfully!"
 echo ""
 echo "📁 Output files:"
-ls -lh target/wasm32-unknown-unknown/release/{market,oracle,amm,factory,treasury}.wasm 2>/dev/null || echo "⚠️  Some WASM files missing"
+ls -lh "$TARGET_DIR"/{market,oracle,amm,factory,treasury}.wasm 2>/dev/null || echo "⚠️  Some WASM files missing"
 echo ""
 echo "Next steps:"
 echo "  1. Optimize: stellar contract optimize --wasm target/wasm32-unknown-unknown/release/market.wasm"

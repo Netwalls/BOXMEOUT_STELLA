@@ -48,26 +48,27 @@ jobs:
       - name: Build all contracts
         run: |
           cd contracts/contracts/boxmeout
+          TARGET_DIR=../../target/wasm32-unknown-unknown/release
           
           echo "🏗️  Building Market contract..."
           cargo build --release --target wasm32-unknown-unknown --features market --no-default-features
-          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../market.wasm
+          cp "$TARGET_DIR/boxmeout.wasm" ../../../market.wasm
           
           echo "🏗️  Building Oracle contract..."
           cargo build --release --target wasm32-unknown-unknown --features oracle --no-default-features
-          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../oracle.wasm
+          cp "$TARGET_DIR/boxmeout.wasm" ../../../oracle.wasm
           
           echo "🏗️  Building AMM contract..."
           cargo build --release --target wasm32-unknown-unknown --features amm --no-default-features
-          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../amm.wasm
+          cp "$TARGET_DIR/boxmeout.wasm" ../../../amm.wasm
           
           echo "🏗️  Building Factory contract..."
           cargo build --release --target wasm32-unknown-unknown --features factory --no-default-features
-          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../factory.wasm
+          cp "$TARGET_DIR/boxmeout.wasm" ../../../factory.wasm
           
           echo "🏗️  Building Treasury contract..."
           cargo build --release --target wasm32-unknown-unknown --features treasury --no-default-features
-          cp target/wasm32-unknown-unknown/release/boxmeout.wasm ../../../treasury.wasm
+          cp "$TARGET_DIR/boxmeout.wasm" ../../../treasury.wasm
           
           echo " All 5 contracts built successfully!"
           ls -lh ../../../*.wasm
