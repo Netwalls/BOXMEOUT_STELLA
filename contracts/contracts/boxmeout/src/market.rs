@@ -2,7 +2,8 @@
 // Handles predictions, bet commitment/reveal, market resolution, and winnings claims
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token, Address, BytesN, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, token, Address, Bytes, BytesN, Env, Map,
+    Symbol, Vec,
 };
 
 // Storage keys
@@ -19,7 +20,7 @@ const NO_POOL_KEY: &str = "no_pool";
 const TOTAL_VOLUME_KEY: &str = "total_volume";
 const PENDING_COUNT_KEY: &str = "pending_count";
 const COMMIT_PREFIX: &str = "commit";
-const PREDICTION_PREFIX: &str = "prediction";
+const PREDICTIONS_PREFIX: &str = "prediction";
 const WINNING_OUTCOME_KEY: &str = "winning_outcome";
 const WINNER_SHARES_KEY: &str = "winner_shares";
 const LOSER_SHARES_KEY: &str = "loser_shares";
@@ -46,14 +47,8 @@ pub enum MarketError {
     TransferFailed = 5,
     /// Market has not been initialized
     NotInitialized = 6,
-    /// No prediction found for user
-    NoPrediction = 7,
-    /// User already claimed winnings
-    AlreadyClaimed = 8,
-    /// User did not predict the winning outcome
-    NotWinner = 9,
-    /// Market not yet resolved
-    MarketNotResolved = 10,
+    /// Invalid revelation: hash doesn't match commitment
+    InvalidRevelation = 7,
 }
 
 /// Commitment record for commit-reveal scheme
@@ -69,12 +64,13 @@ pub struct Commitment {
 /// Revealed prediction record
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct UserPrediction {
+pub struct Prediction {
     pub user: Address,
     pub outcome: u32,
     pub amount: i128,
+    pub commit_timestamp: u64,
+    pub reveal_timestamp: u64,
     pub claimed: bool,
-    pub timestamp: u64,
 }
 
 /// PREDICTION MARKET - Manages individual market logic
@@ -299,22 +295,6 @@ impl PredictionMarket {
     }
 
     /// Phase 2: User reveals their committed prediction
-    ///
-    /// TODO: Reveal Prediction
-    /// - Require user authentication
-    /// - Validate market state still OPEN (revelation period)
-    /// - Validate user has prior commit record for this market
-    /// - Reconstruct commit hash from: outcome + amount + salt provided
-    /// - Compare reconstructed hash with stored commit hash
-    /// - If hashes don't match: reject with "Invalid revelation"
-    /// - Lock in prediction: outcome and amount
-    /// - Mark commit as revealed
-    /// - Update prediction pool: if outcome==YES: yes_pool+=amount, else: no_pool+=amount
-    /// - Calculate odds: yes_odds = yes_pool / (yes_pool + no_pool)
-    /// - Store prediction record in user_predictions map
-    /// - Remove from pending_commits
-    /// - Emit PredictionRevealed(user, market_id, outcome, amount, timestamp)
-    /// - Update market total_volume += amount
     pub fn reveal_prediction(
         env: Env,
         user: Address,
@@ -322,8 +302,126 @@ impl PredictionMarket {
         outcome: u32,
         amount: i128,
         salt: BytesN<32>,
-    ) {
-        todo!("See reveal prediction TODO above")
+    ) -> Result<(), MarketError> {
+        // Require user authentication
+        user.require_auth();
+
+        // Validate market is initialized
+        let market_state: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .ok_or(MarketError::NotInitialized)?;
+
+        // Validate market is in open state (revelation period)
+        if market_state != STATE_OPEN {
+            return Err(MarketError::InvalidMarketState);
+        }
+
+        // Validate user has prior commit record
+        let commit_key = Self::get_commit_key(&env, &user);
+        let commitment: Commitment = env
+            .storage()
+            .persistent()
+            .get(&commit_key)
+            .ok_or(MarketError::InvalidRevelation)?;
+
+        // Validate amount matches commitment
+        if commitment.amount != amount {
+            return Err(MarketError::InvalidRevelation);
+        }
+
+        // Reconstruct commit hash from outcome + amount + salt
+        let mut hash_input = Bytes::new(&env);
+        hash_input.extend_from_array(&outcome.to_be_bytes());
+        hash_input.extend_from_array(&amount.to_be_bytes());
+        hash_input.extend_from_array(&salt.to_array());
+
+        let reconstructed_hash = env.crypto().sha256(&hash_input);
+        let reconstructed_hash_bytes = BytesN::from_array(&env, &reconstructed_hash.to_array());
+
+        // Compare reconstructed hash with stored commit hash
+        if reconstructed_hash_bytes != commitment.commit_hash {
+            return Err(MarketError::InvalidRevelation);
+        }
+
+        // Validate outcome is binary (0 or 1)
+        if outcome > 1 {
+            return Err(MarketError::InvalidRevelation);
+        }
+
+        let current_time = env.ledger().timestamp();
+
+        // Update prediction pools
+        if outcome == 1 {
+            // YES outcome
+            let yes_pool: i128 = env
+                .storage()
+                .persistent()
+                .get(&Symbol::new(&env, YES_POOL_KEY))
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&Symbol::new(&env, YES_POOL_KEY), &(yes_pool + amount));
+        } else {
+            // NO outcome
+            let no_pool: i128 = env
+                .storage()
+                .persistent()
+                .get(&Symbol::new(&env, NO_POOL_KEY))
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&Symbol::new(&env, NO_POOL_KEY), &(no_pool + amount));
+        }
+
+        // Update total volume
+        let total_volume: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, TOTAL_VOLUME_KEY))
+            .unwrap_or(0);
+        env.storage().persistent().set(
+            &Symbol::new(&env, TOTAL_VOLUME_KEY),
+            &(total_volume + amount),
+        );
+
+        // Store prediction record in predictions map
+        let prediction = Prediction {
+            user: user.clone(),
+            outcome,
+            amount,
+            commit_timestamp: commitment.timestamp,
+            reveal_timestamp: current_time,
+            claimed: false,
+        };
+
+        let prediction_key = (Symbol::new(&env, PREDICTIONS_PREFIX), user.clone());
+        env.storage().persistent().set(&prediction_key, &prediction);
+
+        // Remove from pending commits
+        env.storage().persistent().remove(&commit_key);
+
+        // Update pending count
+        let pending_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PENDING_COUNT_KEY))
+            .unwrap_or(0);
+
+        if pending_count > 0 {
+            env.storage()
+                .persistent()
+                .set(&Symbol::new(&env, PENDING_COUNT_KEY), &(pending_count - 1));
+        }
+
+        // Emit PredictionRevealed event
+        env.events().publish(
+            (Symbol::new(&env, "PredictionRevealed"),),
+            (user, market_id, outcome, amount, current_time),
+        );
+
+        Ok(())
     }
 
     /// Close market for new predictions (auto-trigger at closing_time)
@@ -536,8 +634,8 @@ impl PredictionMarket {
         }
 
         // 2. Get User Prediction
-        let prediction_key = (Symbol::new(&env, PREDICTION_PREFIX), user.clone());
-        let mut prediction: UserPrediction = env
+        let prediction_key = (Symbol::new(&env, PREDICTIONS_PREFIX), user.clone());
+        let mut prediction: Prediction = env
             .storage()
             .persistent()
             .get(&prediction_key)
@@ -741,14 +839,16 @@ impl PredictionMarket {
 
     /// Test helper: Set a user's prediction directly (bypasses commit/reveal)
     pub fn test_set_prediction(env: Env, user: Address, outcome: u32, amount: i128) {
-        let prediction = UserPrediction {
+        let now = env.ledger().timestamp();
+        let prediction = Prediction {
             user: user.clone(),
             outcome,
             amount,
+            commit_timestamp: now,
+            reveal_timestamp: now,
             claimed: false,
-            timestamp: env.ledger().timestamp(),
         };
-        let key = (Symbol::new(&env, PREDICTION_PREFIX), user);
+        let key = (Symbol::new(&env, PREDICTIONS_PREFIX), user);
         env.storage().persistent().set(&key, &prediction);
     }
 
@@ -775,8 +875,8 @@ impl PredictionMarket {
     }
 
     /// Test helper: Get user's prediction
-    pub fn test_get_prediction(env: Env, user: Address) -> Option<UserPrediction> {
-        let key = (Symbol::new(&env, PREDICTION_PREFIX), user);
+    pub fn test_get_prediction(env: Env, user: Address) -> Option<Prediction> {
+        let key = (Symbol::new(&env, PREDICTIONS_PREFIX), user);
         env.storage().persistent().get(&key)
     }
 

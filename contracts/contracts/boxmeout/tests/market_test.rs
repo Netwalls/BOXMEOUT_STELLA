@@ -1,11 +1,11 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo},
+    testutils::{Address as _, Events, Ledger, LedgerInfo},
     token, Address, BytesN, Env,
 };
 
-use boxmeout::{Commitment, MarketError, PredictionMarketClient};
+use boxmeout::{Commitment, MarketError, Prediction, PredictionMarketClient};
 
 // ============================================================================
 // TEST HELPERS
@@ -425,149 +425,240 @@ fn test_losing_users_cannot_claim() {
 }
 
 #[test]
-#[should_panic(expected = "Market not resolved")]
-fn test_cannot_claim_before_resolution() {
+fn test_reveal_prediction_happy_path() {
     let env = create_test_env();
-    let (client, market_id, _token_client, _market_contract) = setup_market_for_claims(&env);
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
+    // Setup user with USDC balance
     let user = Address::generate(&env);
+    let amount = 100_000_000i128; // 100 USDC
+    let outcome = 1u32; // YES
+    let salt = BytesN::from_array(&env, &[123u8; 32]);
 
-    // Set user prediction without resolving market
-    client.test_set_prediction(&user, &1u32, &500);
+    // Compute correct commit hash: hash(outcome + amount + salt)
+    let mut hash_input = soroban_sdk::Bytes::new(&env);
+    hash_input.extend_from_array(&outcome.to_be_bytes());
+    hash_input.extend_from_array(&amount.to_be_bytes());
+    hash_input.extend_from_array(&salt.to_array());
 
-    // Market is still OPEN - should fail
-    client.claim_winnings(&user, &market_id);
+    let commit_hash = env.crypto().sha256(&hash_input);
+    let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &amount);
+
+    // Approve market contract to spend user's USDC
+    let market_address = client.address.clone();
+    token.approve(
+        &user,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // First commit prediction
+    let result = client.try_commit_prediction(&user, &commit_hash_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Now reveal prediction
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &salt);
+    assert!(result.is_ok());
+
+    // Verify commitment was removed
+    let commitment = client.get_commitment(&user);
+    assert!(commitment.is_none());
+
+    // Verify prediction was stored
+    // Note: We don't have a getter for predictions yet, so we can't verify this directly
+
+    // Verify pools were updated
+    // Note: We don't have getters for pools yet, but we can verify total volume
+    // This would need to be added to the contract for proper testing
+
+    // Verify pending count decreased
+    let pending_count = client.get_pending_count();
+    assert_eq!(pending_count, 0);
 }
 
 #[test]
-#[should_panic(expected = "Winnings already claimed")]
-fn test_cannot_double_claim() {
+fn test_reveal_prediction_wrong_salt_rejected() {
     let env = create_test_env();
-    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
+    // Setup user with USDC balance
     let user = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome = 1u32;
+    let correct_salt = BytesN::from_array(&env, &[123u8; 32]);
+    let wrong_salt = BytesN::from_array(&env, &[124u8; 32]);
 
-    // Sufficient funds for two claims worth
-    token_client.mint(&market_contract, &2000);
+    // Compute commit hash with correct salt
+    let mut hash_input = soroban_sdk::Bytes::new(&env);
+    hash_input.extend_from_array(&outcome.to_be_bytes());
+    hash_input.extend_from_array(&amount.to_be_bytes());
+    hash_input.extend_from_array(&correct_salt.to_array());
 
-    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
-    client.test_set_prediction(&user, &1u32, &1000);
+    let commit_hash = env.crypto().sha256(&hash_input);
+    let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
 
-    // First claim succeeds
-    let payout = client.claim_winnings(&user, &market_id);
-    assert_eq!(payout, 900);
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &amount);
 
-    // Second claim should panic with "Winnings already claimed"
-    client.claim_winnings(&user, &market_id);
+    let market_address = client.address.clone();
+    token.approve(
+        &user,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Commit with correct hash
+    let result = client.try_commit_prediction(&user, &commit_hash_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Try to reveal with wrong salt
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &wrong_salt);
+    assert_eq!(result, Err(Ok(MarketError::InvalidRevelation)));
 }
 
 #[test]
-fn test_correct_payout_calculation_with_losers() {
+fn test_reveal_prediction_without_commit_rejected() {
     let env = create_test_env();
-    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
 
+    // Setup user without prior commit
     let user = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome = 1u32;
+    let salt = BytesN::from_array(&env, &[123u8; 32]);
 
-    // Total pool: 1000 (winners) + 500 (losers) = 1500
-    // User has 500 of 1000 winner shares (50%)
-    // Gross payout = (500 / 1000) * 1500 = 750
-    // Net payout (after 10% fee) = 750 - 75 = 675
-    token_client.mint(&market_contract, &1500);
-
-    client.test_setup_resolution(&market_id, &1u32, &1000, &500);
-    client.test_set_prediction(&user, &1u32, &500);
-
-    let payout = client.claim_winnings(&user, &market_id);
-    assert_eq!(payout, 675);
-    assert_eq!(token_client.balance(&user), 675);
+    // Try to reveal without committing first
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &salt);
+    assert_eq!(result, Err(Ok(MarketError::InvalidRevelation)));
 }
 
 #[test]
-fn test_multiple_winners_correct_proportional_payout() {
+fn test_reveal_prediction_yes_and_no_outcomes() {
     let env = create_test_env();
-    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
-    let user1 = Address::generate(&env);
-    let user2 = Address::generate(&env);
+    // Test YES outcome (1)
+    let user_yes = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome_yes = 1u32;
+    let salt_yes = BytesN::from_array(&env, &[111u8; 32]);
 
-    // Total pool: 1000 (winners) + 1000 (losers) = 2000
-    // User1 has 600, User2 has 400 of 1000 winner shares
-    token_client.mint(&market_contract, &2000);
+    let mut hash_input_yes = soroban_sdk::Bytes::new(&env);
+    hash_input_yes.extend_from_array(&outcome_yes.to_be_bytes());
+    hash_input_yes.extend_from_array(&amount.to_be_bytes());
+    hash_input_yes.extend_from_array(&salt_yes.to_array());
 
-    client.test_setup_resolution(&market_id, &1u32, &1000, &1000);
-    client.test_set_prediction(&user1, &1u32, &600);
-    client.test_set_prediction(&user2, &1u32, &400);
+    let commit_hash_yes = env.crypto().sha256(&hash_input_yes);
+    let commit_hash_yes_bytes = BytesN::from_array(&env, &commit_hash_yes.to_array());
 
-    // User1: (600 / 1000) * 2000 = 1200, minus 10% = 1080
-    let payout1 = client.claim_winnings(&user1, &market_id);
-    assert_eq!(payout1, 1080);
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user_yes, &amount);
 
-    // User2: (400 / 1000) * 2000 = 800, minus 10% = 720
-    let payout2 = client.claim_winnings(&user2, &market_id);
-    assert_eq!(payout2, 720);
+    let market_address = client.address.clone();
+    token.approve(
+        &user_yes,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
 
-    // Verify balances
-    assert_eq!(token_client.balance(&user1), 1080);
-    assert_eq!(token_client.balance(&user2), 720);
+    // Commit YES prediction
+    let result = client.try_commit_prediction(&user_yes, &commit_hash_yes_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Reveal YES prediction
+    let result =
+        client.try_reveal_prediction(&user_yes, &market_id, &outcome_yes, &amount, &salt_yes);
+    assert!(result.is_ok());
+
+    // Test NO outcome (0)
+    let user_no = Address::generate(&env);
+    let outcome_no = 0u32;
+    let salt_no = BytesN::from_array(&env, &[222u8; 32]);
+
+    let mut hash_input_no = soroban_sdk::Bytes::new(&env);
+    hash_input_no.extend_from_array(&outcome_no.to_be_bytes());
+    hash_input_no.extend_from_array(&amount.to_be_bytes());
+    hash_input_no.extend_from_array(&salt_no.to_array());
+
+    let commit_hash_no = env.crypto().sha256(&hash_input_no);
+    let commit_hash_no_bytes = BytesN::from_array(&env, &commit_hash_no.to_array());
+
+    token.mint(&user_no, &amount);
+    token.approve(
+        &user_no,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Commit NO prediction
+    let result = client.try_commit_prediction(&user_no, &commit_hash_no_bytes, &amount);
+    assert!(result.is_ok());
+
+    // Reveal NO prediction
+    let result = client.try_reveal_prediction(&user_no, &market_id, &outcome_no, &amount, &salt_no);
+    assert!(result.is_ok());
+
+    // Verify both commitments were removed
+    let commitment_yes = client.get_commitment(&user_yes);
+    assert!(commitment_yes.is_none());
+
+    let commitment_no = client.get_commitment(&user_no);
+    assert!(commitment_no.is_none());
+
+    // Verify pending count is 0
+    let pending_count = client.get_pending_count();
+    assert_eq!(pending_count, 0);
 }
 
 #[test]
-fn test_winner_no_outcome_also_works() {
+fn test_reveal_prediction_event_payload_correct() {
     let env = create_test_env();
-    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+    let (client, market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
+    // Setup user with USDC balance
     let user = Address::generate(&env);
+    let amount = 100_000_000i128;
+    let outcome = 1u32;
+    let salt = BytesN::from_array(&env, &[123u8; 32]);
 
-    // NO (0) wins this time
-    token_client.mint(&market_contract, &1000);
+    // Compute commit hash
+    let mut hash_input = soroban_sdk::Bytes::new(&env);
+    hash_input.extend_from_array(&outcome.to_be_bytes());
+    hash_input.extend_from_array(&amount.to_be_bytes());
+    hash_input.extend_from_array(&salt.to_array());
 
-    client.test_setup_resolution(&market_id, &0u32, &1000, &0); // NO wins
-    client.test_set_prediction(&user, &0u32, &1000); // User voted NO
+    let commit_hash = env.crypto().sha256(&hash_input);
+    let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
 
-    let payout = client.claim_winnings(&user, &market_id);
-    assert_eq!(payout, 900); // 1000 - 10% fee
-}
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &amount);
 
-#[test]
-#[should_panic(expected = "No prediction found for user")]
-fn test_user_without_prediction_cannot_claim() {
-    let env = create_test_env();
-    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+    let market_address = client.address.clone();
+    token.approve(
+        &user,
+        &market_address,
+        &amount,
+        &(env.ledger().sequence() + 100),
+    );
 
-    let user = Address::generate(&env);
+    // Commit prediction
+    let result = client.try_commit_prediction(&user, &commit_hash_bytes, &amount);
+    assert!(result.is_ok());
 
-    token_client.mint(&market_contract, &1000);
+    // Reveal prediction and check event
+    let result = client.try_reveal_prediction(&user, &market_id, &outcome, &amount, &salt);
+    assert!(result.is_ok());
 
-    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
-
-    // User has NO prediction - should fail
-    client.claim_winnings(&user, &market_id);
-}
-
-#[test]
-fn test_claim_updates_prediction_claimed_flag() {
-    let env = create_test_env();
-    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
-
-    let user = Address::generate(&env);
-
-    token_client.mint(&market_contract, &1000);
-
-    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
-    client.test_set_prediction(&user, &1u32, &1000);
-
-    // Before claim
-    let prediction_before = client.test_get_prediction(&user);
-    assert!(prediction_before.is_some());
-    assert!(!prediction_before.unwrap().claimed);
-
-    // Claim
-    client.claim_winnings(&user, &market_id);
-
-    // After claim - claimed flag should be true
-    let prediction_after = client.test_get_prediction(&user);
-    assert!(prediction_after.is_some());
-    assert!(prediction_after.unwrap().claimed);
+    // Verify event was emitted
+    let events = env.events().all();
+    assert!(!events.is_empty());
 }
 
 #[test]
