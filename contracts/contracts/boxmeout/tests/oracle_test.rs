@@ -89,7 +89,7 @@ fn test_register_oracle_exceeds_limit() {
     client.initialize(&admin, &2u32);
 
     // Register 11 oracles (limit is 10)
-    for i in 0..11 {
+    for _ in 0..11 {
         let oracle = Address::generate(&env);
         let name = Symbol::new(&env, "Oracle");
         client.register_oracle(&oracle, &name);
@@ -97,8 +97,7 @@ fn test_register_oracle_exceeds_limit() {
 }
 
 #[test]
-#[should_panic(expected = "oracle already registered")]
-#[should_panic]
+#[should_panic(expected = "Oracle already registered")]
 fn test_register_duplicate_oracle() {
     let env = create_test_env();
     env.mock_all_auths();
@@ -534,4 +533,194 @@ fn test_attestation_count_tracking() {
     let (yes_count, no_count) = client.get_attestation_counts(&market_id);
     assert_eq!(yes_count, 2);
     assert_eq!(no_count, 1);
+}
+
+// ===== FINALIZE RESOLUTION INTEGRATION TEST =====
+
+/// Integration test: finalize_resolution with cross-contract call to Market
+#[test]
+fn test_finalize_resolution_integration() {
+    use boxmeout::{PredictionMarket, PredictionMarketClient};
+    use soroban_sdk::token::TokenClient;
+
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    // Register Oracle contract
+    let oracle_id = register_oracle(&env);
+    let oracle_client = OracleManagerClient::new(&env, &oracle_id);
+
+    // Register Market contract
+    let market_id_bytes = BytesN::from_array(&env, &[9u8; 32]);
+    let market_contract_id = env.register_contract(None, PredictionMarket);
+    let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+
+    // Setup token
+    let token_admin = Address::generate(&env);
+    let usdc_address = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+
+    // Initialize oracle with 2 of 3 consensus
+    let admin = Address::generate(&env);
+    oracle_client.initialize(&admin, &2u32);
+
+    // Register 3 oracles
+    let oracle1 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    let oracle3 = Address::generate(&env);
+    oracle_client.register_oracle(&oracle1, &Symbol::new(&env, "O1"));
+    oracle_client.register_oracle(&oracle2, &Symbol::new(&env, "O2"));
+    oracle_client.register_oracle(&oracle3, &Symbol::new(&env, "O3"));
+
+    // Setup timing
+    let resolution_time = 1000u64;
+    let closing_time = 500u64;
+
+    // Initialize market
+    let creator = Address::generate(&env);
+    market_client.initialize(
+        &market_id_bytes,
+        &creator,
+        &Address::generate(&env),
+        &usdc_address,
+        &oracle_id,
+        &closing_time,
+        &resolution_time,
+    );
+
+    // Register market in oracle
+    oracle_client.register_market(&market_id_bytes, &resolution_time);
+
+    // Advance time past resolution
+    env.ledger().set_timestamp(resolution_time + 10);
+
+    // Close market first
+    env.ledger().set_timestamp(closing_time + 10);
+    market_client.close_market(&market_id_bytes);
+
+    // Advance to after resolution time
+    env.ledger().set_timestamp(resolution_time + 10);
+
+    // Submit attestations to reach consensus (2 YES, 1 NO)
+    let data_hash = BytesN::from_array(&env, &[0u8; 32]);
+    oracle_client.submit_attestation(&oracle1, &market_id_bytes, &1u32, &data_hash);
+    oracle_client.submit_attestation(&oracle2, &market_id_bytes, &1u32, &data_hash);
+
+    // Verify consensus reached
+    let (reached, outcome) = oracle_client.check_consensus(&market_id_bytes);
+    assert!(reached);
+    assert_eq!(outcome, 1);
+
+    // Advance time past dispute period (7 days = 604800 seconds)
+    env.ledger().set_timestamp(resolution_time + 604800 + 10);
+
+    // Finalize resolution (cross-contract call to market)
+    oracle_client.finalize_resolution(&market_id_bytes, &market_contract_id);
+
+    // Verify market is resolved
+    let market_state = market_client.get_market_state_value();
+    assert!(market_state.is_some());
+    assert_eq!(market_state.unwrap(), 2); // STATE_RESOLVED = 2
+
+    // Verify consensus result is stored
+    let stored_result = oracle_client.get_consensus_result(&market_id_bytes);
+    assert_eq!(stored_result, 1);
+}
+
+/// Test finalize_resolution fails if consensus not reached
+#[test]
+#[should_panic(expected = "Consensus not reached")]
+fn test_finalize_resolution_no_consensus() {
+    use boxmeout::PredictionMarket;
+
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let oracle_client = OracleManagerClient::new(&env, &oracle_id);
+
+    let market_contract_id = env.register_contract(None, PredictionMarket);
+    let market_id_bytes = BytesN::from_array(&env, &[10u8; 32]);
+
+    let admin = Address::generate(&env);
+    oracle_client.initialize(&admin, &3u32); // Need 3 votes
+
+    let oracle1 = Address::generate(&env);
+    oracle_client.register_oracle(&oracle1, &Symbol::new(&env, "O1"));
+
+    let resolution_time = 1000u64;
+    oracle_client.register_market(&market_id_bytes, &resolution_time);
+
+    // Only 1 attestation (not enough for consensus)
+    env.ledger().set_timestamp(resolution_time + 10);
+    let data_hash = BytesN::from_array(&env, &[0u8; 32]);
+    oracle_client.submit_attestation(&oracle1, &market_id_bytes, &1u32, &data_hash);
+
+    // Advance past dispute period
+    env.ledger().set_timestamp(resolution_time + 604800 + 10);
+
+    // Should panic: consensus not reached
+    oracle_client.finalize_resolution(&market_id_bytes, &market_contract_id);
+}
+
+/// Test finalize_resolution fails if dispute period not elapsed
+#[test]
+#[should_panic(expected = "Dispute period not elapsed")]
+fn test_finalize_resolution_dispute_period_not_elapsed() {
+    use boxmeout::PredictionMarket;
+
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let oracle_client = OracleManagerClient::new(&env, &oracle_id);
+
+    let market_contract_id = env.register_contract(None, PredictionMarket);
+    let market_id_bytes = BytesN::from_array(&env, &[11u8; 32]);
+
+    let admin = Address::generate(&env);
+    oracle_client.initialize(&admin, &2u32);
+
+    let oracle1 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    oracle_client.register_oracle(&oracle1, &Symbol::new(&env, "O1"));
+    oracle_client.register_oracle(&oracle2, &Symbol::new(&env, "O2"));
+
+    let resolution_time = 1000u64;
+    oracle_client.register_market(&market_id_bytes, &resolution_time);
+
+    // Submit attestations to reach consensus
+    env.ledger().set_timestamp(resolution_time + 10);
+    let data_hash = BytesN::from_array(&env, &[0u8; 32]);
+    oracle_client.submit_attestation(&oracle1, &market_id_bytes, &1u32, &data_hash);
+    oracle_client.submit_attestation(&oracle2, &market_id_bytes, &1u32, &data_hash);
+
+    // Try to finalize before dispute period (only 100 seconds after resolution)
+    env.ledger().set_timestamp(resolution_time + 100);
+
+    // Should panic: dispute period not elapsed
+    oracle_client.finalize_resolution(&market_id_bytes, &market_contract_id);
+}
+
+/// Test finalize_resolution fails if market not registered
+#[test]
+#[should_panic(expected = "Market not registered")]
+fn test_finalize_resolution_market_not_registered() {
+    use boxmeout::PredictionMarket;
+
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let oracle_client = OracleManagerClient::new(&env, &oracle_id);
+
+    let market_contract_id = env.register_contract(None, PredictionMarket);
+    let market_id_bytes = BytesN::from_array(&env, &[12u8; 32]);
+
+    let admin = Address::generate(&env);
+    oracle_client.initialize(&admin, &2u32);
+
+    // Market not registered - should panic
+    oracle_client.finalize_resolution(&market_id_bytes, &market_contract_id);
 }

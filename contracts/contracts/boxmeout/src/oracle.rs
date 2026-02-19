@@ -349,20 +349,47 @@ impl OracleManager {
             .expect("Consensus result not found")
     }
 
-    /// Finalize market resolution after time delay
+    /// Finalize market resolution after consensus and dispute period
     ///
-    /// TODO: Finalize Resolution
-    /// - Validate market_id exists
-    /// - Validate consensus already reached
-    /// - Validate time_delay_before_finality has passed
-    /// - Validate no active disputes/challenges
-    /// - Get consensus_result
-    /// - Call market contract's resolve_market() function
-    /// - Pass winning_outcome to market
-    /// - Confirm resolution recorded
-    /// - Emit ResolutionFinalized(market_id, outcome, timestamp)
-    pub fn finalize_resolution(env: Env, market_id: BytesN<32>) {
-        todo!("See finalize resolution TODO above")
+    /// Called after consensus reached and dispute period elapsed.
+    /// Makes cross-contract call to Market.resolve_market().
+    /// Locks in final outcome permanently.
+    pub fn finalize_resolution(env: Env, market_id: BytesN<32>, market_address: Address) {
+        // 1. Validate market is registered
+        let market_key = (Symbol::new(&env, MARKET_RES_TIME_KEY), market_id.clone());
+        let resolution_time: u64 = env
+            .storage()
+            .persistent()
+            .get(&market_key)
+            .expect("Market not registered");
+
+        // 2. Validate consensus reached
+        let (consensus_reached, final_outcome) = Self::check_consensus(env.clone(), market_id.clone());
+        if !consensus_reached {
+            panic!("Consensus not reached");
+        }
+
+        // 3. Validate dispute period elapsed (7 days = 604800 seconds)
+        let current_time = env.ledger().timestamp();
+        let dispute_period = 604800u64;
+        if current_time < resolution_time + dispute_period {
+            panic!("Dispute period not elapsed");
+        }
+
+        // 4. Store consensus result permanently
+        let result_key = (Symbol::new(&env, "consensus_result"), market_id.clone());
+        env.storage().persistent().set(&result_key, &final_outcome);
+
+        // 5. Cross-contract call to Market.resolve_market()
+        use crate::market::PredictionMarketClient;
+        let market_client = PredictionMarketClient::new(&env, &market_address);
+        market_client.resolve_market(&market_id);
+
+        // 6. Emit ResolutionFinalized event
+        env.events().publish(
+            (Symbol::new(&env, "ResolutionFinalized"),),
+            (market_id, final_outcome, current_time),
+        );
     }
 
     /// Challenge an attestation (dispute oracle honesty)
