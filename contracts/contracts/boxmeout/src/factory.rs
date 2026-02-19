@@ -64,6 +64,14 @@ impl MarketFactory {
             .unwrap_or(0)
     }
 
+    /// Get admin address (for market cancel authorization)
+    pub fn get_admin(env: Env) -> Address {
+        env.storage()
+            .persistent()
+            .get(&Symbol::new(&env, ADMIN_KEY))
+            .expect("Admin not set")
+    }
+
     /// Get treasury address
     pub fn get_treasury(env: Env) -> Address {
         env.storage()
