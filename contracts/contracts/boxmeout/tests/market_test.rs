@@ -74,6 +74,7 @@ fn setup_test_market(
         &market_id,
         &creator,
         &factory,
+        &creator, // admin = creator for cancel
         &usdc_address,
         &oracle,
         &closing_time,
@@ -112,6 +113,7 @@ fn setup_market_for_claims(
         &market_id,
         &creator,
         &Address::generate(env),
+        &creator, // admin = creator for cancel
         &usdc_address,
         &oracle,
         &closing_time,

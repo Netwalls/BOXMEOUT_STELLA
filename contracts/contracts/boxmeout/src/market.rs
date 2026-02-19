@@ -852,6 +852,19 @@ impl PredictionMarket {
     // --- TEST HELPERS (Not for production use, but exposed for integration tests) ---
     // In a real production contract, these would be removed or gated behind a feature flag.
 
+    /// Test helper: Add user to participants list (for cancel tests that bypass commit)
+    pub fn test_add_participant(env: Env, user: Address) {
+        let mut participants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PARTICIPANTS_KEY))
+            .unwrap_or_else(|| Vec::new(&env));
+        participants.push_back(user);
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, PARTICIPANTS_KEY), &participants);
+    }
+
     /// Test helper: Set a user's prediction directly (bypasses commit/reveal)
     pub fn test_set_prediction(env: Env, user: Address, outcome: u32, amount: i128) {
         let prediction = UserPrediction {
@@ -985,6 +998,7 @@ mod tests {
             &market_id_bytes,
             &creator,
             &Address::generate(&env),
+            &creator,
             &usdc_address,
             &oracle_contract_id,
             &2000,
@@ -1035,6 +1049,7 @@ mod tests {
             &market_id_bytes,
             &Address::generate(&env),
             &Address::generate(&env),
+            &Address::generate(&env),
             &usdc_client.address,
             &oracle_contract_id,
             &2000,
@@ -1067,6 +1082,7 @@ mod tests {
             &market_id_bytes,
             &Address::generate(&env),
             &Address::generate(&env),
+            &Address::generate(&env),
             &usdc_client.address,
             &oracle_contract_id,
             &2000,
@@ -1095,6 +1111,7 @@ mod tests {
 
         market_client.initialize(
             &market_id_bytes,
+            &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
             &usdc_client.address,
@@ -1127,6 +1144,7 @@ mod tests {
 
         market_client.initialize(
             &market_id_bytes,
+            &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
             &usdc_client.address,
@@ -1165,6 +1183,7 @@ mod tests {
 
         market_client.initialize(
             &market_id_bytes,
+            &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
             &usdc_client.address,
@@ -1208,6 +1227,7 @@ mod tests {
 
         market_client.initialize(
             &market_id_bytes,
+            &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
             &usdc_client.address,
@@ -1257,6 +1277,7 @@ mod tests {
             &market_id_bytes,
             &creator,
             &factory,
+            &creator,
             &usdc,
             &oracle_contract_id,
             &closing_time,
@@ -1294,6 +1315,7 @@ mod tests {
 
         market_client.initialize(
             &market_id_bytes,
+            &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
@@ -1335,6 +1357,7 @@ mod tests {
             &market_id_bytes,
             &creator,
             &Address::generate(&env),
+            &creator,
             &Address::generate(&env),
             &oracle_contract_id,
             &2000,
@@ -1365,6 +1388,7 @@ mod tests {
 
         market_client.initialize(
             &market_id_bytes,
+            &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
