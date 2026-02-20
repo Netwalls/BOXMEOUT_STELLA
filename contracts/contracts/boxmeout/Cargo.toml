@@ -19,6 +19,8 @@ oracle = []
 amm = []
 factory = []
 treasury = []
+# Test feature to enable all contracts for integration tests
+testutils = ["market", "oracle", "amm", "factory", "treasury"]
 
 [dependencies]
 soroban-sdk = { workspace = true }

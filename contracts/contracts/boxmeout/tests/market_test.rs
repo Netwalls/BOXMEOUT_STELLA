@@ -693,3 +693,412 @@ fn test_single_winner_gets_all() {
     let payout = client.claim_winnings(&winner, &market_id);
     assert_eq!(payout, 900);
 }
+
+// ============================================================================
+// LIQUIDITY QUERY TESTS
+// ============================================================================
+
+#[test]
+fn test_get_market_liquidity_no_pool() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Query liquidity when no pool exists (initial state)
+    let (yes_reserve, no_reserve, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Should return zeros for reserves and k
+    assert_eq!(yes_reserve, 0);
+    assert_eq!(no_reserve, 0);
+    assert_eq!(k_constant, 0);
+
+    // Should return 50/50 odds (5000 basis points each)
+    assert_eq!(yes_odds, 5000);
+    assert_eq!(no_odds, 5000);
+}
+
+#[test]
+fn test_get_market_liquidity_balanced_pool() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Manually set balanced pool reserves (simulating AMM pool creation)
+    let yes_reserve = 1_000_000_000u128; // 1000 USDC worth of YES
+    let no_reserve = 1_000_000_000u128; // 1000 USDC worth of NO
+
+    // Store reserves in market storage (simulating AMM sync)
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // Verify k constant (x * y = k)
+    let expected_k = yes_reserve * no_reserve;
+    assert_eq!(k_constant, expected_k);
+
+    // Verify odds are 50/50 for balanced pool
+    assert_eq!(yes_odds, 5000);
+    assert_eq!(no_odds, 5000);
+}
+
+#[test]
+fn test_get_market_liquidity_yes_favored() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Set pool with YES favored (more NO reserve = higher YES price)
+    let yes_reserve = 400_000_000u128; // 400 USDC worth of YES
+    let no_reserve = 600_000_000u128; // 600 USDC worth of NO
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // Verify k constant
+    assert_eq!(k_constant, yes_reserve * no_reserve);
+
+    // Verify odds favor YES (YES should be > 50%)
+    // YES odds = (no_reserve / total) * 10000 = (600 / 1000) * 10000 = 6000
+    assert_eq!(yes_odds, 6000); // 60%
+    assert_eq!(no_odds, 4000); // 40%
+
+    // Verify odds sum to 10000
+    assert_eq!(yes_odds + no_odds, 10000);
+}
+
+#[test]
+fn test_get_market_liquidity_no_favored() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Set pool with NO favored (more YES reserve = higher NO price)
+    let yes_reserve = 700_000_000u128; // 700 USDC worth of YES
+    let no_reserve = 300_000_000u128; // 300 USDC worth of NO
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // Verify k constant
+    assert_eq!(k_constant, yes_reserve * no_reserve);
+
+    // Verify odds favor NO (NO should be > 50%)
+    // YES odds = (no_reserve / total) * 10000 = (300 / 1000) * 10000 = 3000
+    assert_eq!(yes_odds, 3000); // 30%
+    assert_eq!(no_odds, 7000); // 70%
+
+    // Verify odds sum to 10000
+    assert_eq!(yes_odds + no_odds, 10000);
+}
+
+#[test]
+fn test_get_market_liquidity_extreme_yes() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Set pool with extreme YES bias (95% YES)
+    let yes_reserve = 50_000_000u128; // 50 USDC worth of YES
+    let no_reserve = 950_000_000u128; // 950 USDC worth of NO
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // Verify k constant
+    assert_eq!(k_constant, yes_reserve * no_reserve);
+
+    // Verify extreme YES odds (95%)
+    assert_eq!(yes_odds, 9500); // 95%
+    assert_eq!(no_odds, 500); // 5%
+
+    // Verify odds sum to 10000
+    assert_eq!(yes_odds + no_odds, 10000);
+}
+
+#[test]
+fn test_get_market_liquidity_extreme_no() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Set pool with extreme NO bias (95% NO)
+    let yes_reserve = 950_000_000u128; // 950 USDC worth of YES
+    let no_reserve = 50_000_000u128; // 50 USDC worth of NO
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // Verify k constant
+    assert_eq!(k_constant, yes_reserve * no_reserve);
+
+    // Verify extreme NO odds (95%)
+    assert_eq!(yes_odds, 500); // 5%
+    assert_eq!(no_odds, 9500); // 95%
+
+    // Verify odds sum to 10000
+    assert_eq!(yes_odds + no_odds, 10000);
+}
+
+#[test]
+fn test_get_market_liquidity_only_yes_reserve() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Edge case: only YES reserve exists
+    let yes_reserve = 1_000_000_000u128;
+    let no_reserve = 0u128;
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // k should be 0 (one-sided pool)
+    assert_eq!(k_constant, 0);
+
+    // Odds should be 100% YES, 0% NO
+    assert_eq!(yes_odds, 10000);
+    assert_eq!(no_odds, 0);
+}
+
+#[test]
+fn test_get_market_liquidity_only_no_reserve() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Edge case: only NO reserve exists
+    let yes_reserve = 0u128;
+    let no_reserve = 1_000_000_000u128;
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // k should be 0 (one-sided pool)
+    assert_eq!(k_constant, 0);
+
+    // Odds should be 0% YES, 100% NO
+    assert_eq!(yes_odds, 0);
+    assert_eq!(no_odds, 10000);
+}
+
+#[test]
+fn test_get_market_liquidity_large_numbers() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Test with large liquidity amounts
+    let yes_reserve = 10_000_000_000_000u128; // 10 million USDC
+    let no_reserve = 10_000_000_000_000u128; // 10 million USDC
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // Verify k constant (should handle large numbers)
+    assert_eq!(k_constant, yes_reserve * no_reserve);
+
+    // Verify odds are still 50/50
+    assert_eq!(yes_odds, 5000);
+    assert_eq!(no_odds, 5000);
+}
+
+#[test]
+fn test_get_market_liquidity_rounding_edge_case() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Test with amounts that might cause rounding issues
+    let yes_reserve = 333_333_333u128; // 333.333... USDC
+    let no_reserve = 666_666_667u128; // 666.666... USDC
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify reserves
+    assert_eq!(returned_yes, yes_reserve);
+    assert_eq!(returned_no, no_reserve);
+
+    // Verify k constant
+    assert_eq!(k_constant, yes_reserve * no_reserve);
+
+    // Verify odds sum to exactly 10000 (rounding adjustment applied)
+    assert_eq!(yes_odds + no_odds, 10000);
+
+    // YES should be approximately 66.67% (6667 basis points)
+    // NO should be approximately 33.33% (3333 basis points)
+    assert!(yes_odds >= 6666 && yes_odds <= 6668);
+    assert!(no_odds >= 3332 && no_odds <= 3334);
+}
+
+#[test]
+fn test_get_market_liquidity_k_invariant_property() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Set initial pool
+    let yes_reserve = 800_000_000u128;
+    let no_reserve = 200_000_000u128;
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query liquidity
+    let (returned_yes, returned_no, k_constant, _yes_odds, _no_odds) =
+        client.get_market_liquidity(&market_id);
+
+    // Verify k = x * y property
+    assert_eq!(k_constant, returned_yes * returned_no);
+
+    // Verify k matches expected value
+    let expected_k = yes_reserve * no_reserve;
+    assert_eq!(k_constant, expected_k);
+}
+
+#[test]
+fn test_get_market_liquidity_multiple_queries_consistent() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address) = setup_test_market(&env);
+
+    // Set pool reserves
+    let yes_reserve = 500_000_000u128;
+    let no_reserve = 500_000_000u128;
+
+    env.storage().persistent().set(
+        &Symbol::new(&env, "yes_pool"),
+        &yes_reserve,
+    );
+    env.storage().persistent().set(
+        &Symbol::new(&env, "no_pool"),
+        &no_reserve,
+    );
+
+    // Query multiple times
+    let result1 = client.get_market_liquidity(&market_id);
+    let result2 = client.get_market_liquidity(&market_id);
+    let result3 = client.get_market_liquidity(&market_id);
+
+    // All queries should return identical results (read-only operation)
+    assert_eq!(result1, result2);
+    assert_eq!(result2, result3);
+}
+=======
+>>>>>>> origin/main
