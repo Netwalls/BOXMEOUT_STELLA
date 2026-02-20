@@ -1,0 +1,717 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\Cargo.toml
+workspace: C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\Cargo.toml
+    Checking boxmeout v0.1.0 (C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout)
+error[E0433]: failed to resolve: there are too many leading `super` keywords
+ --> contracts\boxmeout\tests\test.rs:3:5
+  |
+3 | use super::*;
+  |     ^^^^^ there are too many leading `super` keywords
+
+error[E0433]: failed to resolve: there are too many leading `super` keywords
+ --> contracts\boxmeout\tests\treasury_integration_tests.rs:3:5
+  |
+3 | use super::*;
+  |     ^^^^^ there are too many leading `super` keywords
+
+error[E0428]: the name `test_buy_shares_no` is defined multiple times
+   --> contracts\boxmeout\tests\amm_test.rs:336:1
+    |
+214 | fn test_buy_shares_no() {
+    | ----------------------- previous definition of the value `test_buy_shares_no` here
+...
+336 | fn test_buy_shares_no() {
+    | ^^^^^^^^^^^^^^^^^^^^^^^ `test_buy_shares_no` redefined here
+    |
+    = note: `test_buy_shares_no` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `test_sell_shares` is defined multiple times
+   --> contracts\boxmeout\tests\amm_test.rs:498:1
+    |
+427 | fn test_sell_shares() {
+    | --------------------- previous definition of the value `test_sell_shares` here
+...
+498 | fn test_sell_shares() {
+    | ^^^^^^^^^^^^^^^^^^^^^ `test_sell_shares` redefined here
+    |
+    = note: `test_sell_shares` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `test_get_odds` is defined multiple times
+   --> contracts\boxmeout\tests\amm_test.rs:656:1
+    |
+627 | fn test_get_odds() {
+    | ------------------ previous definition of the value `test_get_odds` here
+...
+656 | fn test_get_odds() {
+    | ^^^^^^^^^^^^^^^^^^ `test_get_odds` redefined here
+    |
+    = note: `test_get_odds` must be defined only once in the value namespace of this module
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\factory_test.rs:18:9
+   |
+18 |     env.register_contract(None, MarketFactory)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(deprecated)]`
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\integration_test.rs:19:26
+   |
+19 |     let factory_id = env.register_contract(None, MarketFactory);
+   |                          ^^^^^^^^^^^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(deprecated)]`
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\integration_test.rs:20:27
+   |
+20 |     let treasury_id = env.register_contract(None, Treasury);
+   |                           ^^^^^^^^^^^^^^^^^
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\integration_test.rs:21:25
+   |
+21 |     let oracle_id = env.register_contract(None, OracleManager);
+   |                         ^^^^^^^^^^^^^^^^^
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\integration_test.rs:22:22
+   |
+22 |     let amm_id = env.register_contract(None, AMM);
+   |                      ^^^^^^^^^^^^^^^^^
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts\boxmeout\tests\integration_test.rs:122:26
+    |
+122 |     let factory_id = env.register_contract(None, MarketFactory);
+    |                          ^^^^^^^^^^^^^^^^^
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts\boxmeout\tests\integration_test.rs:123:22
+    |
+123 |     let amm_id = env.register_contract(None, AMM);
+    |                      ^^^^^^^^^^^^^^^^^
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts\boxmeout\tests\integration_test.rs:151:25
+    |
+151 |     let oracle_id = env.register_contract(None, OracleManager);
+    |                         ^^^^^^^^^^^^^^^^^
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+   --> contracts\boxmeout\tests\integration_test.rs:178:27
+    |
+178 |     let treasury_id = env.register_contract(None, Treasury);
+    |                           ^^^^^^^^^^^^^^^^^
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\oracle_test.rs:15:9
+   |
+15 |     env.register_contract(None, OracleManager)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(deprecated)]`
+
+error: this assertion is always `true`
+   --> contracts\boxmeout\tests\integration_test.rs:112:5
+    |
+112 |     assert!(true); // Placeholder until functions implemented
+    |     ^^^^^^^^^^^^^
+    |
+    = help: remove the assertion
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.93.0/index.html#assertions_on_constants
+    = note: `-D clippy::assertions-on-constants` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::assertions_on_constants)]`
+
+error: could not compile `boxmeout` (test "integration_test") due to 9 previous errors
+warning: build failed, waiting for other jobs to finish...
+error[E0432]: unresolved import `crate::factory`
+ --> contracts\boxmeout\tests\treasury_integration_tests.rs:4:12
+  |
+4 | use crate::factory::{MarketFactory, MarketFactoryClient};
+  |            ^^^^^^^ could not find `factory` in the crate root
+
+error[E0432]: unresolved import `crate::treasury`
+ --> contracts\boxmeout\tests\treasury_integration_tests.rs:5:12
+  |
+5 | use crate::treasury::{Treasury, TreasuryClient};
+  |            ^^^^^^^^ could not find `treasury` in the crate root
+
+error: unused import: `BytesN`
+ --> contracts\boxmeout\tests\treasury_integration_tests.rs:7:35
+  |
+7 | use soroban_sdk::{token, Address, BytesN, Env, Symbol};
+  |                                   ^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error[E0425]: cannot find value `Contract` in this scope
+ --> contracts\boxmeout\tests\test.rs:9:36
+  |
+9 |     let contract_id = env.register(Contract, ());
+  |                                    ^^^^^^^^ not found in this scope
+  |
+help: consider importing one of these items
+  |
+3 + use soroban_sdk::InvokeError::Contract;
+  |
+3 + use soroban_sdk::auth::Context::Contract;
+  |
+3 + use soroban_sdk::auth::InvokerContractAuthEntry::Contract;
+  |
+3 + use soroban_sdk::testutils::AuthorizedFunction::Contract;
+  |
+  = and 5 other candidates
+
+error: could not compile `boxmeout` (test "factory_test") due to 1 previous error
+error[E0433]: failed to resolve: use of undeclared type `ContractClient`
+  --> contracts\boxmeout\tests\test.rs:10:18
+   |
+10 |     let client = ContractClient::new(&env, &contract_id);
+   |                  ^^^^^^^^^^^^^^ use of undeclared type `ContractClient`
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\treasury_test.rs:15:9
+   |
+15 |     env.register_contract(None, Treasury)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(deprecated)]`
+
+Some errors have detailed explanations: E0425, E0433.
+For more information about an error, try `rustc --explain E0425`.
+Some errors have detailed explanations: E0432, E0433.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `boxmeout` (test "test") due to 3 previous errors
+error: could not compile `boxmeout` (test "treasury_integration_tests") due to 4 previous errors
+error: could not compile `boxmeout` (test "oracle_test") due to 1 previous error
+error: could not compile `boxmeout` (test "treasury_test") due to 1 previous error
+error[E0425]: cannot find value `creator` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:158:24
+    |
+158 |     token_client.mint(&creator, &(initial_liquidity as i128 * 2)); // Mint enough for 2 attempts
+    |                        ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `creator` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:160:25
+    |
+160 |     client.create_pool(&creator, &market_id, &initial_liquidity);
+    |                         ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `creator` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:163:25
+    |
+163 |     client.create_pool(&creator, &market_id, &initial_liquidity);
+    |                         ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `market_id` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:180:37
+    |
+180 |     setup_mock_pool(&env, &amm_id, &market_id, 1000, 1000);
+    |                                     ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `buyer` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:185:46
+    |
+185 |     let shares_received = client.buy_shares(&buyer, &market_id, &outcome, &amount, &min_shares);
+    |                                              ^^^^^ not found in this scope
+
+error[E0425]: cannot find value `market_id` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:185:54
+    |
+185 |     let shares_received = client.buy_shares(&buyer, &market_id, &outcome, &amount, &min_shares);
+    |                                                      ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `market_id` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:192:62
+    |
+192 |         env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                                              ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `buyer` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:206:68
+    |
+206 |     let user_shares = get_user_shares_from_storage(&env, &amm_id, &buyer, &market_id, outcome);
+    |                                                                    ^^^^^ not found in this scope
+
+error[E0425]: cannot find value `market_id` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:206:76
+    |
+206 |     let user_shares = get_user_shares_from_storage(&env, &amm_id, &buyer, &market_id, outcome);
+    |                                                                            ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `market_id` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:349:37
+    |
+349 |     setup_mock_pool(&env, &amm_id, &market_id, 10000, 10000);
+    |                                     ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `buyer` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:354:24
+    |
+354 |     client.buy_shares(&buyer, &market_id, &1u32, &amount, &min_shares);
+    |                        ^^^^^ not found in this scope
+
+error[E0425]: cannot find value `market_id` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:354:32
+    |
+354 |     client.buy_shares(&buyer, &market_id, &1u32, &amount, &min_shares);
+    |                                ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `market_id` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:358:80
+    |
+358 |     let (_, no_reserve) = env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                                                                ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `initial_liquidity` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:490:29
+    |
+490 |     assert_eq!(yes_reserve, initial_liquidity / 2);
+    |                             ^^^^^^^^^^^^^^^^^ help: a local variable with a similar name exists: `total_liquidity`
+
+error[E0425]: cannot find value `initial_liquidity` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:491:28
+    |
+491 |     assert_eq!(no_reserve, initial_liquidity / 2);
+    |                            ^^^^^^^^^^^^^^^^^ help: a local variable with a similar name exists: `total_liquidity`
+
+error[E0425]: cannot find value `initial_liquidity` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:492:33
+    |
+492 |     assert_eq!(total_liquidity, initial_liquidity);
+    |                                 ^^^^^^^^^^^^^^^^^ help: a local variable with a similar name exists: `total_liquidity`
+
+error[E0425]: cannot find value `USER_SHARES_YES` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:524:31
+    |
+ 15 | const USER_SHARES_KEY: &str = "user_shares";
+    | -------------------------------------------- similarly named constant `USER_SHARES_KEY` defined here
+...
+524 |             Symbol::new(&env, USER_SHARES_YES),
+    |                               ^^^^^^^^^^^^^^^ help: a constant with a similar name exists: `USER_SHARES_KEY`
+
+error[E0425]: cannot find value `USER_SHARES_YES` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:586:31
+    |
+ 15 | const USER_SHARES_KEY: &str = "user_shares";
+    | -------------------------------------------- similarly named constant `USER_SHARES_KEY` defined here
+...
+586 |             Symbol::new(&env, USER_SHARES_YES),
+    |                               ^^^^^^^^^^^^^^^ help: a constant with a similar name exists: `USER_SHARES_KEY`
+
+error[E0425]: cannot find value `USER_SHARES_YES` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:615:31
+    |
+ 15 | const USER_SHARES_KEY: &str = "user_shares";
+    | -------------------------------------------- similarly named constant `USER_SHARES_KEY` defined here
+...
+615 |             Symbol::new(&env, USER_SHARES_YES),
+    |                               ^^^^^^^^^^^^^^^ help: a constant with a similar name exists: `USER_SHARES_KEY`
+
+error[E0425]: cannot find value `creator` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:675:24
+    |
+675 |     token_client.mint(&creator, &(initial_liquidity as i128));
+    |                        ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `initial_liquidity` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:675:35
+    |
+675 |     token_client.mint(&creator, &(initial_liquidity as i128));
+    |                                   ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `creator` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:676:25
+    |
+676 |     client.create_pool(&creator, &market_id, &initial_liquidity);
+    |                         ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `initial_liquidity` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:676:47
+    |
+676 |     client.create_pool(&creator, &market_id, &initial_liquidity);
+    |                                               ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `creator` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:775:24
+    |
+775 |     token_client.mint(&creator, &(initial_liquidity as i128));
+    |                        ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `initial_liquidity` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:775:35
+    |
+775 |     token_client.mint(&creator, &(initial_liquidity as i128));
+    |                                   ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `creator` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:776:25
+    |
+776 |     client.create_pool(&creator, &market_id, &initial_liquidity);
+    |                         ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `initial_liquidity` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:776:47
+    |
+776 |     client.create_pool(&creator, &market_id, &initial_liquidity);
+    |                                               ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0423]: expected value, found macro `env`
+   --> contracts\boxmeout\tests\amm_test.rs:847:38
+    |
+847 |     let creator = Address::generate(&env);
+    |                                      ^^^ not a value
+
+error[E0423]: expected value, found macro `env`
+   --> contracts\boxmeout\tests\amm_test.rs:848:41
+    |
+848 |     let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    |                                         ^^^ not a value
+
+error[E0423]: expected value, found macro `env`
+   --> contracts\boxmeout\tests\amm_test.rs:851:49
+    |
+851 |     let token_client = StellarAssetClient::new(&env, &usdc_token);
+    |                                                 ^^^ not a value
+
+error[E0425]: cannot find value `usdc_token` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:851:55
+    |
+851 |     let token_client = StellarAssetClient::new(&env, &usdc_token);
+    |                                                       ^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `client` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:853:5
+    |
+853 |     client.create_pool(&creator, &market_id, &initial_liquidity);
+    |     ^^^^^^ not found in this scope
+
+error[E0423]: expected value, found macro `env`
+   --> contracts\boxmeout\tests\amm_test.rs:856:34
+    |
+856 |     let lp2 = Address::generate(&env);
+    |                                  ^^^ not a value
+
+error[E0425]: cannot find value `client` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:860:5
+    |
+860 |     client.add_liquidity(&lp2, &market_id, &additional_liquidity);
+    |     ^^^^^^ not found in this scope
+
+error[E0423]: expected value, found macro `env`
+   --> contracts\boxmeout\tests\amm_test.rs:863:18
+    |
+863 |     let events = env.events().all();
+    |                  ^^^ not a value
+
+error: unused import: `IntoVal`
+ --> contracts\boxmeout\tests\amm_test.rs:6:27
+  |
+6 |     Address, BytesN, Env, IntoVal, Symbol,
+  |                           ^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
+  --> contracts\boxmeout\tests\amm_test.rs:22:9
+   |
+22 |     env.register_contract(None, AMM)
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(deprecated)]`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:100:18
+    |
+100 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:119:18
+    |
+119 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:144:18
+    |
+144 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:171:18
+    |
+171 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:192:37
+    |
+192 |         env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                     ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:240:37
+    |
+240 |         env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                     ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:262:18
+    |
+262 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:278:37
+    |
+278 |         env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                     ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:285:57
+    |
+285 |     let (new_yes, new_no) = env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                                         ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts\boxmeout\tests\amm_test.rs:313:12
+    |
+313 |     client.create_pool(&market_id, &10_000_000_000u128); // 5B YES, 5B NO
+    |            ^^^^^^^^^^^ ---------- argument #1 of type `&soroban_sdk::Address` is missing
+    |
+note: method defined here
+   --> C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\src\amm.rs:95:12
+    |
+ 95 |     pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+    |            ^^^^^^^^^^^
+help: provide the argument
+    |
+313 |     client.create_pool(/* &soroban_sdk::Address */, &market_id, &10_000_000_000u128); // 5B YES, 5B NO
+    |                        ++++++++++++++++++++++++++++
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:339:18
+    |
+339 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:358:55
+    |
+358 |     let (_, no_reserve) = env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                                       ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:390:37
+    |
+390 |         env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                     ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:404:18
+    |
+404 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:430:18
+    |
+430 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:465:18
+    |
+465 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:484:37
+    |
+484 |         env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                     ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `get_pool_reserves` in this scope
+   --> contracts\boxmeout\tests\amm_test.rs:552:37
+    |
+552 |         env.as_contract(&amm_id, || get_pool_reserves(&env, &market_id));
+    |                                     ^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+   --> contracts\boxmeout\tests\amm_test.rs:630:18
+    |
+630 |     let client = AMMContractClient::new(&env, &amm_id);
+    |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts\boxmeout\tests\amm_test.rs:679:12
+    |
+679 |     client.create_pool(&market_id, &10_000_000_000u128); // 10k USDC
+    |            ^^^^^^^^^^^ ---------- argument #1 of type `&soroban_sdk::Address` is missing
+    |
+note: method defined here
+   --> C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\src\amm.rs:95:12
+    |
+ 95 |     pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+    |            ^^^^^^^^^^^
+help: provide the argument
+    |
+679 |     client.create_pool(/* &soroban_sdk::Address */, &market_id, &10_000_000_000u128); // 10k USDC
+    |                        ++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts\boxmeout\tests\amm_test.rs:701:12
+    |
+701 |     client.create_pool(&market_id, &10_000_000_000u128);
+    |            ^^^^^^^^^^^ ---------- argument #1 of type `&soroban_sdk::Address` is missing
+    |
+note: method defined here
+   --> C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\src\amm.rs:95:12
+    |
+ 95 |     pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+    |            ^^^^^^^^^^^
+help: provide the argument
+    |
+701 |     client.create_pool(/* &soroban_sdk::Address */, &market_id, &10_000_000_000u128);
+    |                        ++++++++++++++++++++++++++++
+
+error[E0599]: no method named `add_liquidity` found for struct `boxmeout::AMMClient<'a>` in the current scope
+   --> contracts\boxmeout\tests\amm_test.rs:720:12
+    |
+720 |     client.add_liquidity(&lp2, &market_id, &additional_liquidity);
+    |            ^^^^^^^^^^^^^ method not found in `boxmeout::AMMClient<'_>`
+
+error[E0599]: no method named `add_liquidity` found for struct `boxmeout::AMMClient<'a>` in the current scope
+   --> contracts\boxmeout\tests\amm_test.rs:721:12
+    |
+721 |     client.add_liquidity(&lp2, &market_id, &additional_liquidity);
+    |            ^^^^^^^^^^^^^ method not found in `boxmeout::AMMClient<'_>`
+
+error[E0599]: no method named `add_liquidity` found for struct `boxmeout::AMMClient<'a>` in the current scope
+   --> contracts\boxmeout\tests\amm_test.rs:722:12
+    |
+722 |     client.add_liquidity(&lp2, &market_id, &additional_liquidity);
+    |            ^^^^^^^^^^^^^ method not found in `boxmeout::AMMClient<'_>`
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts\boxmeout\tests\amm_test.rs:763:12
+    |
+763 |     client.create_pool(&market_id, &10_000_000_000u128);
+    |            ^^^^^^^^^^^ ---------- argument #1 of type `&soroban_sdk::Address` is missing
+    |
+note: method defined here
+   --> C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\src\amm.rs:95:12
+    |
+ 95 |     pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+    |            ^^^^^^^^^^^
+help: provide the argument
+    |
+763 |     client.create_pool(/* &soroban_sdk::Address */, &market_id, &10_000_000_000u128);
+    |                        ++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts\boxmeout\tests\amm_test.rs:798:12
+    |
+798 |     client.create_pool(&market_id_1, &10_000_000_000u128); // 5B YES, 5B NO
+    |            ^^^^^^^^^^^ ------------ argument #1 of type `&soroban_sdk::Address` is missing
+    |
+note: method defined here
+   --> C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\src\amm.rs:95:12
+    |
+ 95 |     pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+    |            ^^^^^^^^^^^
+help: provide the argument
+    |
+798 |     client.create_pool(/* &soroban_sdk::Address */, &market_id_1, &10_000_000_000u128); // 5B YES, 5B NO
+    |                        ++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts\boxmeout\tests\amm_test.rs:806:12
+    |
+806 |     client.create_pool(&market_id_2, &1_000_000_000u128); // 500M YES, 500M NO
+    |            ^^^^^^^^^^^ ------------ argument #1 of type `&soroban_sdk::Address` is missing
+    |
+note: method defined here
+   --> C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\src\amm.rs:95:12
+    |
+ 95 |     pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+    |            ^^^^^^^^^^^
+help: provide the argument
+    |
+806 |     client.create_pool(/* &soroban_sdk::Address */, &market_id_2, &1_000_000_000u128); // 500M YES, 500M NO
+    |                        ++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts\boxmeout\tests\amm_test.rs:813:12
+    |
+813 |     client.create_pool(&market_id_3, &2u128); // 1 YES, 1 NO
+    |            ^^^^^^^^^^^ ------------ argument #1 of type `&soroban_sdk::Address` is missing
+    |
+note: method defined here
+   --> C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\src\amm.rs:95:12
+    |
+ 95 |     pub fn create_pool(env: Env, creator: Address, market_id: BytesN<32>, initial_liquidity: u128) {
+    |            ^^^^^^^^^^^
+help: provide the argument
+    |
+813 |     client.create_pool(/* &soroban_sdk::Address */, &market_id_3, &2u128); // 1 YES, 1 NO
+    |                        ++++++++++++++++++++++++++++
+
+error[E0599]: no method named `add_liquidity` found for struct `boxmeout::AMMClient<'a>` in the current scope
+   --> contracts\boxmeout\tests\amm_test.rs:893:28
+    |
+893 |     let lp_tokens = client.add_liquidity(&lp2, &market_id, &additional_liquidity);
+    |                            ^^^^^^^^^^^^^ method not found in `boxmeout::AMMClient<'_>`
+
+error[E0599]: no method named `add_liquidity` found for struct `boxmeout::AMMClient<'a>` in the current scope
+    --> contracts\boxmeout\tests\amm_test.rs:1000:28
+     |
+1000 |     let lp_tokens = client.add_liquidity(&lp2, &market_id, &additional_liquidity);
+     |                            ^^^^^^^^^^^^^ method not found in `boxmeout::AMMClient<'_>`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+    --> contracts\boxmeout\tests\amm_test.rs:1045:18
+     |
+1045 |     let client = AMMContractClient::new(&env, &amm_id);
+     |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+    --> contracts\boxmeout\tests\amm_test.rs:1123:18
+     |
+1123 |     let client = AMMContractClient::new(&env, &amm_id);
+     |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error[E0433]: failed to resolve: use of undeclared type `AMMContractClient`
+    --> contracts\boxmeout\tests\amm_test.rs:1156:18
+     |
+1156 |     let client = AMMContractClient::new(&env, &amm_id);
+     |                  ^^^^^^^^^^^^^^^^^ use of undeclared type `AMMContractClient`
+
+error: unused import: `Ledger`
+ --> contracts\boxmeout\tests\amm_test.rs:4:39
+  |
+4 |     testutils::{Address as _, Events, Ledger},
+  |                                       ^^^^^^
+
+error: unused variable: `usdc_token`
+   --> contracts\boxmeout\tests\amm_test.rs:736:9
+    |
+736 |     let usdc_token = Address::generate(&env);
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_usdc_token`
+    |
+    = note: `-D unused-variables` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(unused_variables)]`
+
+Some errors have detailed explanations: E0061, E0423, E0425, E0428, E0433, E0599.
+For more information about an error, try `rustc --explain E0061`.
+error: could not compile `boxmeout` (test "amm_test") due to 75 previous errors

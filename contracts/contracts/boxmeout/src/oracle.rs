@@ -127,7 +127,7 @@ impl OracleManager {
     /// - Prevent oracle from submitting new attestations
     /// - Don't affect existing attestations
     /// - Emit OracleDeregistered(oracle_address, timestamp)
-    pub fn deregister_oracle(env: Env, oracle: Address) {
+    pub fn deregister_oracle(_env: Env, _oracle: Address) {
         todo!("See deregister oracle TODO above")
     }
 
@@ -361,7 +361,7 @@ impl OracleManager {
     /// - Pass winning_outcome to market
     /// - Confirm resolution recorded
     /// - Emit ResolutionFinalized(market_id, outcome, timestamp)
-    pub fn finalize_resolution(env: Env, market_id: BytesN<32>) {
+    pub fn finalize_resolution(_env: Env, _market_id: BytesN<32>) {
         todo!("See finalize resolution TODO above")
     }
 
@@ -376,11 +376,11 @@ impl OracleManager {
     /// - Emit AttestationChallenged(oracle, challenger, market_id, reason)
     /// - Require evidence/proof in challenge
     pub fn challenge_attestation(
-        env: Env,
-        challenger: Address,
-        oracle: Address,
-        market_id: BytesN<32>,
-        challenge_reason: Symbol,
+        _env: Env,
+        _challenger: Address,
+        _oracle: Address,
+        _market_id: BytesN<32>,
+        _challenge_reason: Symbol,
     ) {
         todo!("See challenge attestation TODO above")
     }
@@ -401,10 +401,10 @@ impl OracleManager {
     ///   - Penalize false challenger
     /// - Emit ChallengeResolved(oracle, challenger, is_valid, new_reputation)
     pub fn resolve_challenge(
-        env: Env,
-        oracle: Address,
-        market_id: BytesN<32>,
-        challenge_valid: bool,
+        _env: Env,
+        _oracle: Address,
+        _market_id: BytesN<32>,
+        _challenge_valid: bool,
     ) {
         todo!("See resolve challenge TODO above")
     }
@@ -416,7 +416,7 @@ impl OracleManager {
     /// - Return all oracles' attestations for this market
     /// - Include: oracle_address, result, data_hash, timestamp
     /// - Include: consensus status and vote counts
-    pub fn get_attestations(env: Env, market_id: BytesN<32>) -> Vec<Symbol> {
+    pub fn get_attestations(_env: Env, _market_id: BytesN<32>) -> Vec<Symbol> {
         todo!("See get attestations TODO above")
     }
 
@@ -427,7 +427,7 @@ impl OracleManager {
     /// - Return: name, reputation_score, attestations_count, accuracy_pct
     /// - Include: joined_timestamp, status (active/inactive)
     /// - Include: challenges_received, challenges_won
-    pub fn get_oracle_info(env: Env, oracle: Address) -> Symbol {
+    pub fn get_oracle_info(_env: Env, _oracle: Address) -> Symbol {
         todo!("See get oracle info TODO above")
     }
 
@@ -438,7 +438,7 @@ impl OracleManager {
     /// - Return list of oracle addresses
     /// - Include: reputation scores sorted by highest first
     /// - Include: availability status
-    pub fn get_active_oracles(env: Env) -> Vec<Address> {
+    pub fn get_active_oracles(_env: Env) -> Vec<Address> {
         todo!("See get active oracles TODO above")
     }
 
@@ -451,7 +451,7 @@ impl OracleManager {
     /// - Update required_consensus
     /// - Apply to future markets only
     /// - Emit ConsensusThresholdUpdated(new_threshold, old_threshold)
-    pub fn set_consensus_threshold(env: Env, new_threshold: u32) {
+    pub fn set_consensus_threshold(_env: Env, _new_threshold: u32) {
         todo!("See set consensus threshold TODO above")
     }
 
@@ -462,7 +462,7 @@ impl OracleManager {
     /// - Return: total_markets_resolved, consensus_efficiency, dispute_rate
     /// - Include: by_oracle (each oracle's stats)
     /// - Include: time: average_time_to_consensus
-    pub fn get_consensus_report(env: Env) -> Symbol {
+    pub fn get_consensus_report(_env: Env) -> Symbol {
         todo!("See get consensus report TODO above")
     }
 
@@ -476,8 +476,8 @@ impl OracleManager {
     /// - Mark market as MANUAL_OVERRIDE (for audits)
     /// - Emit EmergencyOverride(admin, market_id, forced_outcome, reason)
     pub fn emergency_override(
-        env: Env,
-        admin: Address,
+        _env: Env,
+        _admin: Address,
         _market_id: BytesN<32>,
         _forced_outcome: u32,
         _reason: Symbol,

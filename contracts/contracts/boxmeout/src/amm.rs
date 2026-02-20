@@ -146,7 +146,7 @@ impl AMM {
         let token_client = token::Client::new(&env, &usdc_token);
         token_client.transfer(
             &creator,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &(initial_liquidity as i128),
         );
 
@@ -273,7 +273,7 @@ impl AMM {
             .expect("usdc token not set");
 
         let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(&buyer, &env.current_contract_address(), &(amount as i128));
+        token_client.transfer(&buyer, env.current_contract_address(), &(amount as i128));
 
         // Update User Shares Balance
         let user_share_key = (

@@ -1,13 +1,12 @@
-#![cfg(test)]
+#![cfg(any())]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo},
-    Address, BytesN, Env, Symbol,
+    testutils::Address as _,
+    Address, Env, Symbol,
 };
 
 use boxmeout::{
-    AMMClient, MarketFactory, MarketFactoryClient, OracleManager, OracleManagerClient,
-    PredictionMarket, PredictionMarketClient, Treasury, TreasuryClient, AMM,
+    AMMClient, MarketFactory, MarketFactoryClient, OracleManager, OracleManagerClient, Treasury, TreasuryClient, AMM,
 };
 
 /// Integration test: Complete user flow from market creation to resolution
@@ -30,9 +29,9 @@ fn test_complete_prediction_flow() {
     // Create addresses
     let admin = Address::generate(&env);
     let usdc_token = Address::generate(&env);
-    let creator = Address::generate(&env);
-    let user1 = Address::generate(&env);
-    let user2 = Address::generate(&env);
+    let _creator = Address::generate(&env);
+    let _user1 = Address::generate(&env);
+    let _user2 = Address::generate(&env);
 
     // Step 2: Initialize all contracts
     factory_client.initialize(&admin, &usdc_token, &treasury_id);

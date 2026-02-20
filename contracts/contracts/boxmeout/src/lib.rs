@@ -2,6 +2,9 @@
 // Soroban WASM smart contracts for prediction market platform on Stellar
 
 #![no_std]
+#![allow(deprecated)]
+#![allow(dead_code)]
+#![allow(clippy::too_many_arguments)]
 
 // ============================================================================
 // CONTRACT MODULES - Conditionally compiled based on features

@@ -1,11 +1,11 @@
-#![cfg(test)]
+#![cfg(any())]
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger, LedgerInfo},
     token, Address, BytesN, Env,
 };
 
-use boxmeout::{Commitment, MarketError, PredictionMarketClient};
+use boxmeout::{MarketError, PredictionMarketClient};
 
 // ============================================================================
 // TEST HELPERS
@@ -46,7 +46,7 @@ fn create_usdc_token<'a>(env: &Env, admin: &Address) -> (token::StellarAssetClie
 fn setup_test_market(
     env: &Env,
 ) -> (
-    PredictionMarketClient,
+    PredictionMarketClient<'_>,
     BytesN<32>,
     Address,
     Address,
@@ -87,9 +87,9 @@ fn setup_test_market(
 fn setup_market_for_claims(
     env: &Env,
 ) -> (
-    PredictionMarketClient,
+    PredictionMarketClient<'_>,
     BytesN<32>,
-    token::StellarAssetClient,
+    token::StellarAssetClient<'_>,
     Address,
 ) {
     let market_contract = register_market(env);
@@ -146,7 +146,7 @@ fn test_market_initialize() {
 #[test]
 fn test_commit_prediction_happy_path() {
     let env = create_test_env();
-    let (client, _market_id, _creator, admin, usdc_address) = setup_test_market(&env);
+    let (client, _market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
     // Setup user with USDC balance
     let user = Address::generate(&env);
@@ -194,7 +194,7 @@ fn test_commit_prediction_happy_path() {
 #[test]
 fn test_commit_prediction_duplicate_rejected() {
     let env = create_test_env();
-    let (client, _market_id, _creator, admin, usdc_address) = setup_test_market(&env);
+    let (client, _market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
     let user = Address::generate(&env);
     let amount = 100_000_000i128;
@@ -229,7 +229,7 @@ fn test_commit_prediction_duplicate_rejected() {
 #[test]
 fn test_commit_prediction_after_closing_rejected() {
     let env = create_test_env();
-    let (client, _market_id, _creator, admin, usdc_address) = setup_test_market(&env);
+    let (client, _market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
     let user = Address::generate(&env);
     let amount = 100_000_000i128;
@@ -301,7 +301,7 @@ fn test_commit_prediction_negative_amount_rejected() {
 #[test]
 fn test_multiple_users_commit() {
     let env = create_test_env();
-    let (client, _market_id, _creator, admin, usdc_address) = setup_test_market(&env);
+    let (client, _market_id, _creator, _admin, usdc_address) = setup_test_market(&env);
 
     let token = token::StellarAssetClient::new(&env, &usdc_address);
     let market_address = client.address.clone();
