@@ -727,14 +727,12 @@ fn test_get_market_liquidity_balanced_pool() {
     let no_reserve = 1_000_000_000u128; // 1000 USDC worth of NO
 
     // Store reserves in market storage (simulating AMM sync)
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -762,14 +760,12 @@ fn test_get_market_liquidity_yes_favored() {
     let yes_reserve = 400_000_000u128; // 400 USDC worth of YES
     let no_reserve = 600_000_000u128; // 600 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -800,14 +796,12 @@ fn test_get_market_liquidity_no_favored() {
     let yes_reserve = 700_000_000u128; // 700 USDC worth of YES
     let no_reserve = 300_000_000u128; // 300 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -838,14 +832,12 @@ fn test_get_market_liquidity_extreme_yes() {
     let yes_reserve = 50_000_000u128; // 50 USDC worth of YES
     let no_reserve = 950_000_000u128; // 950 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -875,14 +867,12 @@ fn test_get_market_liquidity_extreme_no() {
     let yes_reserve = 950_000_000u128; // 950 USDC worth of YES
     let no_reserve = 50_000_000u128; // 50 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -912,14 +902,12 @@ fn test_get_market_liquidity_only_yes_reserve() {
     let yes_reserve = 1_000_000_000u128;
     let no_reserve = 0u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -946,14 +934,12 @@ fn test_get_market_liquidity_only_no_reserve() {
     let yes_reserve = 0u128;
     let no_reserve = 1_000_000_000u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -980,14 +966,12 @@ fn test_get_market_liquidity_large_numbers() {
     let yes_reserve = 10_000_000_000_000u128; // 10 million USDC
     let no_reserve = 10_000_000_000_000u128; // 10 million USDC
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -1014,14 +998,12 @@ fn test_get_market_liquidity_rounding_edge_case() {
     let yes_reserve = 333_333_333u128; // 333.333... USDC
     let no_reserve = 666_666_667u128; // 666.666... USDC
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -1052,14 +1034,12 @@ fn test_get_market_liquidity_k_invariant_property() {
     let yes_reserve = 800_000_000u128;
     let no_reserve = 200_000_000u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, _yes_odds, _no_odds) =
@@ -1082,14 +1062,12 @@ fn test_get_market_liquidity_multiple_queries_consistent() {
     let yes_reserve = 500_000_000u128;
     let no_reserve = 500_000_000u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "yes_pool"), &yes_reserve);
+    env.storage()
+        .persistent()
+        .set(&Symbol::new(&env, "no_pool"), &no_reserve);
 
     // Query multiple times
     let result1 = client.get_market_liquidity(&market_id);
@@ -1100,5 +1078,3 @@ fn test_get_market_liquidity_multiple_queries_consistent() {
     assert_eq!(result1, result2);
     assert_eq!(result2, result3);
 }
-=======
->>>>>>> origin/main

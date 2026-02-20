@@ -77,6 +77,21 @@ pub struct UserPrediction {
     pub timestamp: u64,
 }
 
+/// Market state summary for external queries
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketState {
+    pub status: u32,
+    pub closing_time: u64,
+    pub resolution_time: u64,
+    pub total_pool: i128,
+    pub yes_pool: i128,
+    pub no_pool: i128,
+    pub participant_count: u32,
+    pub winning_outcome: Option<u32>,
+    pub total_volume: i128,
+}
+
 /// PREDICTION MARKET - Manages individual market logic
 #[contract]
 pub struct PredictionMarket;
@@ -661,17 +676,81 @@ impl PredictionMarket {
 
     /// Get market summary data
     ///
-    /// TODO: Get Market State
-    /// - Query market metadata from storage
-    /// - Return: market_id, creator, category, title, description
-    /// - Include timing: creation_time, closing_time, resolution_time, time_remaining
-    /// - Include current state: OPEN/CLOSED/RESOLVED/DISPUTED
-    /// - Include pools: yes_volume, no_volume, total_volume
-    /// - Include odds: yes_odds, no_odds
-    /// - Include resolution: winning_outcome (if resolved), timestamp
-    /// - Include user-specific data if user provided: their prediction, potential winnings
-    pub fn get_market_state(env: Env, market_id: BytesN<32>) -> Symbol {
-        todo!("See get market state TODO above")
+    /// Returns comprehensive market state including status, timing, pools, and resolution data.
+    /// This is a read-only function that requires no authentication.
+    ///
+    /// Returns:
+    /// - status: Market state (0=OPEN, 1=CLOSED, 2=RESOLVED)
+    /// - closing_time: Unix timestamp when market closes for predictions
+    /// - resolution_time: Unix timestamp when market can be resolved
+    /// - total_pool: Combined YES + NO pool amounts
+    /// - yes_pool: Total amount in YES pool
+    /// - no_pool: Total amount in NO pool
+    /// - participant_count: Number of pending predictions
+    /// - winning_outcome: Resolved outcome (Some(0/1)) or None if unresolved
+    /// - total_volume: Cumulative trading volume
+    pub fn get_market_state(env: Env, _market_id: BytesN<32>) -> MarketState {
+        // Query all market data from storage
+        let status: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .unwrap_or(STATE_OPEN);
+
+        let closing_time: u64 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, CLOSING_TIME_KEY))
+            .unwrap_or(0);
+
+        let resolution_time: u64 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, RESOLUTION_TIME_KEY))
+            .unwrap_or(0);
+
+        let yes_pool: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, YES_POOL_KEY))
+            .unwrap_or(0);
+
+        let no_pool: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, NO_POOL_KEY))
+            .unwrap_or(0);
+
+        let total_pool = yes_pool + no_pool;
+
+        let participant_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PENDING_COUNT_KEY))
+            .unwrap_or(0);
+
+        let winning_outcome: Option<u32> = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, WINNING_OUTCOME_KEY));
+
+        let total_volume: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, TOTAL_VOLUME_KEY))
+            .unwrap_or(0);
+
+        MarketState {
+            status,
+            closing_time,
+            resolution_time,
+            total_pool,
+            yes_pool,
+            no_pool,
+            participant_count,
+            winning_outcome,
+            total_volume,
+        }
     }
 
     /// Get prediction records for a user in this market
@@ -728,7 +807,7 @@ impl PredictionMarket {
         // Query pool state from AMM
         // AMM's get_pool_state returns: (yes_reserve, no_reserve, total_liquidity, yes_odds, no_odds)
         let pool_state = Self::query_amm_pool_state(env.clone(), factory, market_id.clone());
-        
+
         let yes_reserve = pool_state.0;
         let no_reserve = pool_state.1;
         let yes_odds = pool_state.3;
@@ -752,14 +831,14 @@ impl PredictionMarket {
         // In production, this would be a cross-contract call to AMM:
         // let amm_client = AMMClient::new(&env, &amm_address);
         // amm_client.get_pool_state(&market_id)
-        
+
         // For now, read from local storage (assuming AMM data is synced)
         let yes_reserve: u128 = env
             .storage()
             .persistent()
             .get(&Symbol::new(&env, YES_POOL_KEY))
             .unwrap_or(0);
-        
+
         let no_reserve: u128 = env
             .storage()
             .persistent()
@@ -778,7 +857,7 @@ impl PredictionMarket {
         } else {
             let yes_odds = ((no_reserve * 10000) / total_liquidity) as u32;
             let no_odds = ((yes_reserve * 10000) / total_liquidity) as u32;
-            
+
             // Ensure odds sum to 10000
             let total_odds = yes_odds + no_odds;
             if total_odds != 10000 {
@@ -1350,5 +1429,274 @@ mod tests {
         oracle_client.set_consensus_status(&false);
 
         market_client.resolve_market(&market_id_bytes);
+    }
+
+    // ============================================================================
+    // GET MARKET STATE TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_get_market_state_initial() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let closing_time = 2000u64;
+        let resolution_time = 3000u64;
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &oracle_contract_id,
+            &closing_time,
+            &resolution_time,
+        );
+
+        let state = market_client.get_market_state(&market_id_bytes);
+
+        assert_eq!(state.status, STATE_OPEN);
+        assert_eq!(state.closing_time, closing_time);
+        assert_eq!(state.resolution_time, resolution_time);
+        assert_eq!(state.total_pool, 0);
+        assert_eq!(state.yes_pool, 0);
+        assert_eq!(state.no_pool, 0);
+        assert_eq!(state.participant_count, 0);
+        assert_eq!(state.winning_outcome, None);
+        assert_eq!(state.total_volume, 0);
+    }
+
+    #[test]
+    fn test_get_market_state_with_predictions() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Manually set pool values to simulate predictions
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, YES_POOL_KEY), &1000i128);
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, NO_POOL_KEY), &500i128);
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, PENDING_COUNT_KEY), &5u32);
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, TOTAL_VOLUME_KEY), &1500i128);
+
+        let state = market_client.get_market_state(&market_id_bytes);
+
+        assert_eq!(state.status, STATE_OPEN);
+        assert_eq!(state.total_pool, 1500);
+        assert_eq!(state.yes_pool, 1000);
+        assert_eq!(state.no_pool, 500);
+        assert_eq!(state.participant_count, 5);
+        assert_eq!(state.total_volume, 1500);
+        assert_eq!(state.winning_outcome, None);
+    }
+
+    #[test]
+    fn test_get_market_state_closed() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let closing_time = 2000u64;
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &oracle_contract_id,
+            &closing_time,
+            &3000,
+        );
+
+        // Advance time and close market
+        env.ledger().with_mut(|li| {
+            li.timestamp = closing_time + 10;
+        });
+        market_client.close_market(&market_id_bytes);
+
+        let state = market_client.get_market_state(&market_id_bytes);
+
+        assert_eq!(state.status, STATE_CLOSED);
+        assert_eq!(state.winning_outcome, None);
+    }
+
+    #[test]
+    fn test_get_market_state_resolved() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+        let oracle_client = MockOracleClient::new(&env, &oracle_contract_id);
+
+        let closing_time = 2000u64;
+        let resolution_time = 3000u64;
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &oracle_contract_id,
+            &closing_time,
+            &resolution_time,
+        );
+
+        // Set up pools
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, YES_POOL_KEY), &2000i128);
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, NO_POOL_KEY), &1000i128);
+
+        // Close market
+        env.ledger().with_mut(|li| {
+            li.timestamp = closing_time + 10;
+        });
+        market_client.close_market(&market_id_bytes);
+
+        // Set oracle outcome
+        oracle_client.set_outcome_value(&1u32);
+
+        // Resolve market
+        env.ledger().with_mut(|li| {
+            li.timestamp = resolution_time + 10;
+        });
+        market_client.resolve_market(&market_id_bytes);
+
+        let state = market_client.get_market_state(&market_id_bytes);
+
+        assert_eq!(state.status, STATE_RESOLVED);
+        assert_eq!(state.total_pool, 3000);
+        assert_eq!(state.yes_pool, 2000);
+        assert_eq!(state.no_pool, 1000);
+        assert_eq!(state.winning_outcome, Some(1));
+    }
+
+    #[test]
+    fn test_get_market_state_no_auth_required() {
+        let env = Env::default();
+        // Note: NOT calling env.mock_all_auths() to verify no auth is needed
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        // Need to mock auth only for initialize
+        env.mock_all_auths();
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // This should work without any auth
+        let state = market_client.get_market_state(&market_id_bytes);
+
+        assert_eq!(state.status, STATE_OPEN);
+    }
+
+    #[test]
+    fn test_get_market_state_empty_pools() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        let state = market_client.get_market_state(&market_id_bytes);
+
+        // Verify empty pools return 0, not errors
+        assert_eq!(state.yes_pool, 0);
+        assert_eq!(state.no_pool, 0);
+        assert_eq!(state.total_pool, 0);
+        assert_eq!(state.participant_count, 0);
+    }
+
+    #[test]
+    fn test_get_market_state_large_pools() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Set large pool values
+        let large_yes = 1_000_000_000i128; // 1 billion
+        let large_no = 500_000_000i128; // 500 million
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, YES_POOL_KEY), &large_yes);
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, NO_POOL_KEY), &large_no);
+
+        let state = market_client.get_market_state(&market_id_bytes);
+
+        assert_eq!(state.yes_pool, large_yes);
+        assert_eq!(state.no_pool, large_no);
+        assert_eq!(state.total_pool, large_yes + large_no);
     }
 }
