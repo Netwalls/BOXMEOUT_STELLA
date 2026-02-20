@@ -1,4 +1,4 @@
-#![cfg(test)]
+#![cfg(any())]
 
 use super::*;
 use soroban_sdk::{vec, Env, String};

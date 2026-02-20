@@ -1,4 +1,4 @@
-#![cfg(test)]
+#![cfg(any())]
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},

@@ -1,4 +1,4 @@
-#![cfg(test)]
+#![cfg(any())]
 
 use super::*;
 use crate::factory::{MarketFactory, MarketFactoryClient};

@@ -1,0 +1,226 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\Cargo.toml
+workspace: C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\Cargo.toml
+   Compiling boxmeout v0.1.0 (C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout)
+warning: unused import: `token::StellarAssetClient`
+ --> contracts\boxmeout\src\helpers.rs:3:19
+  |
+3 | ...::{token::StellarAssetClient, A...
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `POOL_YES_RESERVE` is never used
+ --> contracts\boxmeout\src\helpers.rs:6:7
+  |
+6 | const POOL_YES_RESERVE: &...
+  |       ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `POOL_NO_RESERVE` is never used
+ --> contracts\boxmeout\src\helpers.rs:7:7
+  |
+7 | const POOL_NO_RESERVE: &...
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `POOL_K` is never used
+ --> contracts\boxmeout\src\helpers.rs:8:7
+  |
+8 | const POOL_K: &str = "...
+  |       ^^^^^^
+
+warning: constant `POOL_EXISTS` is never used
+ --> contracts\boxmeout\src\helpers.rs:9:7
+  |
+9 | const POOL_EXISTS: &st...
+  |       ^^^^^^^^^^^
+
+warning: constant `TRADE_COUNT` is never used
+  --> contracts\boxmeout\src\helpers.rs:10:7
+   |
+10 | const TRADE_COUNT: &s...
+   |       ^^^^^^^^^^^
+
+warning: constant `USER_SHARES_YES` is never used
+  --> contracts\boxmeout\src\helpers.rs:11:7
+   |
+11 | const USER_SHARES_YES: &...
+   |       ^^^^^^^^^^^^^^^
+
+warning: constant `USER_SHARES_NO` is never used
+  --> contracts\boxmeout\src\helpers.rs:12:7
+   |
+12 | const USER_SHARES_NO: &...
+   |       ^^^^^^^^^^^^^^
+
+warning: function `create_test_env` is never used
+  --> contracts\boxmeout\src\helpers.rs:17:8
+   |
+17 | ...fn create_test_env() ...
+   |       ^^^^^^^^^^^^^^^
+
+warning: function `get_pool_reserves` is never used
+  --> contracts\boxmeout\src\helpers.rs:22:8
+   |
+22 | ...fn get_pool_reserves(en...
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: function `pool_exists` is never used
+  --> contracts\boxmeout\src\helpers.rs:38:8
+   |
+38 | pub fn pool_exists(en...
+   |        ^^^^^^^^^^^
+
+warning: function `set_pool_reserves` is never used
+  --> contracts\boxmeout\src\helpers.rs:46:8
+   |
+46 | ...fn set_pool_reserves(en...
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: function `get_user_shares` is never used
+  --> contracts\boxmeout\src\helpers.rs:62:8
+   |
+62 | ...fn get_user_shares(en...
+   |       ^^^^^^^^^^^^^^^
+
+warning: function `set_user_shares` is never used
+  --> contracts\boxmeout\src\helpers.rs:80:8
+   |
+80 | pub fn set_user_shares(
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `get_trade_count` is never used
+   --> contracts\boxmeout\src\helpers.rs:104:8
+    |
+104 | ...fn get_trade_count(en...
+    |       ^^^^^^^^^^^^^^^
+
+warning: function `increment_trade_count` is never used
+   --> contracts\boxmeout\src\helpers.rs:112:8
+    |
+112 | ...fn increment_trade_count(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_shares_out` is never used
+   --> contracts\boxmeout\src\helpers.rs:124:8
+    |
+124 | ...fn calculate_shares_out(
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_payout` is never used
+   --> contracts\boxmeout\src\helpers.rs:149:8
+    |
+149 | ...fn calculate_payout(
+    |       ^^^^^^^^^^^^^^^^
+
+warning: `boxmeout` (lib test) generated 18 warnings (run `cargo fix --lib -p boxmeout --tests` to apply 1 suggestion)
+warning: unused import: `token::StellarAssetClient`
+ --> contracts\boxmeout\src\helpers.rs:3:19
+  |
+3 | use soroban_sdk::{token::StellarAssetClient, Address, BytesN, Env, Symbol};
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `POOL_YES_RESERVE` is never used
+ --> contracts\boxmeout\src\helpers.rs:6:7
+  |
+6 | const POOL_YES_RESERVE: &str = "pool_yes_reserve";
+  |       ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `POOL_NO_RESERVE` is never used
+ --> contracts\boxmeout\src\helpers.rs:7:7
+  |
+7 | const POOL_NO_RESERVE: &str = "pool_no_reserve";
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `POOL_K` is never used
+ --> contracts\boxmeout\src\helpers.rs:8:7
+  |
+8 | const POOL_K: &str = "pool_k";
+  |       ^^^^^^
+
+warning: constant `POOL_EXISTS` is never used
+ --> contracts\boxmeout\src\helpers.rs:9:7
+  |
+9 | const POOL_EXISTS: &str = "pool_exists";
+  |       ^^^^^^^^^^^
+
+warning: constant `TRADE_COUNT` is never used
+  --> contracts\boxmeout\src\helpers.rs:10:7
+   |
+10 | const TRADE_COUNT: &str = "trade_count";
+   |       ^^^^^^^^^^^
+
+warning: constant `USER_SHARES_YES` is never used
+  --> contracts\boxmeout\src\helpers.rs:11:7
+   |
+11 | const USER_SHARES_YES: &str = "user_shares_yes";
+   |       ^^^^^^^^^^^^^^^
+
+warning: constant `USER_SHARES_NO` is never used
+  --> contracts\boxmeout\src\helpers.rs:12:7
+   |
+12 | const USER_SHARES_NO: &str = "user_shares_no";
+   |       ^^^^^^^^^^^^^^
+
+warning: function `get_pool_reserves` is never used
+  --> contracts\boxmeout\src\helpers.rs:22:8
+   |
+22 | pub fn get_pool_reserves(env: &Env, market_id: &BytesN<32>) -> (u128, u128) {
+   |        ^^^^^^^^^^^^^^^^^
+
+warning: function `pool_exists` is never used
+  --> contracts\boxmeout\src\helpers.rs:38:8
+   |
+38 | pub fn pool_exists(env: &Env, market_id: &BytesN<32>) -> bool {
+   |        ^^^^^^^^^^^
+
+warning: function `set_pool_reserves` is never used
+  --> contracts\boxmeout\src\helpers.rs:46:8
+   |
+46 | pub fn set_pool_reserves(env: &Env, market_id: &BytesN<32>, yes_reserve: u128, no_reserve: u128) {
+   |        ^^^^^^^^^^^^^^^^^
+
+warning: function `get_user_shares` is never used
+  --> contracts\boxmeout\src\helpers.rs:62:8
+   |
+62 | pub fn get_user_shares(env: &Env, user: &Address, market_id: &BytesN<32>, outcome: u32) -> u128 {
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `get_trade_count` is never used
+   --> contracts\boxmeout\src\helpers.rs:104:8
+    |
+104 | pub fn get_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
+    |        ^^^^^^^^^^^^^^^
+
+warning: function `increment_trade_count` is never used
+   --> contracts\boxmeout\src\helpers.rs:112:8
+    |
+112 | pub fn increment_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_shares_out` is never used
+   --> contracts\boxmeout\src\helpers.rs:124:8
+    |
+124 | pub fn calculate_shares_out(
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_payout` is never used
+   --> contracts\boxmeout\src\helpers.rs:149:8
+    |
+149 | pub fn calculate_payout(
+    |        ^^^^^^^^^^^^^^^^
+
+error: linking with `x86_64-w64-mingw32-gcc` failed: exit code: 1
+  |
+  = note: "x86_64-w64-mingw32-gcc" "-Wl,C:\\Users\\Sunday\\AppData\\Local\\Temp\\rustcvNAy9F\\list.def" "-fno-use-linker-plugin" "-Wl,--dynamicbase" "-Wl,--disable-auto-image-base" "-m64" "-Wl,--high-entropy-va" "<sysroot>\\lib\\rustlib\\x86_64-pc-windows-gnu\\lib\\self-contained\\dllcrt2.o" "C:\\Users\\Sunday\\AppData\\Local\\Temp\\rustcvNAy9F\\symbols.o" "<2 object files omitted>" "-Wl,-Bstatic" "C:\\Users\\Sunday\\Desktop\\Github\\BOXMEOUT_STELLA\\contracts\\target\\debug\\deps/{libsoroban_sdk-b98238a5bae41fbe,libstellar_strkey-054066695e4025c7,libheapless-030336a7dc750d99,libhash32-3157977d7b034757,libbyteorder-978d8b6009e604f5,libsoroban_ledger_snapshot-319c2943c7fba058,libthiserror-10b5a4363f0dbaa1,libsoroban_env_host-4343336b717172fb,libk256-43436d92900d7972,libp256-d06f4e23c7832f61,libprimeorder-9acfe9a2aa8a16b5,libark_bls12_381-b446bee737a986bd,libark_ec-33dad96210a25cfa,libark_poly-56c382babe7242d2,libhashbrown-54ec0fd191de3f91,libahash-0dc7ff9cae95e5e4,libonce_cell-a0c7b389974a2387,libitertools-1697e8719b1c18a4,libeither-7261fc4d616429bf,libark_ff-039aaeedea941563,libark_serialize-1a3bd9f31a5bff38,libnum_bigint-02806aacc6a8db78,libnum_integer-5f3d25031f2dde8c,libark_std-62439ecc37988b19,libecdsa-64ab008c54c6be11,librfc6979-81048e1d051cfdcf,libsha3-9be37ca84961ec95,libkeccak-6347cf81df7e4265,libhmac-abdb42c2cf1fcd9d,libhex_literal-971b11fc6112062c,libelliptic_curve-9fbfdb77d7f35102,libsec1-b217528ed7942836,libder-24c3150255b3878b,libcrypto_bigint-7796fdb561af53a2,libbase16ct-9c3e44a07b6ad00b,libgroup-65a4d06b7a8edbbb,libff-865236b7a346cd46,librand-41bdf1df9fabb6f1,librand_chacha-e5447dcb01713f2a,libppv_lite86-e3c72aae21f52cfa,libzerocopy-cd2d20a49aa918c8,libed25519_dalek-0a9fc75196accfb1,libcurve25519_dalek-5d147bb610f87571,libed25519-d34909917e0ce405,libsignature-b12afa40ca83c980,librand_core-5f0426033d9c7bc7,libgetrandom-83f26e837639f315,libsoroban_env_common-ceb12328860e3639,libwasmparser-2b464c06b5c25460,libsemver-0f27146aca202a80,libindexmap-d7679257e74928cf,libequivalent-41d1c3c77947b352,libhashbrown-acb78399e16ec52a,libstellar_xdr-7cab4cac13623127,libstellar_strkey-e3be0cb0ef0b9981,libdata_encoding-23cb8fc972fbf983,libescape_bytes-89be4732e3a76a8e,libbase64-d90e36e42ba3c0af,libserde_with-130d42149a7b862c,libhex-b9ca5dbf6472bfb4,libschemars-8fcb055c5cf0241e,libdyn_clone-885603a200aeebc1,libserde_json-1e9300b5c409b783,libmemchr-8e7bae0ed55217e6,libitoa-4ff1cd40b2b6067b,libzmij-86899365fa45b8e6,libsha2-73ad272bac370bc1,libcpufeatures-3b7dcb300c375055,libcfg_if-2e79846c478e3a52,libdigest-4d15986ad4a9810f,libsubtle-a52da450dbd6d270,libconst_oid-614ba65b1b064ab2,libblock_buffer-61cb6c023fb6c3db,libcrypto_common-d9cf9662106e2b88,libgeneric_array-83cbc536f5da4d5a,libtypenum-5427405582db84dd,libzeroize-540da538bbed657e,libserde-69d91093ed4713c3,libserde_core-55ca13ede870e977,libethnum-1e66b1c90dc4cc48,libarbitrary-1efae2d0b898fde3,libstatic_assertions-f72ea57b316e42dd,libsoroban_wasmi-e8a2005e95651f75,libsmallvec-df798412a6e6b35a,libspin-bfd21d1392915dfe,libwasmparser_nostd-1d282f80d098332d,libindexmap_nostd-8bdf13cd4ec9a669,libwasmi_arena-5002349df4765d1e,libwasmi_core-3fc4500b524af4ba,libnum_traits-e769a33c8f23f7f8,libdowncast_rs-40196c80710eb191,libctor-733fd9120b81ef7f,libdtor-b11cddd249150946}.rlib" "<sysroot>\\lib\\rustlib\\x86_64-pc-windows-gnu\\lib/{libstd-*,libpanic_unwind-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,libwindows_targets-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lbcrypt" "-ladvapi32" "-lkernel32" "-lkernel32" "-lkernel32" "-lntdll" "-luserenv" "-lws2_32" "-ldbghelp" "-lgcc_eh" "-l:libpthread.a" "-lmsvcrt" "-lmingwex" "-lmingw32" "-lgcc" "-lmsvcrt" "-lmingwex" "-luser32" "-lkernel32" "-Wl,--nxcompat" "-nostartfiles" "-L" "<sysroot>\\lib\\rustlib\\x86_64-pc-windows-gnu\\lib\\self-contained" "-o" "C:\\Users\\Sunday\\Desktop\\Github\\BOXMEOUT_STELLA\\contracts\\target\\debug\\deps\\boxmeout.dll" "-Wl,--gc-sections" "-shared" "-Wl,--out-implib=C:\\Users\\Sunday\\Desktop\\Github\\BOXMEOUT_STELLA\\contracts\\target\\debug\\deps\\libboxmeout.dll.a" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: ld: error: export ordinal too large: 73855␍
+          
+
+warning: `boxmeout` (lib) generated 17 warnings (1 duplicate)
+error: could not compile `boxmeout` (lib) due to 1 previous error; 17 warnings emitted

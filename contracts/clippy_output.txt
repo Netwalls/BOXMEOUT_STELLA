@@ -1,0 +1,281 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout\Cargo.toml
+workspace: C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\Cargo.toml
+    Checking boxmeout v0.1.0 (C:\Users\Sunday\Desktop\Github\BOXMEOUT_STELLA\contracts\contracts\boxmeout)
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts\boxmeout\src\amm.rs:88:22
+   |
+88 |         env.events().publish(
+   |                      ^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(deprecated)]`
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\amm.rs:154:22
+    |
+154 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\amm.rs:291:22
+    |
+291 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\amm.rs:423:22
+    |
+423 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\amm.rs:619:22
+    |
+619 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts\boxmeout\src\factory.rs:53:22
+   |
+53 |         env.events().publish(
+   |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\factory.rs:150:22
+    |
+150 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\market.rs:157:22
+    |
+157 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\market.rs:267:22
+    |
+267 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\market.rs:364:22
+    |
+364 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\market.rs:480:22
+    |
+480 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\market.rs:638:22
+    |
+638 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts\boxmeout\src\treasury.rs:88:22
+   |
+88 |         env.events().publish(
+   |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\treasury.rs:125:22
+    |
+125 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\treasury.rs:175:22
+    |
+175 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\treasury.rs:269:22
+    |
+269 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\treasury.rs:327:22
+    |
+327 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\treasury.rs:364:22
+    |
+364 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts\boxmeout\src\oracle.rs:51:22
+   |
+51 |         env.events().publish(
+   |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\oracle.rs:114:22
+    |
+114 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\oracle.rs:158:22
+    |
+158 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts\boxmeout\src\oracle.rs:286:22
+    |
+286 |         env.events().publish(
+    |                      ^^^^^^^
+
+error: constant `POOL_YES_RESERVE` is never used
+ --> contracts\boxmeout\src\helpers.rs:6:7
+  |
+6 | const POOL_YES_RESERVE: &str = "pool_yes_reserve";
+  |       ^^^^^^^^^^^^^^^^
+  |
+  = note: `-D dead-code` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(dead_code)]`
+
+error: constant `POOL_NO_RESERVE` is never used
+ --> contracts\boxmeout\src\helpers.rs:7:7
+  |
+7 | const POOL_NO_RESERVE: &str = "pool_no_reserve";
+  |       ^^^^^^^^^^^^^^^
+
+error: constant `POOL_K` is never used
+ --> contracts\boxmeout\src\helpers.rs:8:7
+  |
+8 | const POOL_K: &str = "pool_k";
+  |       ^^^^^^
+
+error: constant `POOL_EXISTS` is never used
+ --> contracts\boxmeout\src\helpers.rs:9:7
+  |
+9 | const POOL_EXISTS: &str = "pool_exists";
+  |       ^^^^^^^^^^^
+
+error: constant `TRADE_COUNT` is never used
+  --> contracts\boxmeout\src\helpers.rs:10:7
+   |
+10 | const TRADE_COUNT: &str = "trade_count";
+   |       ^^^^^^^^^^^
+
+error: constant `USER_SHARES_YES` is never used
+  --> contracts\boxmeout\src\helpers.rs:11:7
+   |
+11 | const USER_SHARES_YES: &str = "user_shares_yes";
+   |       ^^^^^^^^^^^^^^^
+
+error: constant `USER_SHARES_NO` is never used
+  --> contracts\boxmeout\src\helpers.rs:12:7
+   |
+12 | const USER_SHARES_NO: &str = "user_shares_no";
+   |       ^^^^^^^^^^^^^^
+
+error: function `get_pool_reserves` is never used
+  --> contracts\boxmeout\src\helpers.rs:22:8
+   |
+22 | pub fn get_pool_reserves(env: &Env, market_id: &BytesN<32>) -> (u128, u128) {
+   |        ^^^^^^^^^^^^^^^^^
+
+error: function `pool_exists` is never used
+  --> contracts\boxmeout\src\helpers.rs:38:8
+   |
+38 | pub fn pool_exists(env: &Env, market_id: &BytesN<32>) -> bool {
+   |        ^^^^^^^^^^^
+
+error: function `set_pool_reserves` is never used
+  --> contracts\boxmeout\src\helpers.rs:46:8
+   |
+46 | pub fn set_pool_reserves(env: &Env, market_id: &BytesN<32>, yes_reserve: u128, no_reserve: u128) {
+   |        ^^^^^^^^^^^^^^^^^
+
+error: function `get_user_shares` is never used
+  --> contracts\boxmeout\src\helpers.rs:62:8
+   |
+62 | pub fn get_user_shares(env: &Env, user: &Address, market_id: &BytesN<32>, outcome: u32) -> u128 {
+   |        ^^^^^^^^^^^^^^^
+
+error: function `set_user_shares` is never used
+  --> contracts\boxmeout\src\helpers.rs:80:8
+   |
+80 | pub fn set_user_shares(
+   |        ^^^^^^^^^^^^^^^
+
+error: function `get_trade_count` is never used
+   --> contracts\boxmeout\src\helpers.rs:104:8
+    |
+104 | pub fn get_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
+    |        ^^^^^^^^^^^^^^^
+
+error: function `increment_trade_count` is never used
+   --> contracts\boxmeout\src\helpers.rs:112:8
+    |
+112 | pub fn increment_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+error: function `calculate_shares_out` is never used
+   --> contracts\boxmeout\src\helpers.rs:124:8
+    |
+124 | pub fn calculate_shares_out(
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+error: function `calculate_payout` is never used
+   --> contracts\boxmeout\src\helpers.rs:149:8
+    |
+149 | pub fn calculate_payout(
+    |        ^^^^^^^^^^^^^^^^
+
+error: this function has too many arguments (8/7)
+  --> contracts\boxmeout\src\market.rs:87:5
+   |
+87 | /     pub fn initialize(
+88 | |         env: Env,
+89 | |         market_id: BytesN<32>,
+90 | |         creator: Address,
+...  |
+95 | |         resolution_time: u64,
+96 | |     ) {
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.93.0/index.html#too_many_arguments
+   = note: `-D clippy::too-many-arguments` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::too_many_arguments)]`
+
+error: function `create_test_env` is never used
+  --> contracts\boxmeout\src\helpers.rs:17:8
+   |
+17 | pub fn create_test_env() -> Env {
+   |        ^^^^^^^^^^^^^^^
+
+error: this function has too many arguments (8/7)
+  --> contracts\boxmeout\src\market.rs:84:1
+   |
+84 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.93.0/index.html#too_many_arguments
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: this function has too many arguments (8/7)
+  --> contracts\boxmeout\src\market.rs:84:1
+   |
+84 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.93.0/index.html#too_many_arguments
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: could not compile `boxmeout` (lib) due to 42 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `boxmeout` (lib test) due to 43 previous errors

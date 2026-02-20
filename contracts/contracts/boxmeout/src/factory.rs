@@ -156,42 +156,42 @@ impl MarketFactory {
     }
 
     /// Get market info by market_id
-    pub fn get_market_info(env: Env, market_id: BytesN<32>) {
+    pub fn get_market_info(_env: Env, _market_id: BytesN<32>) {
         todo!("See get market info TODO above")
     }
 
     /// Get all active markets (paginated)
-    pub fn get_active_markets(env: Env, offset: u32, limit: u32) -> Vec<Symbol> {
+    pub fn get_active_markets(_env: Env, _offset: u32, _limit: u32) -> Vec<Symbol> {
         todo!("See get active markets TODO above")
     }
 
     /// Get user's created markets
-    pub fn get_creator_markets(env: Env, creator: Address) {
+    pub fn get_creator_markets(_env: Env, _creator: Address) {
         todo!("See get creator markets TODO above")
     }
 
     /// Get market resolution
-    pub fn get_market_resolution(env: Env, market_id: BytesN<32>) -> Symbol {
+    pub fn get_market_resolution(_env: Env, _market_id: BytesN<32>) -> Symbol {
         todo!("See get market resolution TODO above")
     }
 
     /// Admin: Pause market creation (emergency)
-    pub fn set_market_creation_pause(env: Env, paused: bool) {
+    pub fn set_market_creation_pause(_env: Env, _paused: bool) {
         todo!("See set market creation pause TODO above")
     }
 
     /// Get factory statistics
-    pub fn get_factory_stats(env: Env) {
+    pub fn get_factory_stats(_env: Env) {
         todo!("See get factory stats TODO above")
     }
 
     /// Get collected fees
-    pub fn get_collected_fees(env: Env) {
+    pub fn get_collected_fees(_env: Env) {
         todo!("See get collected fees TODO above")
     }
 
     /// Admin function: Withdraw collected fees to treasury
-    pub fn withdraw_fees(env: Env, amount: i128) {
+    pub fn withdraw_fees(_env: Env, _amount: i128) {
         todo!("See withdraw fees TODO above")
     }
 }

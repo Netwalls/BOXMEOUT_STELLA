@@ -419,11 +419,11 @@ impl OracleManager {
     /// Allows users to challenge attestations with stake.
     /// Requires challenger to put up stake that will be slashed if challenge is invalid.
     pub fn challenge_attestation(
-        env: Env,
-        challenger: Address,
-        oracle: Address,
-        market_id: BytesN<32>,
-        challenge_reason: Symbol,
+        _env: Env,
+        _challenger: Address,
+        _oracle: Address,
+        _market_id: BytesN<32>,
+        _challenge_reason: Symbol,
     ) {
         // 1. Require challenger authentication
         challenger.require_auth();
@@ -486,10 +486,10 @@ impl OracleManager {
     /// Admin arbitration or multi-oracle re-vote to resolve challenges.
     /// Slashes dishonest oracle's stake on successful challenge.
     pub fn resolve_challenge(
-        env: Env,
-        oracle: Address,
-        market_id: BytesN<32>,
-        challenge_valid: bool,
+        _env: Env,
+        _oracle: Address,
+        _market_id: BytesN<32>,
+        _challenge_valid: bool,
     ) {
         // 1. Require admin authentication
         let admin: Address = env
