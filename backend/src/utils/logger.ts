@@ -1,70 +1,36 @@
+/**
+ * Structured logger for log aggregation.
+ * JSON format with request ID, user ID, timestamp on every log.
+ * Levels: debug, info, warn, error.
+ */
 import winston from 'winston';
-import DailyRotateFile from 'winston-daily-rotate-file';
-import path from 'path';
 
-const { combine, timestamp, json, colorize, printf, errors } = winston.format;
+const { combine, timestamp, json } = winston.format;
 
-// Custom format for console logging (more readable in development)
-const consoleFormat = printf(
-  ({ level, message, timestamp, stack, requestId, ...metadata }: any) => {
-    let log = `${timestamp} [${level}] ${requestId ? `[${requestId}] ` : ''}${message}`;
-    if (stack) {
-      log += `\n${stack}`;
-    }
-    if (Object.keys(metadata).length > 0 && !stack) {
-      log += ` ${JSON.stringify(metadata)}`;
-    }
-    return log;
-  }
-);
+const logLevel =
+  process.env.LOG_LEVEL ||
+  (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 
-// Configure the levels
-const levels = {
-  error: 0,
-  warn: 1,
-  info: 2,
-  http: 3,
-  debug: 4,
-};
-
-// Set level based on environment
-const level = () => {
-  const env = process.env.NODE_ENV || 'development';
-  return env === 'development' ? 'debug' : 'info';
-};
-
-// Log rotation configuration
-const fileRotateTransport = new DailyRotateFile({
-  filename: 'logs/app-%DATE%.log',
-  datePattern: 'YYYY-MM-DD',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '14d',
-  format: combine(timestamp(), json()),
+export const logger = winston.createLogger({
+  level: logLevel,
+  levels: { error: 0, warn: 1, info: 2, debug: 3 },
+  format: combine(timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }), json()),
+  defaultMeta: { service: 'boxmeout-backend' },
+  transports: [new winston.transports.Console()],
 });
 
-// Define which transports to use
-const transports: winston.transport[] = [
-  new winston.transports.Console({
-    format:
-      process.env.NODE_ENV === 'production'
-        ? combine(timestamp(), json())
-        : combine(
-            colorize(),
-            timestamp({ format: 'HH:mm:ss' }),
-            errors({ stack: true }),
-            consoleFormat
-          ),
-  }),
-  fileRotateTransport,
-];
+export type Logger = winston.Logger;
 
-// Create the logger instance
-const logger = winston.createLogger({
-  level: level(),
-  levels,
-  transports,
-  exitOnError: false, // Do not exit on handled exceptions
-});
+/**
+ * Create a child logger with request and user context for request-scoped logging.
+ * Use in middleware to attach to req.log so handlers get requestId and userId in every log.
+ */
+export function child(meta: {
+  requestId?: string;
+  userId?: string | null;
+  [key: string]: unknown;
+}): Logger {
+  return logger.child(meta);
+}
 
 export default logger;

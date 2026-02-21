@@ -1,7 +1,43 @@
 // contract/src/treasury.rs - Treasury Contract Implementation
 // Handles fee collection and reward distribution
 
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
+use soroban_sdk::{contract, contractevent, contractimpl, token, Address, Env, Symbol};
+
+#[contractevent]
+pub struct TreasuryInitializedEvent {
+    pub admin: Address,
+    pub usdc_contract: Address,
+    pub factory: Address,
+}
+
+#[contractevent]
+pub struct FeeDistributionUpdatedEvent {
+    pub platform_fee_pct: u32,
+    pub leaderboard_fee_pct: u32,
+    pub creator_fee_pct: u32,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct FeeCollectedEvent {
+    pub source: Address,
+    pub amount: i128,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct CreatorRewardsEvent {
+    pub total_amount: i128,
+    pub count: u32,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalEvent {
+    pub admin: Address,
+    pub recipient: Address,
+    pub amount: i128,
+    pub timestamp: u64,
+}
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -85,10 +121,12 @@ impl Treasury {
             .set(&Symbol::new(&env, DISTRIBUTION_KEY), &default_ratios);
 
         // Emit initialization event
-        env.events().publish(
-            (Symbol::new(&env, "treasury_initialized"),),
-            (admin, usdc_contract, factory),
-        );
+        TreasuryInitializedEvent {
+            admin,
+            usdc_contract,
+            factory,
+        }
+        .publish(&env);
     }
 
     /// Update fee distribution percentages
@@ -122,15 +160,13 @@ impl Treasury {
             .set(&Symbol::new(&env, DISTRIBUTION_KEY), &new_ratios);
 
         // Emit FeeDistributionUpdated event
-        env.events().publish(
-            (Symbol::new(&env, "FeeDistributionUpdated"),),
-            (
-                platform_fee_pct,
-                leaderboard_fee_pct,
-                creator_fee_pct,
-                env.ledger().timestamp(),
-            ),
-        );
+        FeeDistributionUpdatedEvent {
+            platform_fee_pct,
+            leaderboard_fee_pct,
+            creator_fee_pct,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
     }
 
     /// Deposit fees into treasury and split across pools
@@ -173,14 +209,12 @@ impl Treasury {
         self::update_pool_balance(&env, TOTAL_FEES_KEY, amount);
 
         // Emit FeeCollected(source, amount, timestamp)
-        env.events().publish(
-            (
-                Symbol::new(&env, "FeeCollected"),
-                source,
-                (Symbol::new(&env, "fee_source"),),
-            ),
-            (amount, env.ledger().timestamp()),
-        );
+        FeeCollectedEvent {
+            source,
+            amount,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
     }
 
     /// Get platform fees collected
@@ -272,10 +306,11 @@ impl Treasury {
             .persistent()
             .set(&Symbol::new(&env, CREATOR_FEES_KEY), &new_balance);
 
-        env.events().publish(
-            (Symbol::new(&env, "creator_rewards_distributed"),),
-            (total_amount, distributions.len()),
-        );
+        CreatorRewardsEvent {
+            total_amount,
+            count: distributions.len(),
+        }
+        .publish(&env);
     }
 
     /// Get treasury balance (total USDC held)
@@ -309,10 +344,13 @@ impl Treasury {
         let token_client = token::Client::new(&env, &usdc_token);
         token_client.transfer(&env.current_contract_address(), &recipient, &amount);
 
-        env.events().publish(
-            (Symbol::new(&env, "EmergencyWithdrawal"), admin, recipient),
-            (amount, env.ledger().timestamp()),
-        );
+        EmergencyWithdrawalEvent {
+            admin,
+            recipient,
+            amount,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
     }
 }
 

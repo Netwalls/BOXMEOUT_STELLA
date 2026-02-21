@@ -93,10 +93,12 @@ describe('Validation and Error Handling Integration', () => {
     // Check if it's a validation error or success
     // If validation fails, we need to see what's wrong
     if (validResponse.status === 400) {
-      console.log('Validation error details:', validResponse.body);
-      // Check what validation is failing
+      const { logger } = await import('../../src/utils/logger.js');
+      logger.debug('Validation error details', { body: validResponse.body });
       if (validResponse.body.error?.details) {
-        console.log('Validation details:', validResponse.body.error.details);
+        logger.debug('Validation details', {
+          details: validResponse.body.error.details,
+        });
       }
     }
 

@@ -8,6 +8,7 @@ import {
   RefreshRequest,
 } from '../types/auth.types.js';
 import { verifyRefreshToken } from '../utils/jwt.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Authentication Controller
@@ -278,8 +279,8 @@ export class AuthController {
       return;
     }
 
-    // Log unexpected errors
-    console.error('Auth controller error:', error);
+    // Log unexpected errors (handleError has no req context)
+    logger.error('Auth controller error', { error });
 
     res.status(500).json({
       success: false,

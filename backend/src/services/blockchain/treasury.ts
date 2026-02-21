@@ -9,6 +9,7 @@ import {
   scValToNative,
   Address,
 } from '@stellar/stellar-sdk';
+import { logger } from '../../utils/logger.js';
 
 export interface TreasuryBalances {
   totalBalance: string;
@@ -47,7 +48,7 @@ export class TreasuryService {
       try {
         this.adminKeypair = Keypair.fromSecret(adminSecret);
       } catch (error) {
-        console.warn('Invalid ADMIN_WALLET_SECRET for Treasury service');
+        logger.warn('Invalid ADMIN_WALLET_SECRET for Treasury service');
       }
     }
   }

@@ -34,12 +34,4 @@ pub use amm::AMMContract;
 #[cfg(any(feature = "amm", test))]
 pub use amm::AMM;
 
-// Additional test-only exports
-#[cfg(test)]
-pub use factory::*;
-#[cfg(test)]
-pub use market::*;
-#[cfg(test)]
-pub use oracle::*;
-#[cfg(test)]
-pub use treasury::*;
+// Additional test-only exports can be placed here if needed

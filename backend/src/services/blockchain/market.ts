@@ -7,6 +7,7 @@ import {
   Keypair,
   nativeToScVal,
 } from '@stellar/stellar-sdk';
+import { logger } from '../../utils/logger.js';
 
 export interface MarketActionResult {
   txHash: string;
@@ -34,7 +35,7 @@ export class MarketBlockchainService {
       try {
         this.adminKeypair = Keypair.fromSecret(adminSecret);
       } catch (error) {
-        console.warn('Invalid ADMIN_WALLET_SECRET for Market service');
+        logger.warn('Invalid ADMIN_WALLET_SECRET for Market service');
       }
     }
   }
@@ -81,7 +82,7 @@ export class MarketBlockchainService {
         throw new Error(`Transaction failed: ${response.status}`);
       }
     } catch (error) {
-      console.error('Market.resolve_market() error:', error);
+      logger.error('Market.resolve_market() error', { error });
       throw new Error(
         `Failed to resolve market on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -136,7 +137,7 @@ export class MarketBlockchainService {
         throw new Error(`Transaction failed: ${response.status}`);
       }
     } catch (error) {
-      console.error('Market.claim_winnings() error:', error);
+      logger.error('Market.claim_winnings() error', { error });
       throw new Error(
         `Failed to claim winnings on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
       );

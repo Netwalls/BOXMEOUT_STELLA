@@ -35,3 +35,23 @@ overflow-checks = true
 lto = true
 panic = "abort"
 codegen-units = 1
+
+[[test]]
+name = "integration_test"
+required-features = ["testutils"]
+
+[[test]]
+name = "factory_test"
+required-features = ["testutils"]
+
+[[test]]
+name = "market_test"
+required-features = ["testutils"]
+
+[[test]]
+name = "oracle_test"
+required-features = ["testutils"]
+
+[[test]]
+name = "treasury_test"
+required-features = ["testutils"]

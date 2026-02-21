@@ -49,6 +49,7 @@ frontend/coverage/
 # Rust
 Cargo.lock
 **/*.rs.bk
+test_snapshots
 
 # Temporary files
 tmp/

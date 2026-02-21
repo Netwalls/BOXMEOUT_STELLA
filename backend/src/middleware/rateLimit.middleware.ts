@@ -2,6 +2,7 @@ import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient } from '../config/redis.js';
 import { AuthenticatedRequest } from '../types/auth.types.js';
+import { logger } from '../utils/logger.js';
 import { ipKeyGenerator } from 'express-rate-limit';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,7 +24,7 @@ function createRedisStore(prefix: string) {
       prefix: `rl:${prefix}:`,
     });
   } catch (error) {
-    console.warn(
+    logger.warn(
       `Failed to create Redis store for rate limiter (${prefix}), using memory store`
     );
     return undefined; // Falls back to memory store

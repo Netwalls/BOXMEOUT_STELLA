@@ -2,8 +2,54 @@
 // Handles predictions, bet commitment/reveal, market resolution, and winnings claims
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token, Address, BytesN, Env, Symbol, Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, token, Address, BytesN,
+    Env, Symbol, Vec,
 };
+
+#[contractevent]
+pub struct MarketInitializedEvent {
+    pub market_id: BytesN<32>,
+    pub creator: Address,
+    pub factory: Address,
+    pub oracle: Address,
+    pub closing_time: u64,
+    pub resolution_time: u64,
+}
+
+#[contractevent]
+pub struct CommitmentMadeEvent {
+    pub user: Address,
+    pub market_id: BytesN<32>,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct MarketClosedEvent {
+    pub market_id: BytesN<32>,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct MarketResolvedEvent {
+    pub market_id: BytesN<32>,
+    pub final_outcome: u32,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct WinningsClaimedEvent {
+    pub user: Address,
+    pub market_id: BytesN<32>,
+    pub net_payout: i128,
+}
+
+#[contractevent]
+pub struct MarketDisputedEvent {
+    pub user: Address,
+    pub reason: Symbol,
+    pub market_id: BytesN<32>,
+    pub timestamp: u64,
+}
 
 // Storage keys
 const MARKET_ID_KEY: &str = "market_id";
@@ -19,6 +65,7 @@ const NO_POOL_KEY: &str = "no_pool";
 const TOTAL_VOLUME_KEY: &str = "total_volume";
 const PENDING_COUNT_KEY: &str = "pending_count";
 const COMMIT_PREFIX: &str = "commit";
+const PARTICIPANTS_KEY: &str = "participants";
 const PREDICTION_PREFIX: &str = "prediction";
 const WINNING_OUTCOME_KEY: &str = "winning_outcome";
 const WINNER_SHARES_KEY: &str = "winner_shares";
@@ -28,6 +75,8 @@ const LOSER_SHARES_KEY: &str = "loser_shares";
 const STATE_OPEN: u32 = 0;
 const STATE_CLOSED: u32 = 1;
 const STATE_RESOLVED: u32 = 2;
+const STATE_DISPUTED: u32 = 3;
+const STATE_CANCELLED: u32 = 4;
 
 /// Error codes following Soroban best practices
 #[contracterror]
@@ -66,6 +115,16 @@ pub struct Commitment {
     pub timestamp: u64,
 }
 
+/// Dispute record
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeRecord {
+    pub user: Address,
+    pub reason: Symbol,
+    pub evidence: Option<BytesN<32>>,
+    pub timestamp: u64,
+}
+
 /// Revealed prediction record
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -96,6 +155,22 @@ pub struct UserPredictionResult {
     pub status: u32,
     /// 0=NO, 1=YES when revealed; PREDICTION_OUTCOME_NONE when committed
     pub predicted_outcome: u32,
+}
+
+/// Market state summary for backend sync
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketState {
+    /// Current market status: 0=OPEN, 1=CLOSED, 2=RESOLVED
+    pub status: u32,
+    /// Market closing timestamp
+    pub closing_time: u64,
+    /// Total pool size (yes_pool + no_pool)
+    pub total_pool: i128,
+    /// Number of participants (pending + revealed predictions)
+    pub participant_count: u32,
+    /// Winning outcome (0=NO, 1=YES), None if not resolved
+    pub winning_outcome: Option<u32>,
 }
 
 /// PREDICTION MARKET - Manages individual market logic
@@ -175,17 +250,15 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, PENDING_COUNT_KEY), &0u32);
 
         // Emit initialization event
-        env.events().publish(
-            (Symbol::new(&env, "market_initialized"),),
-            (
-                market_id,
-                creator,
-                factory,
-                oracle,
-                closing_time,
-                resolution_time,
-            ),
-        );
+        MarketInitializedEvent {
+            market_id,
+            creator,
+            factory,
+            oracle,
+            closing_time,
+            resolution_time,
+        }
+        .publish(&env);
     }
 
     /// Phase 1: User commits to a prediction (commit-reveal scheme for privacy)
@@ -273,6 +346,17 @@ impl PredictionMarket {
 
         env.storage().persistent().set(&commit_key, &commitment);
 
+        // Add user to participants (for cancel refunds)
+        let mut participants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PARTICIPANTS_KEY))
+            .unwrap_or_else(|| Vec::new(&env));
+        participants.push_back(user.clone());
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, PARTICIPANTS_KEY), &participants);
+
         // Update pending count
         let pending_count: u32 = env
             .storage()
@@ -285,10 +369,12 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, PENDING_COUNT_KEY), &(pending_count + 1));
 
         // Emit CommitmentMade event
-        env.events().publish(
-            (Symbol::new(&env, "CommitmentMade"),),
-            (user, market_id, amount),
-        );
+        CommitmentMadeEvent {
+            user,
+            market_id,
+            amount,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -382,10 +468,11 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_CLOSED);
 
         // Emit MarketClosed Event
-        env.events().publish(
-            (Symbol::new(&env, "market_closed"),),
-            (market_id, current_time),
-        );
+        MarketClosedEvent {
+            market_id,
+            timestamp: current_time,
+        }
+        .publish(&env);
     }
 
     /// Resolve market based on oracle consensus result
@@ -498,31 +585,91 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_RESOLVED);
 
         // Emit MarketResolved event
-        env.events().publish(
-            (Symbol::new(&env, "MarketResolved"),),
-            (market_id, final_outcome, current_time),
-        );
+        MarketResolvedEvent {
+            market_id,
+            final_outcome,
+            timestamp: current_time,
+        }
+        .publish(&env);
     }
 
     /// Dispute market resolution within 7-day window
     ///
-    /// TODO: Dispute Market
-    /// - Require user authentication and user participated in market
+    /// - Require user authentication
     /// - Validate market state is RESOLVED
     /// - Validate current timestamp < resolution_time + 7 days
-    /// - Store dispute record: { user, reason, timestamp }
+    /// - Require minimum stake (1000 tokens)
+    /// - Store dispute record: { user, reason, evidence, timestamp }
     /// - Change market state to DISPUTED
     /// - Freeze all payouts until dispute resolved
-    /// - Increment dispute counter
-    /// - Emit MarketDisputed(user, reason, market_id, timestamp)
-    /// - Notify admin of dispute
+    /// - Emit MarketDisputed event
     pub fn dispute_market(
-        _env: Env,
-        _user: Address,
-        _market_id: BytesN<32>,
-        _dispute_reason: Symbol,
+        env: Env,
+        user: Address,
+        market_id: BytesN<32>,
+        dispute_reason: Symbol,
+        evidence_hash: Option<BytesN<32>>,
     ) {
-        todo!("See dispute market TODO above")
+        user.require_auth();
+
+        let state: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .expect("Market not initialized");
+
+        if state != STATE_RESOLVED {
+            panic!("Market not resolved");
+        }
+
+        let resolution_time: u64 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, RESOLUTION_TIME_KEY))
+            .expect("Resolution time not found");
+
+        let current_time = env.ledger().timestamp();
+        // 7 days = 604800 seconds
+        if current_time >= resolution_time + 604800 {
+            panic!("Dispute window has closed");
+        }
+
+        // Require minimum stake to prevent spam disputes
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not found");
+
+        let token_client = token::TokenClient::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+        let dispute_stake_amount: i128 = 1000;
+
+        token_client.transfer(&user, &contract_address, &dispute_stake_amount);
+
+        // Transition market status to DISPUTED
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_DISPUTED);
+
+        // Store dispute record
+        let dispute = DisputeRecord {
+            user: user.clone(),
+            reason: dispute_reason.clone(),
+            evidence: evidence_hash,
+            timestamp: current_time,
+        };
+        let dispute_key = (Symbol::new(&env, "dispute"), market_id.clone());
+        env.storage().persistent().set(&dispute_key, &dispute);
+
+        // Emit MarketDisputed event
+        MarketDisputedEvent {
+            user,
+            reason: dispute_reason,
+            market_id,
+            timestamp: current_time,
+        }
+        .publish(&env);
     }
 
     /// Claim winnings after market resolution
@@ -661,10 +808,12 @@ impl PredictionMarket {
         env.storage().persistent().set(&prediction_key, &prediction);
 
         // 9. Emit WinningsClaimed Event
-        env.events().publish(
-            (Symbol::new(&env, "WinningsClaimed"),),
-            (user, market_id.clone(), net_payout),
-        );
+        WinningsClaimedEvent {
+            user,
+            market_id: market_id.clone(),
+            net_payout,
+        }
+        .publish(&env);
 
         net_payout
     }
@@ -687,17 +836,68 @@ impl PredictionMarket {
 
     /// Get market summary data
     ///
-    /// TODO: Get Market State
-    /// - Query market metadata from storage
-    /// - Return: market_id, creator, category, title, description
-    /// - Include timing: creation_time, closing_time, resolution_time, time_remaining
-    /// - Include current state: OPEN/CLOSED/RESOLVED/DISPUTED
-    /// - Include pools: yes_volume, no_volume, total_volume
-    /// - Include odds: yes_odds, no_odds
-    /// - Include resolution: winning_outcome (if resolved), timestamp
-    /// - Include user-specific data if user provided: their prediction, potential winnings
-    pub fn get_market_state(_env: Env, _market_id: BytesN<32>) -> Symbol {
-        todo!("See get market state TODO above")
+    /// Returns current market state including status, timing, pool size, and resolution data.
+    /// This is a read-only function that requires no authentication.
+    ///
+    /// # Returns
+    /// - status: Current market state (0=OPEN, 1=CLOSED, 2=RESOLVED)
+    /// - closing_time: When the market closes for new predictions
+    /// - total_pool: Combined size of yes_pool + no_pool
+    /// - participant_count: Number of pending commitments
+    /// - winning_outcome: Final outcome if resolved (0=NO, 1=YES), None otherwise
+    pub fn get_market_state(env: Env, _market_id: BytesN<32>) -> MarketState {
+        // Get market status
+        let status: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .unwrap_or(STATE_OPEN);
+
+        // Get closing time
+        let closing_time: u64 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, CLOSING_TIME_KEY))
+            .unwrap_or(0);
+
+        // Get pool sizes
+        let yes_pool: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, YES_POOL_KEY))
+            .unwrap_or(0);
+
+        let no_pool: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, NO_POOL_KEY))
+            .unwrap_or(0);
+
+        let total_pool = yes_pool + no_pool;
+
+        // Get participant count (pending commitments)
+        let participant_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PENDING_COUNT_KEY))
+            .unwrap_or(0);
+
+        // Get winning outcome if market is resolved
+        let winning_outcome: Option<u32> = if status == STATE_RESOLVED {
+            env.storage()
+                .persistent()
+                .get(&Symbol::new(&env, WINNING_OUTCOME_KEY))
+        } else {
+            None
+        };
+
+        MarketState {
+            status,
+            closing_time,
+            total_pool,
+            participant_count,
+            winning_outcome,
+        }
     }
 
     /// Get prediction records for a user in this market
@@ -850,21 +1050,100 @@ impl PredictionMarket {
 
     /// Emergency function: Market creator can cancel unresolved market
     ///
-    /// TODO: Cancel Market (Creator Only)
-    /// - Require market creator authentication
+    /// - Require creator authentication
     /// - Validate market state is OPEN or CLOSED (not resolved)
-    /// - Return all user USDC balances (full refund)
-    /// - Loop through all users with predictions
-    /// - Transfer their full amounts back from escrow
-    /// - Handle any transfer failures (log but continue)
+    /// - Refund all participants (commitments and predictions)
     /// - Set market state to CANCELLED
-    /// - Emit MarketCancelled(market_id, reason, creator, timestamp)
-    pub fn cancel_market(_env: Env, _creator: Address, _market_id: BytesN<32>) {
-        todo!("See cancel market TODO above")
+    /// - Emit MarketCancelled(market_id, creator, timestamp)
+    pub fn cancel_market(env: Env, creator: Address, market_id: BytesN<32>) {
+        creator.require_auth();
+
+        let stored_creator: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, CREATOR_KEY))
+            .expect("Market not initialized");
+
+        if creator != stored_creator {
+            panic!("Unauthorized: only creator can cancel");
+        }
+
+        let state: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .expect("Market state not found");
+
+        if state == STATE_RESOLVED {
+            panic!("Cannot cancel resolved market");
+        }
+        if state == STATE_CANCELLED {
+            panic!("Market already cancelled");
+        }
+
+        let usdc: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not found");
+        let token_client = token::TokenClient::new(&env, &usdc);
+        let contract = env.current_contract_address();
+
+        let participants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PARTICIPANTS_KEY))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let len = participants.len();
+        for i in 0..len {
+            let user = participants.get(i).expect("participant");
+            if let Some(commitment) = Self::get_commitment(env.clone(), user.clone()) {
+                if commitment.amount > 0 {
+                    token_client.transfer(&contract, &user, &commitment.amount);
+                }
+                env.storage()
+                    .persistent()
+                    .remove(&Self::get_commit_key(&env, &user));
+            } else if let Some(pred) = Self::test_get_prediction(env.clone(), user.clone()) {
+                if pred.amount > 0 {
+                    token_client.transfer(&contract, &user, &pred.amount);
+                }
+                let pred_key = (Symbol::new(&env, PREDICTION_PREFIX), user.clone());
+                env.storage().persistent().remove(&pred_key);
+            }
+        }
+
+        env.storage().persistent().set(
+            &Symbol::new(&env, PARTICIPANTS_KEY),
+            &Vec::<Address>::new(&env),
+        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_CANCELLED);
+
+        let timestamp = env.ledger().timestamp();
+        env.events().publish(
+            (Symbol::new(&env, "MarketCancelled"),),
+            (market_id, creator, timestamp),
+        );
     }
 
     // --- TEST HELPERS (Not for production use, but exposed for integration tests) ---
     // In a real production contract, these would be removed or gated behind a feature flag.
+
+    /// Test helper: Add user to participants (for cancel tests that bypass commit)
+    pub fn test_add_participant(env: Env, user: Address) {
+        let mut participants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PARTICIPANTS_KEY))
+            .unwrap_or_else(|| Vec::new(&env));
+        participants.push_back(user);
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, PARTICIPANTS_KEY), &participants);
+    }
 
     /// Test helper: Set a user's prediction directly (bypasses commit/reveal)
     pub fn test_set_prediction(env: Env, user: Address, outcome: u32, amount: i128) {
@@ -1500,5 +1779,82 @@ mod tests {
         let r = result.unwrap();
         assert_eq!(r.predicted_outcome, 0);
         assert_eq!(r.amount, 200);
+    }
+
+    // ============================================================================
+    // DISPUTE MARKET TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_dispute_market_happy_path() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+        let admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &admin);
+
+        market_client.initialize(
+            &market_id,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        let user = Address::generate(&env);
+        let dispute_reason = Symbol::new(&env, "wrong");
+        let evidence_hash = Some(BytesN::from_array(&env, &[5u8; 32]));
+
+        // Mint USDC to user for dispute stake (1000)
+        usdc_client.mint(&user, &2000);
+
+        // Resolve market
+        market_client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+
+        // Intial state is 2 (RESOLVED)
+        assert_eq!(market_client.get_market_state_value().unwrap(), 2);
+
+        // Dispute
+        market_client.dispute_market(&user, &market_id, &dispute_reason, &evidence_hash);
+
+        // Verify state transitioned to DISPUTED (3)
+        let state = market_client.get_market_state_value().unwrap();
+        assert_eq!(state, 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "Market not resolved")]
+    fn test_dispute_market_not_resolved() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+        let admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &admin);
+
+        market_client.initialize(
+            &market_id,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        let user = Address::generate(&env);
+        let dispute_reason = Symbol::new(&env, "wrong");
+
+        // Market is OPEN, not RESOLVED
+        market_client.dispute_market(&user, &market_id, &dispute_reason, &None);
     }
 }

@@ -4,6 +4,7 @@ import swaggerUi from 'swagger-ui-express';
 import { Express } from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1279,7 +1280,7 @@ export const setupSwagger = (app: Express): void => {
     res.send(swaggerSpec);
   });
 
-  console.log('📚 Swagger documentation available at /api-docs');
+  logger.info('Swagger documentation available at /api-docs');
 };
 
 export { swaggerSpec };

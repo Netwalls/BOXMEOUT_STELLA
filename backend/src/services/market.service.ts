@@ -3,6 +3,7 @@ import { MarketRepository } from '../repositories/market.repository.js';
 import { PredictionRepository } from '../repositories/prediction.repository.js';
 import { MarketCategory, MarketStatus } from '@prisma/client';
 import { executeTransaction } from '../database/transaction.js';
+import { logger } from '../utils/logger.js';
 import { factoryService } from './blockchain/factory.js';
 import { ammService } from './blockchain/amm.js';
 
@@ -120,7 +121,7 @@ export class MarketService {
         blockchainMarketId: blockchainResult.marketId,
       };
     } catch (error) {
-      console.error('Market creation error:', error);
+      logger.error('Market creation error', { error });
       throw new Error(
         `Failed to create market: ${error instanceof Error ? error.message : 'Unknown error'}`
       );

@@ -1,7 +1,23 @@
 // contract/src/factory.rs - Market Factory Contract Implementation
 // Handles market creation and lifecycle management
 
-use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractevent, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec,
+};
+
+#[contractevent]
+pub struct FactoryInitializedEvent {
+    pub admin: Address,
+    pub usdc: Address,
+    pub treasury: Address,
+}
+
+#[contractevent]
+pub struct MarketCreatedEvent {
+    pub market_id: BytesN<32>,
+    pub creator: Address,
+    pub closing_time: u64,
+}
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -50,10 +66,12 @@ impl MarketFactory {
             .set(&Symbol::new(&env, MARKET_COUNT_KEY), &0u32);
 
         // Emit initialization event
-        env.events().publish(
-            (Symbol::new(&env, "factory_initialized"),),
-            (admin, usdc, treasury),
-        );
+        FactoryInitializedEvent {
+            admin,
+            usdc,
+            treasury,
+        }
+        .publish(&env);
     }
 
     /// Get total markets created
@@ -147,10 +165,12 @@ impl MarketFactory {
         );
 
         // Emit MarketCreated event
-        env.events().publish(
-            (Symbol::new(&env, "market_created"),),
-            (market_id.clone(), creator, closing_time),
-        );
+        MarketCreatedEvent {
+            market_id: market_id.clone(),
+            creator,
+            closing_time,
+        }
+        .publish(&env);
 
         market_id
     }

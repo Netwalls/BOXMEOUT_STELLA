@@ -1,7 +1,51 @@
 // contracts/amm.rs - Automated Market Maker for Outcome Shares
 // Enables trading YES/NO outcome shares with dynamic odds pricing (Polymarket model)
 
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contract, contractevent, contractimpl, token, Address, BytesN, Env, Symbol};
+
+#[contractevent]
+pub struct AmmInitializedEvent {
+    pub admin: Address,
+    pub factory: Address,
+    pub max_liquidity_cap: u128,
+}
+
+#[contractevent]
+pub struct PoolCreatedEvent {
+    pub market_id: BytesN<32>,
+    pub initial_liquidity: u128,
+    pub yes_reserve: u128,
+    pub no_reserve: u128,
+}
+
+#[contractevent]
+pub struct BuySharesEvent {
+    pub buyer: Address,
+    pub market_id: BytesN<32>,
+    pub outcome: u32,
+    pub shares_out: u128,
+    pub amount: u128,
+    pub fee_amount: u128,
+}
+
+#[contractevent]
+pub struct SellSharesEvent {
+    pub seller: Address,
+    pub market_id: BytesN<32>,
+    pub outcome: u32,
+    pub shares: u128,
+    pub payout_after_fee: u128,
+    pub fee_amount: u128,
+}
+
+#[contractevent]
+pub struct LiquidityRemovedEvent {
+    pub market_id: BytesN<32>,
+    pub lp_provider: Address,
+    pub lp_tokens: u128,
+    pub yes_amount: u128,
+    pub no_amount: u128,
+}
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -87,10 +131,12 @@ impl AMM {
         );
 
         // Emit initialization event
-        env.events().publish(
-            (Symbol::new(&env, "amm_initialized"),),
-            (admin, factory, max_liquidity_cap),
-        );
+        AmmInitializedEvent {
+            admin,
+            factory,
+            max_liquidity_cap,
+        }
+        .publish(&env);
     }
 
     /// Create new liquidity pool for market
@@ -153,10 +199,13 @@ impl AMM {
         );
 
         // Emit PoolCreated event
-        env.events().publish(
-            (Symbol::new(&env, "pool_created"),),
-            (market_id, initial_liquidity, yes_reserve, no_reserve),
-        );
+        PoolCreatedEvent {
+            market_id,
+            initial_liquidity,
+            yes_reserve,
+            no_reserve,
+        }
+        .publish(&env);
     }
 
     /// Buy outcome shares (YES or NO)
@@ -293,10 +342,15 @@ impl AMM {
             .set(&user_share_key, &(current_shares + shares_out));
 
         // Record trade (Optional: Simplified to event only for this resolution)
-        env.events().publish(
-            (Symbol::new(&env, "buy_shares"),),
-            (buyer, market_id, outcome, shares_out, amount, fee_amount),
-        );
+        BuySharesEvent {
+            buyer,
+            market_id,
+            outcome,
+            shares_out,
+            amount,
+            fee_amount,
+        }
+        .publish(&env);
 
         shares_out
     }
@@ -424,17 +478,15 @@ impl AMM {
         usdc_client.transfer(&contract_address, &seller, &(payout_after_fee as i128));
 
         // Emit SellShares event
-        env.events().publish(
-            (Symbol::new(&env, "sell_shares"),),
-            (
-                seller,
-                market_id,
-                outcome,
-                shares,
-                payout_after_fee,
-                fee_amount,
-            ),
-        );
+        SellSharesEvent {
+            seller,
+            market_id,
+            outcome,
+            shares,
+            payout_after_fee,
+            fee_amount,
+        }
+        .publish(&env);
 
         payout_after_fee
     }
@@ -620,10 +672,14 @@ impl AMM {
         );
 
         // Emit LiquidityRemoved event
-        env.events().publish(
-            (Symbol::new(&env, "liquidity_removed"),),
-            (market_id, lp_provider, lp_tokens, yes_amount, no_amount),
-        );
+        LiquidityRemovedEvent {
+            market_id,
+            lp_provider,
+            lp_tokens,
+            yes_amount,
+            no_amount,
+        }
+        .publish(&env);
 
         (yes_amount, no_amount)
     }

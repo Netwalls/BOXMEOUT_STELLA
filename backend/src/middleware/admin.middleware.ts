@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../types/auth.types.js';
+import { logger } from '../utils/logger.js';
 
 const ADMIN_WALLET_ADDRESSES = (process.env.ADMIN_WALLET_ADDRESSES || '')
   .split(',')
@@ -32,7 +33,7 @@ export async function requireAdmin(
 
     next();
   } catch (error) {
-    console.error('Admin middleware error:', error);
+    (req.log || logger).error('Admin middleware error', { error });
     res.status(500).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message: 'Authorization failed' },

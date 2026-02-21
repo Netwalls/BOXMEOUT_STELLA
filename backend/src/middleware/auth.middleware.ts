@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest, AuthError } from '../types/auth.types.js';
 import { verifyAccessToken } from '../utils/jwt.js';
+import { child, logger } from '../utils/logger.js';
 import { UserTier } from '@prisma/client';
 
 /**
@@ -10,7 +11,7 @@ import { UserTier } from '@prisma/client';
  *
  * Usage:
  *   router.get('/protected', requireAuth, (req, res) => {
- *     console.log(req.user.userId);
+ *     req.log?.info('user', { userId: req.user.userId });
  *   });
  */
 export async function requireAuth(
@@ -48,6 +49,11 @@ export async function requireAuth(
       publicKey: payload.publicKey,
       tier: payload.tier,
     };
+    // Enrich request logger with userId for all subsequent logs
+    req.log = child({
+      requestId: req.requestId,
+      userId: req.user.userId,
+    }) as AuthenticatedRequest['log'];
 
     next();
   } catch (error) {
@@ -62,7 +68,7 @@ export async function requireAuth(
       return;
     }
 
-    console.error('Auth middleware error:', error);
+    (req.log || logger).error('Auth middleware error', { error });
     res.status(500).json({
       success: false,
       error: {
@@ -116,6 +122,10 @@ export async function optionalAuth(
         publicKey: payload.publicKey,
         tier: payload.tier,
       };
+      req.log = child({
+        requestId: req.requestId,
+        userId: req.user.userId,
+      }) as AuthenticatedRequest['log'];
     } catch {
       // Token invalid, but that's okay for optional auth
       // Continue without user info

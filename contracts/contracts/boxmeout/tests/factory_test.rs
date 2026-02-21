@@ -17,7 +17,7 @@ fn create_test_env() -> Env {
 
 // Helper to register factory contract
 fn register_factory(env: &Env) -> Address {
-    env.register_contract(None, MarketFactory)
+    env.register(MarketFactory, ())
 }
 
 // Helper to create a mock USDC token
@@ -73,11 +73,11 @@ fn test_create_market() {
 
     // Initialize factory
     let admin = Address::generate(&env);
-    let usdc = create_mock_token(&env, &admin);
+    let usdc = Address::generate(&env);
     let treasury = Address::generate(&env);
-    env.mock_all_auths();
     client.initialize(&admin, &usdc, &treasury);
 
+    // TODO: Implement when create_market is ready
     // Create market
     let creator = Address::generate(&env);
 
@@ -109,7 +109,7 @@ fn test_create_market() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "invalid timestamps")]
 fn test_create_market_invalid_timestamps() {
     let env = create_test_env();
     let factory_id = register_factory(&env);
@@ -253,10 +253,7 @@ fn test_update_treasury_address() {
 }
 */
 
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, Symbol,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
 
 // Import the Factory contract
 use boxmeout::factory::{MarketFactory, MarketFactoryClient};
@@ -267,7 +264,7 @@ fn create_test_env() -> Env {
 
 // Helper to register factory contract
 fn register_factory(env: &Env) -> Address {
-    env.register_contract(None, MarketFactory)
+    env.register(MarketFactory, ())
 }
 
 // Helper to create a mock USDC token

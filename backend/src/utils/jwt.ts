@@ -5,6 +5,7 @@ import {
   RefreshTokenPayload,
   AuthError,
 } from '../types/auth.types.js';
+import { logger } from './logger.js';
 
 // Validate JWT secrets are configured
 function getJwtSecret(envVar: string, name: string): Secret {
@@ -43,8 +44,8 @@ const REFRESH_TTL: StringValue = (process.env.JWT_REFRESH_TTL ||
 // Warn if using default secrets in non-development environment
 if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
   if (!process.env.JWT_ACCESS_SECRET || !process.env.JWT_REFRESH_SECRET) {
-    console.warn(
-      '⚠️  WARNING: Using default JWT secrets in production. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET!'
+    logger.warn(
+      'Using default JWT secrets in production. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET'
     );
   }
 }

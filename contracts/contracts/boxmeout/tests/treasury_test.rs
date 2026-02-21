@@ -1,7 +1,4 @@
-use soroban_sdk::{
-    testutils::{Address as _, Events},
-    Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 use boxmeout::treasury::{Treasury, TreasuryClient};
 
@@ -10,7 +7,7 @@ fn create_test_env() -> Env {
 }
 
 fn register_treasury(env: &Env) -> Address {
-    env.register_contract(None, Treasury)
+    env.register(Treasury, ())
 }
 
 #[test]

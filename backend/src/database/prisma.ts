@@ -1,5 +1,6 @@
 // Database connection and Prisma client singleton
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../utils/logger.js';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -40,7 +41,7 @@ export async function checkDatabaseConnection(): Promise<boolean> {
     await prisma.$queryRaw`SELECT 1`;
     return true;
   } catch (error) {
-    console.error('Database connection failed:', error);
+    logger.error('Database connection failed', { error });
     return false;
   }
 }

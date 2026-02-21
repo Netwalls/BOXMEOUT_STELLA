@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/auth.types.js';
 import { TreasuryService } from '../services/treasury.service.js';
+import { logger } from '../utils/logger.js';
 import { z } from 'zod';
 
 const distributeLeaderboardSchema = z.object({
@@ -36,7 +37,7 @@ export class TreasuryController {
         data: balances,
       });
     } catch (error) {
-      console.error('Get balances error:', error);
+      (req.log || logger).error('Get balances error', { error });
       res.status(500).json({
         success: false,
         error: {
@@ -84,7 +85,7 @@ export class TreasuryController {
         data: result,
       });
     } catch (error) {
-      console.error('Distribute leaderboard error:', error);
+      (req.log || logger).error('Distribute leaderboard error', { error });
       res.status(500).json({
         success: false,
         error: {
@@ -136,7 +137,7 @@ export class TreasuryController {
         data: result,
       });
     } catch (error) {
-      console.error('Distribute creator error:', error);
+      (req.log || logger).error('Distribute creator error', { error });
       res.status(500).json({
         success: false,
         error: {
