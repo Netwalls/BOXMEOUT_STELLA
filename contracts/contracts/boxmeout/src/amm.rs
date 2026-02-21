@@ -703,9 +703,52 @@ impl AMM {
         (yes_price, no_price)
     }
 
+    /// Get LP position details for a user
+    /// Returns (lp_tokens, pool_share_bps, unrealized_pnl)
+    /// - lp_tokens: User's LP token balance
+    /// - pool_share_bps: Share of pool in basis points (5000 = 50%)
+    /// - unrealized_pnl: Current value minus initial investment (can be negative)
+    pub fn get_lp_position(
+        env: Env,
+        market_id: BytesN<32>,
+        lp_provider: Address,
+    ) -> (u128, u32, i128) {
+        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        if !env.storage().persistent().has(&pool_exists_key) {
+            return (0, 0, 0);
+        }
+
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            market_id.clone(),
+            lp_provider.clone(),
+        );
+        let lp_tokens: u128 = env.storage().persistent().get(&lp_balance_key).unwrap_or(0);
+
+        if lp_tokens == 0 {
+            return (0, 0, 0);
+        }
+
+        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let total_lp_supply: u128 = env.storage().persistent().get(&lp_supply_key).unwrap_or(1);
+
+        let pool_share_bps = ((lp_tokens * 10000) / total_lp_supply) as u32;
+
+        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
+        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
+        let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
+
+        let current_value = ((lp_tokens * (yes_reserve + no_reserve)) / total_lp_supply) as i128;
+        let initial_investment = lp_tokens as i128;
+        let unrealized_pnl = current_value - initial_investment;
+
+        (lp_tokens, pool_share_bps, unrealized_pnl)
+    }
+
     // TODO: Implement remaining AMM functions
     // - add_liquidity()
-    // - get_lp_position() / claim_lp_fees()
+    // - claim_lp_fees()
     // - calculate_spot_price()
     // - get_trade_history()
 }

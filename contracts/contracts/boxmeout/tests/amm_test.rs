@@ -1191,3 +1191,111 @@ fn test_get_current_prices_precision() {
     assert!(yes_price < 5500);
     assert!(no_price > 4500);
 }
+
+// ============================================================================
+// TESTS FOR get_lp_position() - LP token balance and pool share query
+// ============================================================================
+
+#[test]
+fn test_get_lp_position_no_pool() {
+    let env = create_test_env();
+    let amm_id = register_amm(&env);
+    let client = AMMContractClient::new(&env, &amm_id);
+
+    let admin = Address::generate(&env);
+    let factory = Address::generate(&env);
+    let usdc_token = Address::generate(&env);
+    let max_liquidity_cap = 100_000_000_000u128;
+    client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
+
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let lp_provider = Address::generate(&env);
+
+    let (lp_tokens, pool_share_bps, unrealized_pnl) =
+        client.get_lp_position(&market_id, &lp_provider);
+
+    assert_eq!(lp_tokens, 0);
+    assert_eq!(pool_share_bps, 0);
+    assert_eq!(unrealized_pnl, 0);
+}
+
+#[test]
+fn test_get_lp_position_single_provider() {
+    let env = create_test_env();
+    let amm_id = register_amm(&env);
+    let client = AMMContractClient::new(&env, &amm_id);
+
+    let admin = Address::generate(&env);
+    let factory = Address::generate(&env);
+    let usdc_token = Address::generate(&env);
+    let max_liquidity_cap = 100_000_000_000u128;
+    client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
+
+    let creator = Address::generate(&env);
+    let market_id = BytesN::from_array(&env, &[2u8; 32]);
+    let initial_liquidity = 10_000_000_000u128;
+
+    client.create_pool(&creator, &market_id, &initial_liquidity);
+
+    let (lp_tokens, pool_share_bps, unrealized_pnl) =
+        client.get_lp_position(&market_id, &creator);
+
+    assert_eq!(lp_tokens, initial_liquidity);
+    assert_eq!(pool_share_bps, 10000); // 100% of pool
+    assert_eq!(unrealized_pnl, 0); // No trading yet
+}
+
+#[test]
+fn test_get_lp_position_with_trading_profit() {
+    let env = create_test_env();
+    let amm_id = register_amm(&env);
+    let client = AMMContractClient::new(&env, &amm_id);
+
+    let admin = Address::generate(&env);
+    let factory = Address::generate(&env);
+    let usdc_token = Address::generate(&env);
+    let max_liquidity_cap = 100_000_000_000u128;
+    client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
+
+    let creator = Address::generate(&env);
+    let market_id = BytesN::from_array(&env, &[3u8; 32]);
+    let initial_liquidity = 10_000_000_000u128;
+
+    client.create_pool(&creator, &market_id, &initial_liquidity);
+
+    // Execute trades to generate fees
+    let trader = Address::generate(&env);
+    client.buy_shares(&trader, &market_id, &1u32, &1_000_000_000u128, &500_000_000u128);
+
+    let (lp_tokens, pool_share_bps, unrealized_pnl) =
+        client.get_lp_position(&market_id, &creator);
+
+    assert_eq!(lp_tokens, initial_liquidity);
+    assert_eq!(pool_share_bps, 10000);
+    assert!(unrealized_pnl > 0); // Should have profit from fees
+}
+
+#[test]
+fn test_get_lp_position_no_tokens() {
+    let env = create_test_env();
+    let amm_id = register_amm(&env);
+    let client = AMMContractClient::new(&env, &amm_id);
+
+    let admin = Address::generate(&env);
+    let factory = Address::generate(&env);
+    let usdc_token = Address::generate(&env);
+    let max_liquidity_cap = 100_000_000_000u128;
+    client.initialize(&admin, &factory, &usdc_token, &max_liquidity_cap);
+
+    let creator = Address::generate(&env);
+    let market_id = BytesN::from_array(&env, &[4u8; 32]);
+    client.create_pool(&creator, &market_id, &10_000_000_000u128);
+
+    let non_lp = Address::generate(&env);
+    let (lp_tokens, pool_share_bps, unrealized_pnl) =
+        client.get_lp_position(&market_id, &non_lp);
+
+    assert_eq!(lp_tokens, 0);
+    assert_eq!(pool_share_bps, 0);
+    assert_eq!(unrealized_pnl, 0);
+}
