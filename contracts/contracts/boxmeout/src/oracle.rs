@@ -1,7 +1,9 @@
 // contract/src/oracle.rs - Oracle & Market Resolution Contract Implementation
 // Handles multi-source oracle consensus for market resolution
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, Address, BytesN, Env, IntoVal, Symbol, Vec,
+};
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -403,9 +405,11 @@ impl OracleManager {
         env.storage().persistent().set(&result_key, &final_outcome);
 
         // 5. Cross-contract call to Market.resolve_market()
-        use crate::market::PredictionMarketClient;
-        let market_client = PredictionMarketClient::new(&env, &market_address);
-        market_client.resolve_market(&market_id);
+        env.invoke_contract::<()>(
+            &market_address,
+            &(Symbol::new(&env, "resolve_market")),
+            (market_id.clone(),).into_val(&env),
+        );
 
         // 6. Emit ResolutionFinalized event
         env.events().publish(
