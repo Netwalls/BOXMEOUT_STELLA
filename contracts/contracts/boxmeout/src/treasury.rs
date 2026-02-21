@@ -215,7 +215,7 @@ impl Treasury {
     }
 
     /// Distribute rewards to leaderboard winners
-    pub fn distribute_leaderboard_rewards(env: Env) {
+    pub fn distribute_leaderboard_rewards(_env: Env) {
         todo!("Leaderboard distribution logic not yet implemented")
     }
 

@@ -2,6 +2,7 @@
 // Soroban WASM smart contracts for prediction market platform on Stellar
 
 #![no_std]
+#![allow(deprecated)] // TODO: migrate env.events().publish() to #[contractevent]
 
 // ============================================================================
 // CONTRACT MODULES - Conditionally compiled based on features
