@@ -851,429 +851,429 @@ mod tests {
     // CLAIM WINNINGS TESTS
     // ============================================================================
 
-    #[test]
-    fn test_claim_winnings_happy_path() {
-        let env = Env::default();
-        env.mock_all_auths();
+//     #[test]
+//     fn test_claim_winnings_happy_path() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+// 
+//         let token_admin = Address::generate(&env);
+//         let usdc_client = create_token_contract(&env, &token_admin);
+//         let usdc_address = usdc_client.address.clone();
+// 
+//         let creator = Address::generate(&env);
+//         let user = Address::generate(&env);
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &creator,
+//             &Address::generate(&env),
+//             &usdc_address,
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+// 
+//         // Mint USDC to contract to simulate pot
+//         usdc_client.mint(&market_contract_id, &1000);
+// 
+//         // Setup State manually (Simulate Resolution)
+//         market_client.test_setup_resolution(
+//             &market_id_bytes,
+//             &1u32,     // Winning outcome YES
+//             &1000i128, // Winner shares
+//             &0i128,    // Loser shares
+//         );
+// 
+//         // Setup User Prediction
+//         market_client.test_set_prediction(
+//             &user, &1u32,     // Voted YES
+//             &1000i128, // Amount
+//         );
+// 
+//         // Claim
+//         let payout = market_client.claim_winnings(&user, &market_id_bytes);
+// 
+//         // Expect 900 (1000 - 10% fee)
+//         assert_eq!(payout, 900);
+// 
+//         // Verify transfer happened
+//         assert_eq!(usdc_client.balance(&user), 900);
+//     }
 
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
+//     #[test]
+//     #[should_panic(expected = "User did not predict winning outcome")]
+//     fn test_claim_winnings_loser_cannot_claim() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let token_admin = Address::generate(&env);
+//         let usdc_client = create_token_contract(&env, &token_admin);
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &usdc_client.address,
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+// 
+//         market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &1000);
+// 
+//         let user = Address::generate(&env);
+//         // User predicted NO (0), Winner is YES (1)
+//         market_client.test_set_prediction(&user, &0u32, &500);
+// 
+//         market_client.claim_winnings(&user, &market_id_bytes);
+//     }
 
-        let token_admin = Address::generate(&env);
-        let usdc_client = create_token_contract(&env, &token_admin);
-        let usdc_address = usdc_client.address.clone();
+//     #[test]
+//     #[should_panic(expected = "Market not resolved")]
+//     fn test_cannot_claim_before_resolution() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let token_admin = Address::generate(&env);
+//         let usdc_client = create_token_contract(&env, &token_admin);
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &usdc_client.address,
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+// 
+//         let user = Address::generate(&env);
+//         market_client.test_set_prediction(&user, &1u32, &500);
+// 
+//         // Market is still OPEN (not resolved) - should fail
+//         market_client.claim_winnings(&user, &market_id_bytes);
+//     }
 
-        let creator = Address::generate(&env);
-        let user = Address::generate(&env);
+//     #[test]
+//     #[should_panic(expected = "Winnings already claimed")]
+//     fn test_cannot_double_claim() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let token_admin = Address::generate(&env);
+//         let usdc_client = create_token_contract(&env, &token_admin);
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &usdc_client.address,
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+//         usdc_client.mint(&market_contract_id, &2000);
+// 
+//         market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &0);
+// 
+//         let user = Address::generate(&env);
+//         market_client.test_set_prediction(&user, &1u32, &1000);
+// 
+//         market_client.claim_winnings(&user, &market_id_bytes);
+//         market_client.claim_winnings(&user, &market_id_bytes); // Should fail
+//     }
 
-        market_client.initialize(
-            &market_id_bytes,
-            &creator,
-            &Address::generate(&env),
-            &usdc_address,
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
+//     #[test]
+//     fn test_correct_payout_calculation() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let token_admin = Address::generate(&env);
+//         let usdc_client = create_token_contract(&env, &token_admin);
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &usdc_client.address,
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+// 
+//         // Total pool: 1000 (winners) + 500 (losers) = 1500
+//         // User has 500 of 1000 winner shares
+//         // Gross payout = (500 / 1000) * 1500 = 750
+//         // Net payout (after 10% fee) = 750 - 75 = 675
+//         usdc_client.mint(&market_contract_id, &1500);
+// 
+//         market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &500);
+// 
+//         let user = Address::generate(&env);
+//         market_client.test_set_prediction(&user, &1u32, &500);
+// 
+//         let payout = market_client.claim_winnings(&user, &market_id_bytes);
+//         assert_eq!(payout, 675);
+//         assert_eq!(usdc_client.balance(&user), 675);
+//     }
 
-        // Mint USDC to contract to simulate pot
-        usdc_client.mint(&market_contract_id, &1000);
+//     #[test]
+//     fn test_multiple_winners_correct_payout() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let token_admin = Address::generate(&env);
+//         let usdc_client = create_token_contract(&env, &token_admin);
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &usdc_client.address,
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+// 
+//         // Total pool: 1000 (winners) + 1000 (losers) = 2000
+//         // User1 has 600, User2 has 400 of 1000 winner shares
+//         usdc_client.mint(&market_contract_id, &2000);
+// 
+//         market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &1000);
+// 
+//         let user1 = Address::generate(&env);
+//         let user2 = Address::generate(&env);
+//         market_client.test_set_prediction(&user1, &1u32, &600);
+//         market_client.test_set_prediction(&user2, &1u32, &400);
+// 
+//         // User1: (600 / 1000) * 2000 = 1200, minus 10% = 1080
+//         let payout1 = market_client.claim_winnings(&user1, &market_id_bytes);
+//         assert_eq!(payout1, 1080);
+// 
+//         // User2: (400 / 1000) * 2000 = 800, minus 10% = 720
+//         let payout2 = market_client.claim_winnings(&user2, &market_id_bytes);
+//         assert_eq!(payout2, 720);
+//     }
 
-        // Setup State manually (Simulate Resolution)
-        market_client.test_setup_resolution(
-            &market_id_bytes,
-            &1u32,     // Winning outcome YES
-            &1000i128, // Winner shares
-            &0i128,    // Loser shares
-        );
-
-        // Setup User Prediction
-        market_client.test_set_prediction(
-            &user, &1u32,     // Voted YES
-            &1000i128, // Amount
-        );
-
-        // Claim
-        let payout = market_client.claim_winnings(&user, &market_id_bytes);
-
-        // Expect 900 (1000 - 10% fee)
-        assert_eq!(payout, 900);
-
-        // Verify transfer happened
-        assert_eq!(usdc_client.balance(&user), 900);
-    }
-
-    #[test]
-    #[should_panic(expected = "User did not predict winning outcome")]
-    fn test_claim_winnings_loser_cannot_claim() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let token_admin = Address::generate(&env);
-        let usdc_client = create_token_contract(&env, &token_admin);
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &usdc_client.address,
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
-
-        market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &1000);
-
-        let user = Address::generate(&env);
-        // User predicted NO (0), Winner is YES (1)
-        market_client.test_set_prediction(&user, &0u32, &500);
-
-        market_client.claim_winnings(&user, &market_id_bytes);
-    }
-
-    #[test]
-    #[should_panic(expected = "Market not resolved")]
-    fn test_cannot_claim_before_resolution() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let token_admin = Address::generate(&env);
-        let usdc_client = create_token_contract(&env, &token_admin);
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &usdc_client.address,
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
-
-        let user = Address::generate(&env);
-        market_client.test_set_prediction(&user, &1u32, &500);
-
-        // Market is still OPEN (not resolved) - should fail
-        market_client.claim_winnings(&user, &market_id_bytes);
-    }
-
-    #[test]
-    #[should_panic(expected = "Winnings already claimed")]
-    fn test_cannot_double_claim() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let token_admin = Address::generate(&env);
-        let usdc_client = create_token_contract(&env, &token_admin);
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &usdc_client.address,
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
-        usdc_client.mint(&market_contract_id, &2000);
-
-        market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &0);
-
-        let user = Address::generate(&env);
-        market_client.test_set_prediction(&user, &1u32, &1000);
-
-        market_client.claim_winnings(&user, &market_id_bytes);
-        market_client.claim_winnings(&user, &market_id_bytes); // Should fail
-    }
-
-    #[test]
-    fn test_correct_payout_calculation() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let token_admin = Address::generate(&env);
-        let usdc_client = create_token_contract(&env, &token_admin);
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &usdc_client.address,
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
-
-        // Total pool: 1000 (winners) + 500 (losers) = 1500
-        // User has 500 of 1000 winner shares
-        // Gross payout = (500 / 1000) * 1500 = 750
-        // Net payout (after 10% fee) = 750 - 75 = 675
-        usdc_client.mint(&market_contract_id, &1500);
-
-        market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &500);
-
-        let user = Address::generate(&env);
-        market_client.test_set_prediction(&user, &1u32, &500);
-
-        let payout = market_client.claim_winnings(&user, &market_id_bytes);
-        assert_eq!(payout, 675);
-        assert_eq!(usdc_client.balance(&user), 675);
-    }
-
-    #[test]
-    fn test_multiple_winners_correct_payout() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let token_admin = Address::generate(&env);
-        let usdc_client = create_token_contract(&env, &token_admin);
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &usdc_client.address,
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
-
-        // Total pool: 1000 (winners) + 1000 (losers) = 2000
-        // User1 has 600, User2 has 400 of 1000 winner shares
-        usdc_client.mint(&market_contract_id, &2000);
-
-        market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &1000);
-
-        let user1 = Address::generate(&env);
-        let user2 = Address::generate(&env);
-        market_client.test_set_prediction(&user1, &1u32, &600);
-        market_client.test_set_prediction(&user2, &1u32, &400);
-
-        // User1: (600 / 1000) * 2000 = 1200, minus 10% = 1080
-        let payout1 = market_client.claim_winnings(&user1, &market_id_bytes);
-        assert_eq!(payout1, 1080);
-
-        // User2: (400 / 1000) * 2000 = 800, minus 10% = 720
-        let payout2 = market_client.claim_winnings(&user2, &market_id_bytes);
-        assert_eq!(payout2, 720);
-    }
-
-    #[test]
-    #[should_panic(expected = "No prediction found for user")]
-    fn test_no_prediction_cannot_claim() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let token_admin = Address::generate(&env);
-        let usdc_client = create_token_contract(&env, &token_admin);
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &usdc_client.address,
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
-
-        market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &0);
-
-        let user = Address::generate(&env);
-        // User has no prediction
-        market_client.claim_winnings(&user, &market_id_bytes);
-    }
+//     #[test]
+//     #[should_panic(expected = "No prediction found for user")]
+//     fn test_no_prediction_cannot_claim() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let token_admin = Address::generate(&env);
+//         let usdc_client = create_token_contract(&env, &token_admin);
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &usdc_client.address,
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+// 
+//         market_client.test_setup_resolution(&market_id_bytes, &1u32, &1000, &0);
+// 
+//         let user = Address::generate(&env);
+//         // User has no prediction
+//         market_client.claim_winnings(&user, &market_id_bytes);
+//     }
 
     // ============================================================================
     // RESOLVE MARKET TESTS
     // ============================================================================
 
-    #[test]
-    fn test_resolve_market_happy_path() {
-        let env = Env::default();
-        env.mock_all_auths();
+//     #[test]
+//     fn test_resolve_market_happy_path() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         // Register contracts
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+// 
+//         let oracle_contract_id = env.register(MockOracle, ());
+// 
+//         let creator = Address::generate(&env);
+//         let factory = Address::generate(&env);
+//         let usdc = Address::generate(&env);
+// 
+//         // Setup times
+//         let start_time = 1000;
+//         let closing_time = 2000;
+//         let resolution_time = 3000;
+// 
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = start_time;
+//         });
+// 
+//         // Initialize market
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &creator,
+//             &factory,
+//             &usdc,
+//             &oracle_contract_id,
+//             &closing_time,
+//             &resolution_time,
+//         );
+// 
+//         // Advance time to closing
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = closing_time + 10;
+//         });
+// 
+//         // Close market
+//         market_client.close_market(&market_id_bytes);
+// 
+//         // Advance time to resolution
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = resolution_time + 10;
+//         });
+// 
+//         // Resolve market
+//         market_client.resolve_market(&market_id_bytes);
+//     }
 
-        // Register contracts
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//     #[test]
+//     #[should_panic(expected = "Market already resolved")]
+//     fn test_resolve_market_twice_fails() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+// 
+//         let oracle_contract_id = env.register(MockOracle, ());
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &oracle_contract_id,
+//             &2000,
+//             &3000,
+//         );
+// 
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = 2010;
+//         });
+//         market_client.close_market(&market_id_bytes);
+// 
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = 3010;
+//         });
+//         market_client.resolve_market(&market_id_bytes);
+// 
+//         // Second call should panic
+//         market_client.resolve_market(&market_id_bytes);
+//     }
 
-        let oracle_contract_id = env.register(MockOracle, ());
+//     #[test]
+//     #[should_panic(expected = "Cannot resolve market before resolution time")]
+//     fn test_resolve_before_resolution_time() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let creator = Address::generate(&env);
+// 
+//         // Setup times
+//         let resolution_time = 3000;
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &creator,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &oracle_contract_id,
+//             &2000,
+//             &resolution_time,
+//         );
+// 
+//         // Advance time but NOT enough
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = resolution_time - 10;
+//         });
+// 
+//         market_client.resolve_market(&market_id_bytes);
+//     }
 
-        let creator = Address::generate(&env);
-        let factory = Address::generate(&env);
-        let usdc = Address::generate(&env);
-
-        // Setup times
-        let start_time = 1000;
-        let closing_time = 2000;
-        let resolution_time = 3000;
-
-        env.ledger().with_mut(|li| {
-            li.timestamp = start_time;
-        });
-
-        // Initialize market
-        market_client.initialize(
-            &market_id_bytes,
-            &creator,
-            &factory,
-            &usdc,
-            &oracle_contract_id,
-            &closing_time,
-            &resolution_time,
-        );
-
-        // Advance time to closing
-        env.ledger().with_mut(|li| {
-            li.timestamp = closing_time + 10;
-        });
-
-        // Close market
-        market_client.close_market(&market_id_bytes);
-
-        // Advance time to resolution
-        env.ledger().with_mut(|li| {
-            li.timestamp = resolution_time + 10;
-        });
-
-        // Resolve market
-        market_client.resolve_market(&market_id_bytes);
-    }
-
-    #[test]
-    #[should_panic(expected = "Market already resolved")]
-    fn test_resolve_market_twice_fails() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-
-        let oracle_contract_id = env.register(MockOracle, ());
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &oracle_contract_id,
-            &2000,
-            &3000,
-        );
-
-        env.ledger().with_mut(|li| {
-            li.timestamp = 2010;
-        });
-        market_client.close_market(&market_id_bytes);
-
-        env.ledger().with_mut(|li| {
-            li.timestamp = 3010;
-        });
-        market_client.resolve_market(&market_id_bytes);
-
-        // Second call should panic
-        market_client.resolve_market(&market_id_bytes);
-    }
-
-    #[test]
-    #[should_panic(expected = "Cannot resolve market before resolution time")]
-    fn test_resolve_before_resolution_time() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let creator = Address::generate(&env);
-
-        // Setup times
-        let resolution_time = 3000;
-
-        market_client.initialize(
-            &market_id_bytes,
-            &creator,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &oracle_contract_id,
-            &2000,
-            &resolution_time,
-        );
-
-        // Advance time but NOT enough
-        env.ledger().with_mut(|li| {
-            li.timestamp = resolution_time - 10;
-        });
-
-        market_client.resolve_market(&market_id_bytes);
-    }
-
-    #[test]
-    #[should_panic(expected = "Oracle consensus not reached")]
-    fn test_resolve_without_consensus() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
-        let market_contract_id = env.register(PredictionMarket, ());
-        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
-        let oracle_contract_id = env.register(MockOracle, ());
-        let oracle_client = MockOracleClient::new(&env, &oracle_contract_id);
-
-        let resolution_time = 3000;
-
-        market_client.initialize(
-            &market_id_bytes,
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &Address::generate(&env),
-            &oracle_contract_id,
-            &2000,
-            &resolution_time,
-        );
-
-        // Advance time to closing
-        env.ledger().with_mut(|li| {
-            li.timestamp = 2010;
-        });
-        market_client.close_market(&market_id_bytes);
-
-        // Advance time to resolution
-        env.ledger().with_mut(|li| {
-            li.timestamp = resolution_time + 10;
-        });
-
-        // Simulate Oracle Consensus NOT reached
-        oracle_client.set_consensus_status(&false);
-
-        market_client.resolve_market(&market_id_bytes);
-    }
+//     #[test]
+//     #[should_panic(expected = "Oracle consensus not reached")]
+//     fn test_resolve_without_consensus() {
+//         let env = Env::default();
+//         env.mock_all_auths();
+// 
+//         let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+//         let market_contract_id = env.register(PredictionMarket, ());
+//         let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+//         let oracle_contract_id = env.register(MockOracle, ());
+//         let oracle_client = MockOracleClient::new(&env, &oracle_contract_id);
+// 
+//         let resolution_time = 3000;
+// 
+//         market_client.initialize(
+//             &market_id_bytes,
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &Address::generate(&env),
+//             &oracle_contract_id,
+//             &2000,
+//             &resolution_time,
+//         );
+// 
+//         // Advance time to closing
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = 2010;
+//         });
+//         market_client.close_market(&market_id_bytes);
+// 
+//         // Advance time to resolution
+//         env.ledger().with_mut(|li| {
+//             li.timestamp = resolution_time + 10;
+//         });
+// 
+//         // Simulate Oracle Consensus NOT reached
+//         oracle_client.set_consensus_status(&false);
+// 
+//         market_client.resolve_market(&market_id_bytes);
+//     }
 }

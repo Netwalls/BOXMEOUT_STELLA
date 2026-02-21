@@ -1,8 +1,6 @@
-#![cfg(any())]
 
-use super::*;
-use crate::factory::{MarketFactory, MarketFactoryClient};
-use crate::treasury::{Treasury, TreasuryClient};
+use boxmeout::{MarketFactory, MarketFactoryClient};
+use boxmeout::{Treasury, TreasuryClient};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{token, Address, BytesN, Env, Symbol};
 

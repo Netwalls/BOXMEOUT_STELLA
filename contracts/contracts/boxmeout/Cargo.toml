@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 # Features: Use these to build different contracts
 # cargo build --target wasm32-unknown-unknown --release --features market

@@ -1,4 +1,3 @@
-#![cfg(any())]
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -12,7 +11,7 @@ fn create_test_env() -> Env {
 }
 
 fn register_oracle(env: &Env) -> Address {
-    env.register_contract(None, OracleManager)
+    env.register(OracleManager, ())
 }
 
 #[test]
