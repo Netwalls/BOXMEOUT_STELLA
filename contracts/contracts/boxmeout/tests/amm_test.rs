@@ -6,7 +6,7 @@ use soroban_sdk::{
     Address, BytesN, Env, Symbol,
 };
 
-use boxmeout::{AMM, AMMClient};
+use boxmeout::{AMMClient, AMM};
 
 fn create_test_env() -> Env {
     let env = Env::default();
@@ -516,14 +516,15 @@ fn test_remove_liquidity() {
 
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     let token_client = token::StellarAssetClient::new(&env, &usdc_token);
-token_client.mint(&creator, &(initial_liquidity as i128));
+    token_client.mint(&creator, &(initial_liquidity as i128));
     client.create_pool(&creator, &market_id, &initial_liquidity);
 
     // Add liquidity from second LP
     let lp2 = Address::generate(&env);
     let additional_liquidity = 10_000_000_000u128;
     token_client.mint(&lp2, &(additional_liquidity as i128));
-    let lp_tokens = 0; return; // client.add_liquidity(&lp2, &market_id, &additional_liquidity);
+    let lp_tokens = 0;
+    return; // client.add_liquidity(&lp2, &market_id, &additional_liquidity);
 
     // Remove half of lp2's liquidity
     let tokens_to_remove = lp_tokens / 2;
@@ -556,7 +557,7 @@ fn test_remove_liquidity_more_than_owned() {
 
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     let token_client = token::StellarAssetClient::new(&env, &usdc_token);
-token_client.mint(&creator, &(initial_liquidity as i128));
+    token_client.mint(&creator, &(initial_liquidity as i128));
     client.create_pool(&creator, &market_id, &initial_liquidity);
 
     // Try to remove more LP tokens than owned
@@ -584,7 +585,7 @@ fn test_remove_liquidity_proportional_calculation() {
 
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     let token_client = token::StellarAssetClient::new(&env, &usdc_token);
-token_client.mint(&creator, &(initial_liquidity as i128));
+    token_client.mint(&creator, &(initial_liquidity as i128));
     client.create_pool(&creator, &market_id, &initial_liquidity);
 
     // Remove all creator's liquidity (except can't drain completely)
@@ -668,7 +669,7 @@ fn test_remove_liquidity_zero_amount() {
 
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     let token_client = token::StellarAssetClient::new(&env, &usdc_token);
-token_client.mint(&creator, &(initial_liquidity as i128));
+    token_client.mint(&creator, &(initial_liquidity as i128));
     client.create_pool(&creator, &market_id, &initial_liquidity);
 
     // Try to remove zero LP tokens

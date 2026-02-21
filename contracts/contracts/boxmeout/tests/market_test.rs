@@ -728,14 +728,12 @@ fn test_get_market_liquidity_balanced_pool() {
 
     // Store reserves in market storage (simulating AMM sync)
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -765,14 +763,12 @@ fn test_get_market_liquidity_yes_favored() {
     let no_reserve = 600_000_000u128; // 600 USDC worth of NO
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -805,14 +801,12 @@ fn test_get_market_liquidity_no_favored() {
     let no_reserve = 300_000_000u128; // 300 USDC worth of NO
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -845,14 +839,12 @@ fn test_get_market_liquidity_extreme_yes() {
     let no_reserve = 950_000_000u128; // 950 USDC worth of NO
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -884,14 +876,12 @@ fn test_get_market_liquidity_extreme_no() {
     let no_reserve = 50_000_000u128; // 50 USDC worth of NO
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -923,14 +913,12 @@ fn test_get_market_liquidity_only_yes_reserve() {
     let no_reserve = 0u128;
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -959,14 +947,12 @@ fn test_get_market_liquidity_only_no_reserve() {
     let no_reserve = 1_000_000_000u128;
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -995,14 +981,12 @@ fn test_get_market_liquidity_large_numbers() {
     let no_reserve = 10_000_000_000_000u128; // 10 million USDC
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -1031,14 +1015,12 @@ fn test_get_market_liquidity_rounding_edge_case() {
     let no_reserve = 666_666_667u128; // 666.666... USDC
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -1071,14 +1053,12 @@ fn test_get_market_liquidity_k_invariant_property() {
     let no_reserve = 200_000_000u128;
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query liquidity
@@ -1103,14 +1083,12 @@ fn test_get_market_liquidity_multiple_queries_consistent() {
     let no_reserve = 500_000_000u128;
 
     env.as_contract(&client.address, || {
-        env.storage().persistent().set(
-            &Symbol::new(&env, "yes_pool"),
-            &(yes_reserve as i128),
-        );
-        env.storage().persistent().set(
-            &Symbol::new(&env, "no_pool"),
-            &(no_reserve as i128),
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "yes_pool"), &(yes_reserve as i128));
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "no_pool"), &(no_reserve as i128));
     });
 
     // Query multiple times
@@ -1127,22 +1105,25 @@ fn test_get_market_liquidity_multiple_queries_consistent() {
 fn test_dispute_market_happy_path() {
     let env = create_test_env();
     let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
-    
+
     let user = Address::generate(&env);
     token_client.mint(&user, &200_000_000); // Give user enough for dispute
-    
+
     // Resolve market
     token_client.mint(&market_contract, &1000);
     client.test_setup_resolution(&market_id, &1u32, &1000, &0);
     client.test_set_prediction(&user, &1u32, &1000); // User participated
-    
+
     let reason = soroban_sdk::symbol_short!("wrong");
     let initial_user_balance = token_client.balance(&user);
-    
+
     client.dispute_market(&user, &market_id, &reason, &None, &100_000_000i128);
-    
+
     // Verify stake was deducted
-    assert_eq!(token_client.balance(&user), initial_user_balance - 100_000_000);
+    assert_eq!(
+        token_client.balance(&user),
+        initial_user_balance - 100_000_000
+    );
 }
 
 #[test]
@@ -1154,7 +1135,7 @@ fn test_dispute_market_insufficient_stake() {
     token_client.mint(&user, &200_000_000);
     client.test_setup_resolution(&market_id, &1u32, &1000, &0);
     client.test_set_prediction(&user, &1u32, &1000);
-    
+
     let reason = soroban_sdk::symbol_short!("wrong");
     client.dispute_market(&user, &market_id, &reason, &None, &99_999_999i128);
 }
@@ -1167,7 +1148,7 @@ fn test_dispute_market_not_resolved() {
     let user = Address::generate(&env);
     token_client.mint(&user, &200_000_000);
     client.test_set_prediction(&user, &1u32, &1000);
-    
+
     // Market is OPEN, not RESOLVED
     let reason = soroban_sdk::symbol_short!("wrong");
     client.dispute_market(&user, &market_id, &reason, &None, &100_000_000i128);

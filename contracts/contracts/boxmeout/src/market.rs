@@ -555,7 +555,7 @@ impl PredictionMarket {
             .expect("Resolution time not found");
 
         let current_time = env.ledger().timestamp();
-        
+
         let dispute_period = 604800u64; // 7 days in seconds
         if current_time >= resolution_time + dispute_period {
             panic!("Dispute window closed");
@@ -594,8 +594,14 @@ impl PredictionMarket {
         };
 
         // Store dispute record
-        let dispute_key = (Symbol::new(&env, DISPUTE_PREFIX), market_id.clone(), user.clone());
-        env.storage().persistent().set(&dispute_key, &dispute_record);
+        let dispute_key = (
+            Symbol::new(&env, DISPUTE_PREFIX),
+            market_id.clone(),
+            user.clone(),
+        );
+        env.storage()
+            .persistent()
+            .set(&dispute_key, &dispute_record);
 
         // Change market state to DISPUTED
         env.storage()
@@ -805,7 +811,11 @@ impl PredictionMarket {
 
         // Check revealed prediction
         let pred_key = (Symbol::new(&env, PREDICTION_PREFIX), user);
-        if let Some(pred) = env.storage().persistent().get::<_, UserPrediction>(&pred_key) {
+        if let Some(pred) = env
+            .storage()
+            .persistent()
+            .get::<_, UserPrediction>(&pred_key)
+        {
             return Some(UserPredictionResult {
                 commitment_hash: BytesN::from_array(&env, &[0u8; 32]),
                 amount: pred.amount,
@@ -859,7 +869,7 @@ impl PredictionMarket {
         // Query pool state from AMM
         // AMM's get_pool_state returns: (yes_reserve, no_reserve, total_liquidity, yes_odds, no_odds)
         let pool_state = Self::query_amm_pool_state(env.clone(), factory, market_id.clone());
-        
+
         let yes_reserve = pool_state.0;
         let no_reserve = pool_state.1;
         let yes_odds = pool_state.3;
@@ -883,7 +893,7 @@ impl PredictionMarket {
         // In production, this would be a cross-contract call to AMM:
         // let amm_client = AMMClient::new(&env, &amm_address);
         // amm_client.get_pool_state(&market_id)
-        
+
         // For now, read from local storage (assuming AMM data is synced)
         // Market stores pool values as i128; convert to u128 for return type
         let yes_reserve_i: i128 = env
@@ -912,7 +922,7 @@ impl PredictionMarket {
         } else {
             let yes_odds = ((no_reserve * 10000) / total_liquidity) as u32;
             let no_odds = ((yes_reserve * 10000) / total_liquidity) as u32;
-            
+
             // Ensure odds sum to 10000
             let total_odds = yes_odds + no_odds;
             if total_odds != 10000 {

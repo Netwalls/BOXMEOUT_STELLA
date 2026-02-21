@@ -1,8 +1,12 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, token::{self, StellarAssetClient}};
+use soroban_sdk::{
+    testutils::Address as _,
+    token::{self, StellarAssetClient},
+    Address, BytesN, Env,
+};
 
-use boxmeout::{AMM, AMMClient};
+use boxmeout::{AMMClient, AMM};
 
 fn create_test_env() -> Env {
     let env = Env::default();
@@ -24,7 +28,9 @@ fn test_get_current_prices_no_pool() {
     // Initialize AMM
     let admin = Address::generate(&env);
     let factory = Address::generate(&env);
-    let usdc_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     token_client.mint(&admin, &100_000_000_000i128);
     let max_liquidity_cap = 100_000_000_000u128;
@@ -48,7 +54,9 @@ fn test_get_current_prices_equal_reserves() {
     // Initialize AMM
     let admin = Address::generate(&env);
     let factory = Address::generate(&env);
-    let usdc_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     token_client.mint(&admin, &100_000_000_000i128);
     let max_liquidity_cap = 100_000_000_000u128;
@@ -80,7 +88,9 @@ fn test_get_current_prices_after_trade() {
     // Initialize AMM
     let admin = Address::generate(&env);
     let factory = Address::generate(&env);
-    let usdc_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     token_client.mint(&admin, &100_000_000_000i128);
     let max_liquidity_cap = 100_000_000_000u128;
@@ -125,7 +135,9 @@ fn test_get_current_prices_read_only() {
     // Initialize AMM
     let admin = Address::generate(&env);
     let factory = Address::generate(&env);
-    let usdc_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
     let token_client = StellarAssetClient::new(&env, &usdc_token);
     token_client.mint(&admin, &100_000_000_000i128);
     let max_liquidity_cap = 100_000_000_000u128;
