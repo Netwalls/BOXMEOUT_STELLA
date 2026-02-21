@@ -704,7 +704,6 @@ fn test_dispute_market_happy_path() {
     assert_eq!(token_client.balance(&user), 1000); // 2000 - 1000
     assert_eq!(token_client.balance(&market_contract), 1000); // escrow received 1000
 }
-
 #[test]
 #[should_panic(expected = "Market not resolved")]
 fn test_dispute_market_not_resolved() {
