@@ -230,6 +230,13 @@ impl AMM {
             panic!("amount must be greater than 0");
         }
 
+        // Get USDC token address FIRST (before any storage operations)
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("usdc token not set");
+
         // Check if pool exists
         let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
@@ -258,29 +265,30 @@ impl AMM {
         let amount_after_fee = amount - fee_amount;
 
         // CPMM calculation: shares_out = (amount_in * reserve_out) / (reserve_in + amount_in)
-        let (reserve_in, reserve_out, new_reserve_in, new_reserve_out) = if outcome == 1 {
-            // Buying YES shares: pay with USDC, get YES shares
-            // Input reserve is NO (what we're paying with conceptually in CPMM mapping)
-            // Output reserve is YES (what we're getting)
-            let shares_out = (amount_after_fee * yes_reserve) / (no_reserve + amount_after_fee);
-            (
-                no_reserve,
-                yes_reserve,
-                no_reserve + amount_after_fee,
-                yes_reserve - shares_out,
-            )
-        } else {
-            // Buying NO shares: pay with USDC, get NO shares
-            let shares_out = (amount_after_fee * no_reserve) / (yes_reserve + amount_after_fee);
-            (
-                yes_reserve,
-                no_reserve,
-                yes_reserve + amount_after_fee,
-                no_reserve - shares_out,
-            )
-        };
-
-        let shares_out = (amount_after_fee * reserve_out) / (reserve_in + amount_after_fee);
+        let (_reserve_in, _reserve_out, new_reserve_in, new_reserve_out, shares_out) =
+            if outcome == 1 {
+                // Buying YES shares: pay with USDC, get YES shares
+                // Input reserve is NO (what we're paying with conceptually in CPMM mapping)
+                // Output reserve is YES (what we're getting)
+                let shares_out = (amount_after_fee * yes_reserve) / (no_reserve + amount_after_fee);
+                (
+                    no_reserve,
+                    yes_reserve,
+                    no_reserve + amount_after_fee,
+                    yes_reserve - shares_out,
+                    shares_out,
+                )
+            } else {
+                // Buying NO shares: pay with USDC, get NO shares
+                let shares_out = (amount_after_fee * no_reserve) / (yes_reserve + amount_after_fee);
+                (
+                    yes_reserve,
+                    no_reserve,
+                    yes_reserve + amount_after_fee,
+                    no_reserve - shares_out,
+                    shares_out,
+                )
+            };
 
         // Slippage protection
         if shares_out < min_shares {
@@ -316,15 +324,11 @@ impl AMM {
                 .set(&no_key, &(no_reserve - shares_out));
         }
 
-        // Transfer USDC from buyer to contract
-        let usdc_token: Address = env
-            .storage()
-            .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
-            .expect("usdc token not set");
-
-        let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(&buyer, env.current_contract_address(), &(amount as i128));
+        // Transfer USDC from buyer to contract (usdc_token already retrieved above)
+        // Use TokenClient like market contract does
+        let token_client = token::TokenClient::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+        token_client.transfer(&buyer, &contract_address, &(amount as i128));
 
         // Update User Shares Balance
         let user_share_key = (
@@ -370,6 +374,13 @@ impl AMM {
         if shares == 0 {
             panic!("Shares execution amount must be positive");
         }
+
+        // Get USDC token address FIRST (before any other operations)
+        let usdc_address: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not configured");
 
         // Check if pool exists
         let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
@@ -462,18 +473,10 @@ impl AMM {
             .set(&user_share_key, &(user_shares - shares));
 
         // Transfer USDC to seller
-        let usdc_address: Address = env
-            .storage()
-            .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
-            .expect("USDC token not configured");
-        let usdc_client = soroban_sdk::token::Client::new(&env, &usdc_address);
-
-        usdc_client.transfer(
-            &env.current_contract_address(),
-            &seller,
-            &(payout_after_fee as i128),
-        );
+        // Use TokenClient like market contract does
+        let usdc_client = token::TokenClient::new(&env, &usdc_address);
+        let contract_address = env.current_contract_address();
+        usdc_client.transfer(&contract_address, &seller, &(payout_after_fee as i128));
 
         // Emit SellShares event
         SellSharesEvent {
