@@ -13,7 +13,8 @@ crate-type = ["cdylib", "rlib"]
 # cargo build --target wasm32-unknown-unknown --release --features factory
 # cargo build --target wasm32-unknown-unknown --release --features treasury
 [features]
-# No default - you MUST specify which contract to build
+default = ["testutils"]
+# Use --no-default-features when building individual contracts for deployment
 market = []
 oracle = []
 amm = []

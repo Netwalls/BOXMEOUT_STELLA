@@ -1,8 +1,8 @@
 #![cfg(test)]
 
-use super::*;
-use crate::factory::{MarketFactory, MarketFactoryClient};
-use crate::treasury::{Treasury, TreasuryClient};
+use boxmeout::*;
+use boxmeout::{MarketFactory, MarketFactoryClient};
+use boxmeout::{Treasury, TreasuryClient};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{token, Address, BytesN, Env, Symbol};
 
@@ -39,7 +39,7 @@ fn test_factory_to_treasury_fee_flow() {
     usdc_client.mint(&creator, &20_000_000); // 2 USDC
 
     // Create Market (charges 1 USDC fee)
-    let title = Symbol::new(&env, "Test Market");
+    let title = Symbol::new(&env, "TestMarket");
     let desc = Symbol::new(&env, "Description");
     let cat = Symbol::new(&env, "Category");
     let now = 1000;

@@ -197,11 +197,9 @@ impl AMM {
         }
 
         // Calculate trading fee (20 basis points = 0.2%)
-        let trading_fee_bps: u128 = env
-            .storage()
-            .persistent()
-            .get(&Symbol::new(&env, TRADING_FEE_KEY))
-            .unwrap_or(20);
+        let trading_fee: u32 = env.storage().persistent().get(&Symbol::new(&env, TRADING_FEE_KEY)).unwrap_or(20);
+        let trading_fee_bps: u128 = trading_fee as u128;
+
 
         let fee_amount = (amount * trading_fee_bps) / 10000;
         let amount_after_fee = amount - fee_amount;
@@ -356,11 +354,9 @@ impl AMM {
         };
 
         // Calculate trading fee (20 basis points = 0.2%)
-        let trading_fee_bps: u128 = env
-            .storage()
-            .persistent()
-            .get(&Symbol::new(&env, TRADING_FEE_KEY))
-            .unwrap_or(20);
+        let trading_fee: u32 = env.storage().persistent().get(&Symbol::new(&env, TRADING_FEE_KEY)).unwrap_or(20);
+        let trading_fee_bps: u128 = trading_fee as u128;
+
 
         let fee_amount = (payout * trading_fee_bps) / 10000;
         let payout_after_fee = payout - fee_amount;
@@ -677,11 +673,9 @@ impl AMM {
         }
 
         // Get trading fee (default 20 basis points = 0.2%)
-        let trading_fee_bps: u128 = env
-            .storage()
-            .persistent()
-            .get(&Symbol::new(&env, TRADING_FEE_KEY))
-            .unwrap_or(20);
+        let trading_fee: u32 = env.storage().persistent().get(&Symbol::new(&env, TRADING_FEE_KEY)).unwrap_or(20);
+        let trading_fee_bps: u128 = trading_fee as u128;
+
 
         let total_liquidity = yes_reserve + no_reserve;
 

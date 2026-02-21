@@ -356,7 +356,7 @@ mod tests {
         let treasury_id = env.register(Treasury, ());
         let treasury_client = TreasuryClient::new(env, &treasury_id);
 
-        env.mock_all_auths();
+        env.mock_all_auths_allowing_non_root_auth();
         treasury_client.initialize(&admin, &usdc_client.address, &factory);
 
         (treasury_client, usdc_client, admin, usdc_admin, factory)

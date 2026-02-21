@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger, LedgerInfo},
-    token, Address, BytesN, Env,
+    token, Address, BytesN, Env, Symbol,
 };
 
 use boxmeout::{Commitment, MarketError, PredictionMarketClient};
@@ -727,14 +727,16 @@ fn test_get_market_liquidity_balanced_pool() {
     let no_reserve = 1_000_000_000u128; // 1000 USDC worth of NO
 
     // Store reserves in market storage (simulating AMM sync)
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -762,14 +764,16 @@ fn test_get_market_liquidity_yes_favored() {
     let yes_reserve = 400_000_000u128; // 400 USDC worth of YES
     let no_reserve = 600_000_000u128; // 600 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -800,14 +804,16 @@ fn test_get_market_liquidity_no_favored() {
     let yes_reserve = 700_000_000u128; // 700 USDC worth of YES
     let no_reserve = 300_000_000u128; // 300 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -838,14 +844,16 @@ fn test_get_market_liquidity_extreme_yes() {
     let yes_reserve = 50_000_000u128; // 50 USDC worth of YES
     let no_reserve = 950_000_000u128; // 950 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -875,14 +883,16 @@ fn test_get_market_liquidity_extreme_no() {
     let yes_reserve = 950_000_000u128; // 950 USDC worth of YES
     let no_reserve = 50_000_000u128; // 50 USDC worth of NO
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -912,14 +922,16 @@ fn test_get_market_liquidity_only_yes_reserve() {
     let yes_reserve = 1_000_000_000u128;
     let no_reserve = 0u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -946,14 +958,16 @@ fn test_get_market_liquidity_only_no_reserve() {
     let yes_reserve = 0u128;
     let no_reserve = 1_000_000_000u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -980,14 +994,16 @@ fn test_get_market_liquidity_large_numbers() {
     let yes_reserve = 10_000_000_000_000u128; // 10 million USDC
     let no_reserve = 10_000_000_000_000u128; // 10 million USDC
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -1014,14 +1030,16 @@ fn test_get_market_liquidity_rounding_edge_case() {
     let yes_reserve = 333_333_333u128; // 333.333... USDC
     let no_reserve = 666_666_667u128; // 666.666... USDC
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, yes_odds, no_odds) =
@@ -1052,14 +1070,16 @@ fn test_get_market_liquidity_k_invariant_property() {
     let yes_reserve = 800_000_000u128;
     let no_reserve = 200_000_000u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query liquidity
     let (returned_yes, returned_no, k_constant, _yes_odds, _no_odds) =
@@ -1082,14 +1102,16 @@ fn test_get_market_liquidity_multiple_queries_consistent() {
     let yes_reserve = 500_000_000u128;
     let no_reserve = 500_000_000u128;
 
-    env.storage().persistent().set(
-        &Symbol::new(&env, "yes_pool"),
-        &yes_reserve,
-    );
-    env.storage().persistent().set(
-        &Symbol::new(&env, "no_pool"),
-        &no_reserve,
-    );
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Symbol::new(&env, "yes_pool"),
+            &(yes_reserve as i128),
+        );
+        env.storage().persistent().set(
+            &Symbol::new(&env, "no_pool"),
+            &(no_reserve as i128),
+        );
+    });
 
     // Query multiple times
     let result1 = client.get_market_liquidity(&market_id);
@@ -1100,5 +1122,53 @@ fn test_get_market_liquidity_multiple_queries_consistent() {
     assert_eq!(result1, result2);
     assert_eq!(result2, result3);
 }
-=======
->>>>>>> origin/main
+
+#[test]
+fn test_dispute_market_happy_path() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+    
+    let user = Address::generate(&env);
+    token_client.mint(&user, &200_000_000); // Give user enough for dispute
+    
+    // Resolve market
+    token_client.mint(&market_contract, &1000);
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user, &1u32, &1000); // User participated
+    
+    let reason = soroban_sdk::symbol_short!("wrong");
+    let initial_user_balance = token_client.balance(&user);
+    
+    client.dispute_market(&user, &market_id, &reason, &None, &100_000_000i128);
+    
+    // Verify stake was deducted
+    assert_eq!(token_client.balance(&user), initial_user_balance - 100_000_000);
+}
+
+#[test]
+#[should_panic(expected = "Insufficient dispute stake")]
+fn test_dispute_market_insufficient_stake() {
+    let env = create_test_env();
+    let (client, market_id, token_client, _market_contract) = setup_market_for_claims(&env);
+    let user = Address::generate(&env);
+    token_client.mint(&user, &200_000_000);
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user, &1u32, &1000);
+    
+    let reason = soroban_sdk::symbol_short!("wrong");
+    client.dispute_market(&user, &market_id, &reason, &None, &99_999_999i128);
+}
+
+#[test]
+#[should_panic(expected = "Market not resolved or already disputed")]
+fn test_dispute_market_not_resolved() {
+    let env = create_test_env();
+    let (client, market_id, token_client, _market_contract) = setup_market_for_claims(&env);
+    let user = Address::generate(&env);
+    token_client.mint(&user, &200_000_000);
+    client.test_set_prediction(&user, &1u32, &1000);
+    
+    // Market is OPEN, not RESOLVED
+    let reason = soroban_sdk::symbol_short!("wrong");
+    client.dispute_market(&user, &market_id, &reason, &None, &100_000_000i128);
+}
