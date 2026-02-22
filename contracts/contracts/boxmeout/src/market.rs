@@ -60,6 +60,14 @@ pub struct MarketDisputedEvent {
     pub timestamp: u64,
 }
 
+#[contractevent]
+pub struct DisputeResolvedEvent {
+    pub market_id: BytesN<32>,
+    pub admin: Address,
+    pub upheld: bool,
+    pub timestamp: u64,
+}
+
 // Storage keys
 const MARKET_ID_KEY: &str = "market_id";
 const CREATOR_KEY: &str = "creator";
@@ -821,6 +829,122 @@ impl PredictionMarket {
         .publish(&env);
     }
 
+    /// Resolve dispute - Admin upholds the dispute (market resolution was wrong)
+    ///
+    /// When upheld:
+    /// - Disputer gets their stake back
+    /// - Market returns to RESOLVED state with corrected outcome
+    /// - All previous claims are invalidated
+    pub fn uphold_dispute(
+        env: Env,
+        admin: Address,
+        market_id: BytesN<32>,
+        corrected_outcome: u32,
+    ) {
+        admin.require_auth();
+
+        // Verify market is in DISPUTED state
+        let state: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .expect("Market not initialized");
+
+        if state != STATE_DISPUTED {
+            panic!("Market not disputed");
+        }
+
+        // Get dispute record
+        let dispute_key = (Symbol::new(&env, "dispute"), market_id.clone());
+        let dispute: DisputeRecord = env
+            .storage()
+            .persistent()
+            .get(&dispute_key)
+            .expect("Dispute not found");
+
+        // Return stake to disputer
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("USDC token not found");
+
+        let token_client = token::TokenClient::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+        let dispute_stake_amount: i128 = 1000;
+
+        token_client.transfer(&contract_address, &dispute.user, &dispute_stake_amount);
+
+        // Update winning outcome to corrected value
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, WINNING_OUTCOME_KEY), &corrected_outcome);
+
+        // Return market to RESOLVED state
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_RESOLVED);
+
+        // Clear dispute record
+        env.storage().persistent().remove(&dispute_key);
+
+        // Emit DisputeResolved event
+        DisputeResolvedEvent {
+            market_id,
+            admin,
+            upheld: true,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+    }
+
+    /// Resolve dispute - Admin dismisses the dispute (market resolution was correct)
+    ///
+    /// When dismissed:
+    /// - Disputer loses their stake (slashed)
+    /// - Market returns to RESOLVED state with original outcome
+    pub fn dismiss_dispute(env: Env, admin: Address, market_id: BytesN<32>) {
+        admin.require_auth();
+
+        // Verify market is in DISPUTED state
+        let state: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .expect("Market not initialized");
+
+        if state != STATE_DISPUTED {
+            panic!("Market not disputed");
+        }
+
+        // Get dispute record (to verify it exists)
+        let dispute_key = (Symbol::new(&env, "dispute"), market_id.clone());
+        let _dispute: DisputeRecord = env
+            .storage()
+            .persistent()
+            .get(&dispute_key)
+            .expect("Dispute not found");
+
+        // Stake remains in contract (slashed) - no refund
+
+        // Return market to RESOLVED state
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_RESOLVED);
+
+        // Clear dispute record
+        env.storage().persistent().remove(&dispute_key);
+
+        // Emit DisputeResolved event
+        DisputeResolvedEvent {
+            market_id,
+            admin,
+            upheld: false,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+    }
+
     /// Claim winnings after market resolution
     ///
     /// This function allows users to claim their winnings after a market has been resolved.
@@ -846,12 +970,16 @@ impl PredictionMarket {
         // Require user authentication
         user.require_auth();
 
-        // 1. Validate market state is RESOLVED
+        // 1. Validate market state is RESOLVED (not DISPUTED)
         let state: u32 = env
             .storage()
             .persistent()
             .get(&Symbol::new(&env, MARKET_STATE_KEY))
             .expect("Market not initialized");
+
+        if state == STATE_DISPUTED {
+            panic!("Cannot claim during dispute");
+        }
 
         if state != STATE_RESOLVED {
             panic!("Market not resolved");
@@ -2206,7 +2334,7 @@ mod tests {
         // Need to re-commit first since commitment was removed, but prediction exists
         // So even if we try to commit again it'll fail due to duplicate reveal check
         let salt2 = BytesN::from_array(&env, &[5; 32]);
-        let commit_hash2 = compute_commit_hash(&env, &market_id, outcome, &salt2);
+        let _commit_hash2 = compute_commit_hash(&env, &market_id, outcome, &salt2);
 
         // Trying to commit again will fail with DuplicateCommit since commitment was removed
         // but prediction exists. Let's use test helper to set up the scenario:
@@ -2642,7 +2770,7 @@ mod tests {
 mod market_leaderboard_tests {
     use super::*;
     use soroban_sdk::{
-        testutils::{Address as _, Ledger},
+        testutils::Address as _,
         Address, BytesN, Env, Vec,
     };
 

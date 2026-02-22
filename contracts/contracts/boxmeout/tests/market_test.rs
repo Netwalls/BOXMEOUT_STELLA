@@ -130,6 +130,21 @@ fn setup_market_for_claims(
     (client, market_id, token_client, market_contract)
 }
 
+/// Helper to compute commit hash for tests
+fn compute_commit_hash(
+    env: &Env,
+    market_id: &BytesN<32>,
+    outcome: u32,
+    salt: &BytesN<32>,
+) -> BytesN<32> {
+    let mut preimage = soroban_sdk::Bytes::new(env);
+    preimage.extend_from_array(&market_id.to_array());
+    preimage.extend_from_array(&outcome.to_be_bytes());
+    preimage.extend_from_array(&salt.to_array());
+    let hash = env.crypto().sha256(&preimage);
+    BytesN::from_array(env, &hash.to_array())
+}
+
 // ============================================================================
 // INITIALIZATION TESTS
 // ============================================================================
@@ -744,6 +759,236 @@ fn test_dispute_market_window_closed() {
     });
 
     client.dispute_market(&user, &market_id, &dispute_reason, &None);
+}
+
+// ============================================================================
+// DISPUTE RESOLUTION TESTS
+// ============================================================================
+
+#[test]
+fn test_uphold_dispute_happy_path() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let dispute_reason = Symbol::new(&env, "wrong");
+
+    // Mint USDC to user for dispute stake
+    token_client.mint(&user, &2000);
+    token_client.approve(
+        &user,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Resolve market with outcome 1 (YES)
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    assert_eq!(client.get_market_state_value().unwrap(), 2); // RESOLVED
+
+    // Dispute the market
+    client.dispute_market(&user, &market_id, &dispute_reason, &None);
+    assert_eq!(client.get_market_state_value().unwrap(), 3); // DISPUTED
+    assert_eq!(token_client.balance(&user), 1000); // Stake deducted
+
+    // Admin upholds dispute with corrected outcome 0 (NO)
+    client.uphold_dispute(&admin, &market_id, &0u32);
+
+    // Verify state returned to RESOLVED
+    assert_eq!(client.get_market_state_value().unwrap(), 2);
+
+    // Verify stake was returned to disputer
+    assert_eq!(token_client.balance(&user), 2000); // Stake returned
+
+    // Verify winning outcome was updated
+    assert_eq!(client.test_get_winning_outcome().unwrap(), 0);
+}
+
+#[test]
+fn test_dismiss_dispute_happy_path() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let user = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let dispute_reason = Symbol::new(&env, "wrong");
+
+    // Mint USDC to user for dispute stake
+    token_client.mint(&user, &2000);
+    token_client.approve(
+        &user,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Resolve market with outcome 1 (YES)
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    let original_outcome = client.test_get_winning_outcome().unwrap();
+
+    // Dispute the market
+    client.dispute_market(&user, &market_id, &dispute_reason, &None);
+    assert_eq!(client.get_market_state_value().unwrap(), 3); // DISPUTED
+
+    // Admin dismisses dispute (original resolution was correct)
+    client.dismiss_dispute(&admin, &market_id);
+
+    // Verify state returned to RESOLVED
+    assert_eq!(client.get_market_state_value().unwrap(), 2);
+
+    // Verify stake was NOT returned (slashed)
+    assert_eq!(token_client.balance(&user), 1000); // Stake not returned
+    assert_eq!(token_client.balance(&market_contract), 1000); // Stake remains in contract
+
+    // Verify winning outcome unchanged
+    assert_eq!(client.test_get_winning_outcome().unwrap(), original_outcome);
+}
+
+#[test]
+#[should_panic(expected = "Market not disputed")]
+fn test_uphold_dispute_not_disputed() {
+    let env = create_test_env();
+    let (client, market_id, _token_client, _market_contract) = setup_market_for_claims(&env);
+
+    let admin = Address::generate(&env);
+
+    // Resolve market but don't dispute
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+
+    // Try to uphold non-existent dispute
+    client.uphold_dispute(&admin, &market_id, &0u32);
+}
+
+#[test]
+#[should_panic(expected = "Market not disputed")]
+fn test_dismiss_dispute_not_disputed() {
+    let env = create_test_env();
+    let (client, market_id, _token_client, _market_contract) = setup_market_for_claims(&env);
+
+    let admin = Address::generate(&env);
+
+    // Resolve market but don't dispute
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+
+    // Try to dismiss non-existent dispute
+    client.dismiss_dispute(&admin, &market_id);
+}
+
+#[test]
+#[should_panic(expected = "Cannot claim during dispute")]
+fn test_claim_winnings_blocked_during_dispute() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let winner = Address::generate(&env);
+    let disputer = Address::generate(&env);
+
+    // Setup winner with direct prediction (using test helper)
+    client.test_add_participant(&winner);
+    client.test_set_prediction(&winner, &1u32, &500);
+
+    // Resolve market with YES outcome
+    client.test_setup_resolution(&market_id, &1u32, &500, &0);
+
+    // Setup disputer and dispute the market
+    token_client.mint(&disputer, &2000);
+    token_client.approve(
+        &disputer,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    let dispute_reason = Symbol::new(&env, "wrong");
+    client.dispute_market(&disputer, &market_id, &dispute_reason, &None);
+
+    // Verify market is disputed
+    assert_eq!(client.get_market_state_value().unwrap(), 3);
+
+    // Try to claim winnings during dispute - should panic
+    client.claim_winnings(&winner, &market_id);
+}
+
+#[test]
+fn test_claim_winnings_after_dispute_dismissed() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let winner = Address::generate(&env);
+    let disputer = Address::generate(&env);
+    let admin = Address::generate(&env);
+
+    // Setup winner with direct prediction
+    client.test_add_participant(&winner);
+    client.test_set_prediction(&winner, &1u32, &500);
+
+    // Resolve market
+    client.test_setup_resolution(&market_id, &1u32, &500, &0);
+
+    // Dispute and dismiss
+    token_client.mint(&disputer, &2000);
+    token_client.approve(
+        &disputer,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    let dispute_reason = Symbol::new(&env, "wrong");
+    client.dispute_market(&disputer, &market_id, &dispute_reason, &None);
+    client.dismiss_dispute(&admin, &market_id);
+
+    // Now claim should work
+    let payout = client.claim_winnings(&winner, &market_id);
+    assert!(payout > 0);
+}
+
+#[test]
+fn test_claim_winnings_after_dispute_upheld_corrected_outcome() {
+    let env = create_test_env();
+    let (client, market_id, token_client, market_contract) = setup_market_for_claims(&env);
+
+    let yes_user = Address::generate(&env);
+    let disputer = Address::generate(&env);
+    let admin = Address::generate(&env);
+
+    // Setup YES user only
+    client.test_add_participant(&yes_user);
+    client.test_set_prediction(&yes_user, &1u32, &500);
+
+    // Resolve market with YES outcome
+    client.test_setup_resolution(&market_id, &1u32, &500, &0);
+
+    // Verify YES user can claim before dispute
+    assert_eq!(client.test_get_winning_outcome().unwrap(), 1);
+
+    // Dispute the market
+    token_client.mint(&disputer, &2000);
+    token_client.approve(
+        &disputer,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    let dispute_reason = Symbol::new(&env, "wrong");
+    client.dispute_market(&disputer, &market_id, &dispute_reason, &None);
+    
+    // Verify market is disputed
+    assert_eq!(client.get_market_state_value().unwrap(), 3);
+
+    // Admin upholds dispute - this tests the uphold flow
+    client.uphold_dispute(&admin, &market_id, &0u32); // Change to NO
+
+    // Verify outcome was changed
+    assert_eq!(client.test_get_winning_outcome().unwrap(), 0);
+    
+    // Verify market returned to RESOLVED state
+    assert_eq!(client.get_market_state_value().unwrap(), 2);
+    
+    // Verify disputer got stake back
+    assert_eq!(token_client.balance(&disputer), 2000);
 }
 
 // ============================================================================
