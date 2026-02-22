@@ -1,0 +1,187 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Generate Prisma client
+        run: |
+          cd backend
+          npx prisma generate
+
+      - name: Run ESLint
+        run: |
+          cd backend
+          npm run lint
+
+      - name: Run TypeScript type check
+        run: |
+          cd backend
+          npx tsc --noEmit
+
+      - name: Run Prettier check
+        run: |
+          cd backend
+          npm run format:check || true
+
+      - name: Validate Prisma schema
+        run: |
+          cd backend
+          npx prisma validate
+
+  backend-test:
+    name: Backend Tests (PostgreSQL + Redis)
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: boxmeout_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Generate Prisma client
+        run: |
+          cd backend
+          npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/boxmeout_test
+
+      - name: Run database migrations
+        run: |
+          cd backend
+          npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/boxmeout_test
+
+      - name: Run unit tests
+        run: |
+          cd backend
+          SKIP_DB_SETUP=true npx vitest run --config vitest.config.ts
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/boxmeout_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+      - name: Run integration tests
+        run: |
+          cd backend
+          npx vitest run --config vitest.integration.config.ts
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/boxmeout_test
+          DATABASE_URL_TEST: postgresql://postgres:password@localhost:5432/boxmeout_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+  prisma-check:
+    name: Prisma Schema Check
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: boxmeout_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Generate Prisma client
+        run: |
+          cd backend
+          npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/boxmeout_test
+
+      - name: Check Prisma migrations status
+        run: |
+          cd backend
+          npx prisma migrate status
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/boxmeout_test
