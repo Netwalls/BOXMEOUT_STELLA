@@ -1068,8 +1068,8 @@ impl OracleManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Ledger};
-    use soroban_sdk::{Address, Env};
+    use soroban_sdk::testutils::{Address as _, Events, Ledger};
+    use soroban_sdk::{Address, Env, IntoVal};
 
     // Do NOT expose contractimpl or initialize here, only use OracleManagerClient
     fn setup_oracle(env: &Env) -> (OracleManagerClient<'_>, Address, Address, Address) {
