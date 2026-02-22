@@ -1455,7 +1455,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Initial threshold is 2 (set in setup_oracle)
@@ -1486,7 +1486,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Set threshold to equal oracle count (2)
@@ -1522,7 +1522,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Attempt to set threshold to 0 - should panic
@@ -1535,7 +1535,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // We have 2 oracles, attempt to set threshold to 3 - should panic
@@ -1563,7 +1563,7 @@ mod tests {
     fn test_set_consensus_threshold_unauthorized_caller() {
         let env = Env::default();
         
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Create a non-admin user
@@ -1589,7 +1589,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Set threshold from 2 to 1
@@ -1608,7 +1608,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Set threshold to minimum valid value (1)
@@ -1633,7 +1633,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Update threshold multiple times
@@ -1660,7 +1660,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (oracle_client, admin, oracle1, oracle2) = setup_oracle(&env);
+        let (oracle_client, _admin, oracle1, oracle2) = setup_oracle(&env);
         register_test_oracles(&env, &oracle_client, &oracle1, &oracle2);
 
         // Create market with initial threshold of 2
