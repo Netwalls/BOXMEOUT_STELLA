@@ -6,6 +6,11 @@ import { executeTransaction } from '../database/transaction.js';
 import { logger } from '../utils/logger.js';
 import { factoryService } from './blockchain/factory.js';
 import { ammService } from './blockchain/amm.js';
+import {
+  sanitizeMarketTitle,
+  sanitizeMarketDescription,
+  validateNumericInput,
+} from '../utils/sanitization.js';
 
 export class MarketService {
   private marketRepository: MarketRepository;
@@ -67,19 +72,34 @@ export class MarketService {
     closingAt: Date;
     resolutionTime?: Date;
   }) {
+    // Sanitize title and description to prevent XSS
+    const sanitizedTitle = sanitizeMarketTitle(data.title);
+    const sanitizedDescription = sanitizeMarketDescription(data.description);
+    const sanitizedOutcomeA = sanitizeMarketTitle(data.outcomeA);
+    const sanitizedOutcomeB = sanitizeMarketTitle(data.outcomeB);
+
     // Validate closing time is in the future
     if (data.closingAt <= new Date()) {
       throw new Error('Closing time must be in the future');
     }
 
-    // Validate title length
-    if (data.title.length < 5 || data.title.length > 200) {
+    // Validate title length after sanitization
+    if (sanitizedTitle.length < 5 || sanitizedTitle.length > 200) {
       throw new Error('Title must be between 5 and 200 characters');
     }
 
-    // Validate description length
-    if (data.description.length < 10 || data.description.length > 5000) {
+    // Validate description length after sanitization
+    if (sanitizedDescription.length < 10 || sanitizedDescription.length > 5000) {
       throw new Error('Description must be between 10 and 5000 characters');
+    }
+
+    // Validate outcome lengths
+    if (sanitizedOutcomeA.length < 1 || sanitizedOutcomeA.length > 100) {
+      throw new Error('Outcome A must be between 1 and 100 characters');
+    }
+
+    if (sanitizedOutcomeB.length < 1 || sanitizedOutcomeB.length > 100) {
+      throw new Error('Outcome B must be between 1 and 100 characters');
     }
 
     // Default resolution time to 24 hours after closing if not provided
@@ -93,25 +113,25 @@ export class MarketService {
     }
 
     try {
-      // Call blockchain factory to create market on-chain
+      // Call blockchain factory to create market on-chain with sanitized data
       const blockchainResult = await factoryService.createMarket({
-        title: data.title,
-        description: data.description,
+        title: sanitizedTitle,
+        description: sanitizedDescription,
         category: data.category,
         closingTime: data.closingAt,
         resolutionTime: resolutionTime,
         creator: data.creatorPublicKey,
       });
 
-      // Store market in database with transaction hash
+      // Store market in database with sanitized data
       const market = await this.marketRepository.createMarket({
         contractAddress: blockchainResult.marketId,
-        title: data.title,
-        description: data.description,
+        title: sanitizedTitle,
+        description: sanitizedDescription,
         category: data.category,
         creatorId: data.creatorId,
-        outcomeA: data.outcomeA,
-        outcomeB: data.outcomeB,
+        outcomeA: sanitizedOutcomeA,
+        outcomeB: sanitizedOutcomeB,
         closingAt: data.closingAt,
       });
 
@@ -150,11 +170,28 @@ export class MarketService {
     skip?: number;
     take?: number;
   }) {
+    // Validate pagination parameters to prevent overflow
+    const skip = options?.skip
+      ? validateNumericInput(options.skip, {
+          min: 0,
+          max: 100000,
+          allowDecimals: false,
+        })
+      : 0;
+
+    const take = options?.take
+      ? validateNumericInput(options.take, {
+          min: 1,
+          max: 100,
+          allowDecimals: false,
+        })
+      : 20;
+
     if (options?.status === MarketStatus.OPEN) {
       return await this.marketRepository.findActiveMarkets({
         category: options.category,
-        skip: options.skip,
-        take: options.take,
+        skip,
+        take,
       });
     }
 
@@ -164,8 +201,8 @@ export class MarketService {
         ...(options?.status && { status: options.status }),
       },
       orderBy: { createdAt: 'desc' },
-      skip: options?.skip,
-      take: options?.take || 20,
+      skip,
+      take,
     });
   }
 

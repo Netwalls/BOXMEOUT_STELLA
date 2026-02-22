@@ -6,6 +6,7 @@ import {
   challengeRateLimiter,
   refreshRateLimiter,
 } from '../middleware/rateLimit.middleware.js';
+import { validate, schemas } from '../middleware/validation.middleware.js';
 
 const router = Router();
 
@@ -16,8 +17,11 @@ const router = Router();
  * @body    { publicKey: string }
  * @returns { nonce: string, message: string, expiresAt: number }
  */
-router.post('/challenge', challengeRateLimiter, (req, res) =>
-  authController.challenge(req, res)
+router.post(
+  '/challenge',
+  challengeRateLimiter,
+  validate({ body: schemas.walletChallenge }),
+  (req, res) => authController.challenge(req, res)
 );
 
 /**

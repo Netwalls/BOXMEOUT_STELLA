@@ -64,8 +64,20 @@ export const schemas = {
 
   // Market schemas
   createMarket: z.object({
-    title: z.string().min(10).max(200),
-    description: z.string().min(20).max(2000),
+    title: z
+      .string()
+      .min(5)
+      .max(200)
+      .refine((val) => val.trim().length >= 5, {
+        message: 'Title must be at least 5 characters after trimming',
+      }),
+    description: z
+      .string()
+      .min(10)
+      .max(5000)
+      .refine((val) => val.trim().length >= 10, {
+        message: 'Description must be at least 10 characters after trimming',
+      }),
     category: z.enum([
       'WRESTLING',
       'BOXING',
@@ -75,16 +87,32 @@ export const schemas = {
       'CRYPTO',
       'ENTERTAINMENT',
     ]),
-    outcomeA: z.string().min(5).max(100),
-    outcomeB: z.string().min(5).max(100),
+    outcomeA: z.string().min(1).max(100),
+    outcomeB: z.string().min(1).max(100),
     closingAt: z.string().datetime(),
-    resolutionSource: z.string().max(500).optional(),
+    resolutionTime: z.string().datetime().optional(),
   }),
 
   // Pagination
   pagination: z.object({
-    page: z.string().regex(/^\d+$/).transform(Number).optional().default('1'),
-    limit: z.string().regex(/^\d+$/).transform(Number).optional().default('20'),
+    page: z
+      .string()
+      .regex(/^\d+$/)
+      .transform(Number)
+      .refine((val) => val >= 1 && val <= 10000, {
+        message: 'Page must be between 1 and 10000',
+      })
+      .optional()
+      .default('1'),
+    limit: z
+      .string()
+      .regex(/^\d+$/)
+      .transform(Number)
+      .refine((val) => val >= 1 && val <= 100, {
+        message: 'Limit must be between 1 and 100',
+      })
+      .optional()
+      .default('20'),
     sort: z.string().optional(),
     order: z.enum(['asc', 'desc']).optional().default('desc'),
   }),
@@ -94,13 +122,119 @@ export const schemas = {
     id: z.string().uuid(),
   }),
 
-  // Stellar address
+  // Stellar address (strict base32 validation)
   stellarAddress: z.object({
-    address: z.string().regex(/^G[A-Z0-9]{55}$/),
+    address: z.string().regex(/^G[A-Z2-7]{55}$/, {
+      message: 'Invalid Stellar address format',
+    }),
   }),
 
-  // Wallet challenge
+  // Wallet challenge (strict base32 validation)
   walletChallenge: z.object({
-    publicKey: z.string().regex(/^G[A-Z0-9]{55}$/),
+    publicKey: z.string().regex(/^G[A-Z2-7]{55}$/, {
+      message: 'Invalid Stellar public key format',
+    }),
+  }),
+
+  // Prediction schemas
+  commitPrediction: z.object({
+    predictedOutcome: z
+      .number()
+      .int()
+      .min(0)
+      .max(1)
+      .refine((val) => val === 0 || val === 1, {
+        message: 'Predicted outcome must be 0 or 1',
+      }),
+    amountUsdc: z
+      .number()
+      .positive()
+      .finite()
+      .max(922337203685.4775807)
+      .refine((val) => val > 0, {
+        message: 'Amount must be greater than 0',
+      }),
+  }),
+
+  revealPrediction: z.object({
+    predictionId: z.string().uuid(),
+  }),
+
+  // Pool creation
+  createPool: z.object({
+    initialLiquidity: z
+      .string()
+      .regex(/^\d+$/)
+      .refine((val) => BigInt(val) > 0n, {
+        message: 'Initial liquidity must be greater than 0',
+      })
+      .refine((val) => BigInt(val) <= BigInt(Number.MAX_SAFE_INTEGER), {
+        message: 'Initial liquidity exceeds maximum safe value',
+      }),
+  }),
+
+  // Buy/Sell shares
+  tradeShares: z.object({
+    outcome: z
+      .number()
+      .int()
+      .min(0)
+      .max(1)
+      .refine((val) => val === 0 || val === 1, {
+        message: 'Outcome must be 0 or 1',
+      }),
+    amount: z
+      .number()
+      .positive()
+      .finite()
+      .max(922337203685.4775807)
+      .refine((val) => val > 0, {
+        message: 'Amount must be greater than 0',
+      }),
+  }),
+
+  // Oracle attestation
+  attestMarket: z.object({
+    outcome: z
+      .number()
+      .int()
+      .min(0)
+      .max(1)
+      .refine((val) => val === 0 || val === 1, {
+        message: 'Outcome must be 0 or 1',
+      }),
+  }),
+
+  // Treasury distribution
+  distributeLeaderboard: z.object({
+    recipients: z
+      .array(
+        z.object({
+          address: z.string().regex(/^G[A-Z2-7]{55}$/, {
+            message: 'Invalid Stellar address format',
+          }),
+          amount: z
+            .string()
+            .regex(/^\d+$/)
+            .refine((val) => BigInt(val) > 0n, {
+              message: 'Amount must be greater than 0',
+            }),
+        })
+      )
+      .min(1)
+      .max(100),
+  }),
+
+  distributeCreator: z.object({
+    marketId: z.string().uuid(),
+    creatorAddress: z.string().regex(/^G[A-Z2-7]{55}$/, {
+      message: 'Invalid Stellar address format',
+    }),
+    amount: z
+      .string()
+      .regex(/^\d+$/)
+      .refine((val) => BigInt(val) > 0n, {
+        message: 'Amount must be greater than 0',
+      }),
   }),
 };
