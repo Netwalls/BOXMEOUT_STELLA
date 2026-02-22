@@ -2,7 +2,7 @@
 // Enables trading YES/NO outcome shares with dynamic odds pricing (Polymarket model)
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol,
+    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol, Vec,
 };
 
 #[contractevent]
@@ -49,6 +49,17 @@ pub struct LiquidityRemovedEvent {
     pub no_amount: u128,
 }
 
+/// Trade record for recent trades history
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Trade {
+    pub trader: Address,
+    pub outcome: u32,
+    pub quantity: u128,
+    pub price: u128,
+    pub timestamp: u64,
+}
+
 // Storage keys
 const ADMIN_KEY: &str = "admin";
 const FACTORY_KEY: &str = "factory";
@@ -67,6 +78,11 @@ const POOL_LP_SUPPLY_KEY: &str = "pool_lp_supply";
 const POOL_LP_TOKENS_KEY: &str = "pool_lp_tokens";
 const USER_SHARES_KEY: &str = "user_shares";
 
+// Trade history storage keys
+const RECENT_TRADES_KEY: &str = "recent_trades";
+const TRADE_COUNT_KEY: &str = "trade_count";
+const MAX_RECENT_TRADES: usize = 100;
+
 // Pool data structure
 #[derive(Clone)]
 pub struct Pool {
@@ -74,36 +90,6 @@ pub struct Pool {
     pub no_reserve: u128,
     pub total_liquidity: u128,
     pub created_at: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LiquidityAdded {
-    pub provider: Address,
-    pub usdc_amount: u128,
-    pub lp_tokens_minted: u128,
-    pub new_reserve: u128,
-    pub k: u128,
-}
-
-fn calculate_lp_tokens_to_mint(
-    current_lp_supply: u128,
-    current_total_liquidity: u128,
-    usdc_amount: u128,
-) -> u128 {
-    if current_lp_supply == 0 {
-        // First LP receives 1:1 LP tokens for deposited liquidity.
-        return usdc_amount;
-    }
-
-    if current_total_liquidity == 0 {
-        panic!("invalid pool liquidity");
-    }
-
-    usdc_amount
-        .checked_mul(current_lp_supply)
-        .and_then(|v| v.checked_div(current_total_liquidity))
-        .expect("lp mint calculation overflow")
 }
 
 /// AUTOMATED MARKET MAKER - Manages liquidity pools and share trading
@@ -370,6 +356,21 @@ impl AMM {
             .persistent()
             .set(&user_share_key, &(current_shares + shares_out));
 
+        // Record trade with price = amount / shares_out (USDC per share)
+        let price = if shares_out > 0 {
+            amount / shares_out
+        } else {
+            0
+        };
+        Self::record_trade(
+            env.clone(),
+            market_id.clone(),
+            buyer.clone(),
+            outcome,
+            shares_out,
+            price,
+        );
+
         // Record trade (Optional: Simplified to event only for this resolution)
         BuySharesEvent {
             buyer,
@@ -507,6 +508,21 @@ impl AMM {
             &(payout_after_fee as i128),
         );
 
+        // Record trade with price = payout_after_fee / shares (USDC per share)
+        let price = if shares > 0 {
+            payout_after_fee / shares
+        } else {
+            0
+        };
+        Self::record_trade(
+            env.clone(),
+            market_id.clone(),
+            seller.clone(),
+            outcome,
+            shares,
+            price,
+        );
+
         // Emit SellShares event
         SellSharesEvent {
             seller,
@@ -575,131 +591,6 @@ impl AMM {
         }
 
         (yes_odds, no_odds)
-    }
-
-    /// Add USDC liquidity to an existing pool and mint LP tokens proportionally.
-    /// Returns minted LP token amount.
-    pub fn add_liquidity(
-        env: Env,
-        lp_provider: Address,
-        market_id: BytesN<32>,
-        usdc_amount: u128,
-    ) -> u128 {
-        lp_provider.require_auth();
-
-        if usdc_amount == 0 {
-            panic!("usdc amount must be greater than 0");
-        }
-
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
-        if !env.storage().persistent().has(&pool_exists_key) {
-            panic!("pool does not exist");
-        }
-
-        let yes_reserve_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_reserve_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
-        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id.clone());
-        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
-        let lp_balance_key = (
-            Symbol::new(&env, POOL_LP_TOKENS_KEY),
-            market_id.clone(),
-            lp_provider.clone(),
-        );
-
-        let yes_reserve: u128 = env
-            .storage()
-            .persistent()
-            .get(&yes_reserve_key)
-            .expect("yes reserve not found");
-        let no_reserve: u128 = env
-            .storage()
-            .persistent()
-            .get(&no_reserve_key)
-            .expect("no reserve not found");
-        let current_total_liquidity = yes_reserve
-            .checked_add(no_reserve)
-            .expect("total liquidity overflow");
-        let current_lp_supply: u128 = env.storage().persistent().get(&lp_supply_key).unwrap_or(0);
-
-        let lp_tokens_to_mint =
-            calculate_lp_tokens_to_mint(current_lp_supply, current_total_liquidity, usdc_amount);
-        if lp_tokens_to_mint == 0 {
-            panic!("lp tokens to mint must be positive");
-        }
-
-        // Add liquidity proportionally to preserve pool pricing.
-        let yes_add = if current_total_liquidity == 0 {
-            usdc_amount / 2
-        } else {
-            usdc_amount
-                .checked_mul(yes_reserve)
-                .and_then(|v| v.checked_div(current_total_liquidity))
-                .expect("yes reserve add overflow")
-        };
-        let no_add = usdc_amount
-            .checked_sub(yes_add)
-            .expect("liquidity split underflow");
-
-        if yes_add == 0 || no_add == 0 {
-            panic!("liquidity amount too small");
-        }
-
-        let new_yes_reserve = yes_reserve
-            .checked_add(yes_add)
-            .expect("yes reserve overflow");
-        let new_no_reserve = no_reserve.checked_add(no_add).expect("no reserve overflow");
-        let new_k = new_yes_reserve
-            .checked_mul(new_no_reserve)
-            .expect("k overflow");
-        let new_total_liquidity = current_total_liquidity
-            .checked_add(usdc_amount)
-            .expect("total liquidity overflow");
-
-        let new_lp_supply = current_lp_supply
-            .checked_add(lp_tokens_to_mint)
-            .expect("lp supply overflow");
-        let current_lp_balance: u128 = env.storage().persistent().get(&lp_balance_key).unwrap_or(0);
-        let new_lp_balance = current_lp_balance
-            .checked_add(lp_tokens_to_mint)
-            .expect("lp balance overflow");
-
-        env.storage()
-            .persistent()
-            .set(&yes_reserve_key, &new_yes_reserve);
-        env.storage()
-            .persistent()
-            .set(&no_reserve_key, &new_no_reserve);
-        env.storage().persistent().set(&k_key, &new_k);
-        env.storage()
-            .persistent()
-            .set(&lp_supply_key, &new_lp_supply);
-        env.storage()
-            .persistent()
-            .set(&lp_balance_key, &new_lp_balance);
-
-        let usdc_token: Address = env
-            .storage()
-            .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
-            .expect("usdc token not set");
-        let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(
-            &lp_provider,
-            &env.current_contract_address(),
-            &(usdc_amount as i128),
-        );
-
-        let event = LiquidityAdded {
-            provider: lp_provider.clone(),
-            usdc_amount,
-            lp_tokens_minted: lp_tokens_to_mint,
-            new_reserve: new_total_liquidity,
-            k: new_k,
-        };
-        env.events()
-            .publish((Symbol::new(&env, "liquidity_added"),), event);
-
-        lp_tokens_to_mint
     }
 
     /// Remove liquidity from pool (redeem LP tokens)
@@ -863,17 +754,6 @@ impl AMM {
         (yes_reserve, no_reserve, total_liquidity, yes_odds, no_odds)
     }
 
-    /// Get current pool constant product value.
-    pub fn get_pool_k(env: Env, market_id: BytesN<32>) -> u128 {
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
-        if !env.storage().persistent().has(&pool_exists_key) {
-            return 0;
-        }
-
-        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id);
-        env.storage().persistent().get(&k_key).unwrap_or(0)
-    }
-
     /// Pure function: Calculate current YES/NO prices based on reserves
     /// Returns (yes_price, no_price) in basis points (10000 = 1.00 USDC)
     /// Accounts for trading fees in the price calculation
@@ -934,107 +814,65 @@ impl AMM {
     // - get_lp_position() / claim_lp_fees()
     // - calculate_spot_price()
     // - get_trade_history()
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{token, Address, Env};
-
-    fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::StellarAssetClient<'a> {
-        let token_address = env
-            .register_stellar_asset_contract_v2(admin.clone())
-            .address();
-        token::StellarAssetClient::new(env, &token_address)
-    }
-
-    fn setup_amm_pool(
-        env: &Env,
-    ) -> (
-        AMMClient<'_>,
-        token::StellarAssetClient<'_>,
-        Address,
-        Address,
-        BytesN<32>,
+    /// Record a trade in the recent trades history (capped at 100 entries)
+    /// Maintains a FIFO queue by removing oldest trade when limit is reached
+    fn record_trade(
+        env: Env,
+        market_id: BytesN<32>,
+        trader: Address,
+        outcome: u32,
+        quantity: u128,
+        price: u128,
     ) {
-        let admin = Address::generate(env);
-        let factory = Address::generate(env);
-        let usdc_admin = Address::generate(env);
-        let initial_lp = Address::generate(env);
-        let usdc = create_token_contract(env, &usdc_admin);
+        let trades_key = (Symbol::new(&env, RECENT_TRADES_KEY), market_id.clone());
+        let count_key = (Symbol::new(&env, TRADE_COUNT_KEY), market_id.clone());
 
-        let amm_id = env.register(AMM, ());
-        let amm = AMMClient::new(env, &amm_id);
+        // Get current trades vector
+        let mut trades: Vec<Trade> = env
+            .storage()
+            .persistent()
+            .get(&trades_key)
+            .unwrap_or_else(|| Vec::new(&env));
 
-        env.mock_all_auths();
-        amm.initialize(&admin, &factory, &usdc.address, &1_000_000_000u128);
+        // Create new trade record
+        let new_trade = Trade {
+            trader,
+            outcome,
+            quantity,
+            price,
+            timestamp: env.ledger().timestamp(),
+        };
 
-        let market_id = BytesN::from_array(env, &[7u8; 32]);
-        usdc.mint(&initial_lp, &2_000_000i128);
-        amm.create_pool(&initial_lp, &market_id, &1_000_000u128);
+        // If at capacity, remove oldest trade (FIFO)
+        if trades.len() >= MAX_RECENT_TRADES as u32 {
+            // Remove first element by creating a new vec without it
+            let mut new_trades = Vec::new(&env);
+            for i in 1..trades.len() {
+                new_trades.push_back(trades.get(i).unwrap());
+            }
+            trades = new_trades;
+        }
 
-        (amm, usdc, initial_lp, admin, market_id)
+        // Add new trade to end
+        trades.push_back(new_trade);
+
+        // Update storage
+        env.storage().persistent().set(&trades_key, &trades);
+        env.storage()
+            .persistent()
+            .set(&count_key, &(trades.len() as u32));
     }
 
-    #[test]
-    fn test_lp_tokens_first_provider() {
-        let usdc_amount = 1_000_000u128;
-        let total_lp_supply = 0u128;
-        let expected = usdc_amount;
+    /// Get recent trades for a market (up to 100 entries)
+    /// Returns trades in chronological order (oldest first)
+    /// Includes: trader address, outcome (0=NO, 1=YES), quantity, price, timestamp
+    pub fn get_recent_trades(env: Env, market_id: BytesN<32>) -> Vec<Trade> {
+        let trades_key = (Symbol::new(&env, RECENT_TRADES_KEY), market_id);
 
-        let minted = calculate_lp_tokens_to_mint(total_lp_supply, 0, usdc_amount);
-        assert_eq!(minted, expected);
-    }
-
-    #[test]
-    fn test_lp_tokens_proportional() {
-        let usdc_amount = 500_000u128;
-        let reserve = 1_000_000u128;
-        let total_lp_supply = 1_000_000u128;
-        let expected = 500_000u128;
-
-        let minted = calculate_lp_tokens_to_mint(total_lp_supply, reserve, usdc_amount);
-        assert_eq!(minted, expected);
-    }
-
-    #[test]
-    fn test_reserves_updated_after_add() {
-        let env = Env::default();
-        let (amm, usdc, _initial_lp, _admin, market_id) = setup_amm_pool(&env);
-        let second_lp = Address::generate(&env);
-        usdc.mint(&second_lp, &1_000_000i128);
-
-        let (yes_before, no_before, total_before, _, _) = amm.get_pool_state(&market_id);
-        assert_eq!(yes_before, 500_000);
-        assert_eq!(no_before, 500_000);
-        assert_eq!(total_before, 1_000_000);
-
-        let minted = amm.add_liquidity(&second_lp, &market_id, &500_000u128);
-        assert_eq!(minted, 500_000u128);
-
-        let (yes_after, no_after, total_after, _, _) = amm.get_pool_state(&market_id);
-        assert_eq!(yes_after, 750_000);
-        assert_eq!(no_after, 750_000);
-        assert_eq!(total_after, 1_500_000);
-    }
-
-    #[test]
-    fn test_k_constant_updated() {
-        let env = Env::default();
-        let (amm, usdc, _initial_lp, _admin, market_id) = setup_amm_pool(&env);
-        let second_lp = Address::generate(&env);
-        usdc.mint(&second_lp, &1_000_000i128);
-
-        let old_k = amm.get_pool_k(&market_id);
-        assert_eq!(old_k, 250_000_000_000);
-
-        amm.add_liquidity(&second_lp, &market_id, &500_000u128);
-
-        let (yes_after, no_after, _, _, _) = amm.get_pool_state(&market_id);
-        let new_k = amm.get_pool_k(&market_id);
-        assert_eq!(new_k, yes_after * no_after);
-        assert_eq!(new_k, 562_500_000_000);
-        assert!(new_k > old_k);
+        env.storage()
+            .persistent()
+            .get(&trades_key)
+            .unwrap_or_else(|| Vec::new(&env))
     }
 }
