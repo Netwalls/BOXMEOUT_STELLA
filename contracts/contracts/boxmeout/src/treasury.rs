@@ -121,12 +121,10 @@ impl Treasury {
             .set(&Symbol::new(&env, DISTRIBUTION_KEY), &default_ratios);
 
         // Emit initialization event
-        TreasuryInitializedEvent {
-            admin,
-            usdc_contract,
-            factory,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "TreasuryInitialized"),),
+            (admin, usdc_contract, factory),
+        );
     }
 
     /// Update fee distribution percentages
@@ -160,13 +158,10 @@ impl Treasury {
             .set(&Symbol::new(&env, DISTRIBUTION_KEY), &new_ratios);
 
         // Emit FeeDistributionUpdated event
-        FeeDistributionUpdatedEvent {
-            platform_fee_pct,
-            leaderboard_fee_pct,
-            creator_fee_pct,
-            timestamp: env.ledger().timestamp(),
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "FeeDistributionUpdated"),),
+            (platform_fee_pct, leaderboard_fee_pct, creator_fee_pct, env.ledger().timestamp()),
+        );
     }
 
     /// Deposit fees into treasury and split across pools
@@ -209,12 +204,10 @@ impl Treasury {
         self::update_pool_balance(&env, TOTAL_FEES_KEY, amount);
 
         // Emit FeeCollected(source, amount, timestamp)
-        FeeCollectedEvent {
-            source,
-            amount,
-            timestamp: env.ledger().timestamp(),
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "FeeCollected"),),
+            (source, amount, env.ledger().timestamp()),
+        );
     }
 
     /// Get platform fees collected
@@ -306,11 +299,11 @@ impl Treasury {
             .persistent()
             .set(&Symbol::new(&env, CREATOR_FEES_KEY), &new_balance);
 
-        CreatorRewardsEvent {
-            total_amount,
-            count: distributions.len(),
-        }
-        .publish(&env);
+        // Emit CreatorRewards event
+        env.events().publish(
+            (Symbol::new(&env, "CreatorRewards"),),
+            (total_amount, distributions.len()),
+        );
     }
 
     /// Get treasury balance (total USDC held)
@@ -344,13 +337,11 @@ impl Treasury {
         let token_client = token::Client::new(&env, &usdc_token);
         token_client.transfer(&env.current_contract_address(), &recipient, &amount);
 
-        EmergencyWithdrawalEvent {
-            admin,
-            recipient,
-            amount,
-            timestamp: env.ledger().timestamp(),
-        }
-        .publish(&env);
+        // Emit EmergencyWithdrawal event
+        env.events().publish(
+            (Symbol::new(&env, "EmergencyWithdrawal"),),
+            (admin, recipient, amount, env.ledger().timestamp()),
+        );
     }
 }
 

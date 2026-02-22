@@ -250,15 +250,10 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, PENDING_COUNT_KEY), &0u32);
 
         // Emit initialization event
-        MarketInitializedEvent {
-            market_id,
-            creator,
-            factory,
-            oracle,
-            closing_time,
-            resolution_time,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "MarketInitialized"),),
+            (market_id, creator, factory, oracle, closing_time, resolution_time),
+        );
     }
 
     /// Phase 1: User commits to a prediction (commit-reveal scheme for privacy)
@@ -369,12 +364,10 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, PENDING_COUNT_KEY), &(pending_count + 1));
 
         // Emit CommitmentMade event
-        CommitmentMadeEvent {
-            user,
-            market_id,
-            amount,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "CommitmentMade"),),
+            (user, market_id, amount),
+        );
 
         Ok(())
     }
@@ -468,11 +461,10 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_CLOSED);
 
         // Emit MarketClosed Event
-        MarketClosedEvent {
-            market_id,
-            timestamp: current_time,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "MarketClosed"),),
+            (market_id, current_time),
+        );
     }
 
     /// Resolve market based on oracle consensus result
@@ -585,12 +577,10 @@ impl PredictionMarket {
             .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_RESOLVED);
 
         // Emit MarketResolved event
-        MarketResolvedEvent {
-            market_id,
-            final_outcome,
-            timestamp: current_time,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "MarketResolved"),),
+            (market_id, final_outcome, current_time),
+        );
     }
 
     /// Dispute market resolution within 7-day window
@@ -663,13 +653,10 @@ impl PredictionMarket {
         env.storage().persistent().set(&dispute_key, &dispute);
 
         // Emit MarketDisputed event
-        MarketDisputedEvent {
-            user,
-            reason: dispute_reason,
-            market_id,
-            timestamp: current_time,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "MarketDisputed"),),
+            (user, dispute_reason, market_id, current_time),
+        );
     }
 
     /// Claim winnings after market resolution
@@ -808,12 +795,10 @@ impl PredictionMarket {
         env.storage().persistent().set(&prediction_key, &prediction);
 
         // 9. Emit WinningsClaimed Event
-        WinningsClaimedEvent {
-            user,
-            market_id: market_id.clone(),
-            net_payout,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "WinningsClaimed"),),
+            (user, market_id.clone(), net_payout),
+        );
 
         net_payout
     }

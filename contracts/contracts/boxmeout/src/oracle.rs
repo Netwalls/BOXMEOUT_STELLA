@@ -173,11 +173,10 @@ impl OracleManager {
             .set(&Symbol::new(&env, LAST_OVERRIDE_TIME_KEY), &0u64);
 
         // Emit initialization event
-        OracleInitializedEvent {
-            admin,
-            required_consensus,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "OracleInitialized"),),
+            (admin, required_consensus),
+        );
     }
 
     /// Register a new oracle node
@@ -243,12 +242,10 @@ impl OracleManager {
             .set(&Symbol::new(&env, ORACLE_COUNT_KEY), &(oracle_count + 1));
 
         // Emit OracleRegistered event
-        OracleRegisteredEvent {
-            oracle,
-            oracle_name,
-            timestamp: env.ledger().timestamp(),
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "OracleRegistered"),),
+            (oracle, oracle_name, env.ledger().timestamp()),
+        );
     }
 
     /// Deregister an oracle node
@@ -289,11 +286,10 @@ impl OracleManager {
         env.storage().persistent().set(&no_count_key, &0u32);
 
         // Emit market registered event
-        MarketRegisteredEvent {
-            market_id,
-            resolution_time,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "MarketRegistered"),),
+            (market_id, resolution_time),
+        );
     }
 
     /// Get market resolution time (helper function)
@@ -418,12 +414,10 @@ impl OracleManager {
         }
 
         // 10. Emit AttestationSubmitted(market_id, attestor, outcome)
-        AttestationSubmittedEvent {
-            market_id,
-            oracle,
-            attestation_result,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "AttestationSubmitted"),),
+            (market_id, oracle, attestation_result),
+        );
     }
 
     /// Check if consensus has been reached for market
@@ -527,12 +521,10 @@ impl OracleManager {
         }
 
         // 6. Emit ResolutionFinalized event
-        ResolutionFinalizedEvent {
-            market_id,
-            final_outcome,
-            timestamp: current_time,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "ResolutionFinalized"),),
+            (market_id, final_outcome, current_time),
+        );
     }
 
     /// Challenge an attestation (dispute oracle honesty)
@@ -596,13 +588,10 @@ impl OracleManager {
         env.storage().persistent().set(&market_challenge_key, &true);
 
         // 8. Emit AttestationChallenged event
-        AttestationChallengedEvent {
-            oracle,
-            challenger,
-            market_id,
-            challenge_reason,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "AttestationChallenged"),),
+            (oracle, challenger, market_id, challenge_reason),
+        );
     }
 
     /// Resolve a challenge and update oracle reputation
@@ -695,11 +684,10 @@ impl OracleManager {
                 }
 
                 // Emit OracleDeregistered event
-                OracleDeregisteredEvent {
-                    oracle: oracle.clone(),
-                    timestamp: env.ledger().timestamp(),
-                }
-                .publish(&env);
+                env.events().publish(
+                    (Symbol::new(&env, "OracleDeregistered"),),
+                    (oracle.clone(), env.ledger().timestamp()),
+                );
             }
         } else {
             // Challenge is invalid - oracle was honest
@@ -737,14 +725,10 @@ impl OracleManager {
         env.storage().persistent().remove(&market_challenge_key);
 
         // 11. Emit ChallengeResolved event
-        ChallengeResolvedEvent {
-            oracle,
-            challenger: challenge.challenger,
-            challenge_valid,
-            new_reputation,
-            slashed_amount,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "ChallengeResolved"),),
+            (oracle, challenge.challenger, challenge_valid, new_reputation, slashed_amount),
+        );
     }
 
     /// Get all attestations for a market
@@ -835,12 +819,10 @@ impl OracleManager {
             .set(&Symbol::new(&env, REQUIRED_CONSENSUS_KEY), &new_threshold);
 
         // Emit ThresholdUpdated event
-        ThresholdUpdatedEvent {
-            previous_threshold,
-            new_threshold,
-            timestamp: env.ledger().timestamp(),
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "ThresholdUpdated"),),
+            (previous_threshold, new_threshold, env.ledger().timestamp()),
+        );
     }
 
     /// Get consensus report
