@@ -1,14 +1,21 @@
 // File for resuable helper functions
 
-use soroban_sdk::{token::StellarAssetClient, Address, BytesN, Env, Symbol};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 // use crate::helpers::*;
 
+#[allow(dead_code)]
 const POOL_YES_RESERVE: &str = "pool_yes_reserve";
+#[allow(dead_code)]
 const POOL_NO_RESERVE: &str = "pool_no_reserve";
+#[allow(dead_code)]
 const POOL_K: &str = "pool_k";
+#[allow(dead_code)]
 const POOL_EXISTS: &str = "pool_exists";
+#[allow(dead_code)]
 const TRADE_COUNT: &str = "trade_count";
+#[allow(dead_code)]
 const USER_SHARES_YES: &str = "user_shares_yes";
+#[allow(dead_code)]
 const USER_SHARES_NO: &str = "user_shares_no";
 
 /// Create test environment (test-only utility)
@@ -19,6 +26,7 @@ pub fn create_test_env() -> Env {
 }
 
 /// Get pool reserves for a market
+#[allow(dead_code)]
 pub fn get_pool_reserves(env: &Env, market_id: &BytesN<32>) -> (u128, u128) {
     let yes_reserve: u128 = env
         .storage()
@@ -35,6 +43,7 @@ pub fn get_pool_reserves(env: &Env, market_id: &BytesN<32>) -> (u128, u128) {
 }
 
 /// Check if pool exists for a market
+#[allow(dead_code)]
 pub fn pool_exists(env: &Env, market_id: &BytesN<32>) -> bool {
     env.storage()
         .persistent()
@@ -43,6 +52,7 @@ pub fn pool_exists(env: &Env, market_id: &BytesN<32>) -> bool {
 }
 
 /// Update pool reserves in storage
+#[allow(dead_code)]
 pub fn set_pool_reserves(env: &Env, market_id: &BytesN<32>, yes_reserve: u128, no_reserve: u128) {
     env.storage().persistent().set(
         &(Symbol::new(env, POOL_YES_RESERVE), market_id.clone()),
@@ -59,6 +69,7 @@ pub fn set_pool_reserves(env: &Env, market_id: &BytesN<32>, yes_reserve: u128, n
 }
 
 /// Get user's share balance for a specific outcome
+#[allow(dead_code)]
 pub fn get_user_shares(env: &Env, user: &Address, market_id: &BytesN<32>, outcome: u32) -> u128 {
     let key = if outcome == 1 {
         (
@@ -77,6 +88,7 @@ pub fn get_user_shares(env: &Env, user: &Address, market_id: &BytesN<32>, outcom
 }
 
 /// Update user's share balance for a specific outcome
+#[allow(dead_code)]
 pub fn set_user_shares(
     env: &Env,
     user: &Address,
@@ -101,6 +113,7 @@ pub fn set_user_shares(
 }
 
 /// Get trade count for a market
+#[allow(dead_code)]
 pub fn get_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
     env.storage()
         .persistent()
@@ -109,6 +122,7 @@ pub fn get_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
 }
 
 /// Increment and return new trade count
+#[allow(dead_code)]
 pub fn increment_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
     let count = get_trade_count(env, market_id) + 1;
     env.storage()
@@ -121,6 +135,7 @@ pub fn increment_trade_count(env: &Env, market_id: &BytesN<32>) -> u32 {
 /// When buying YES: input goes to NO reserve, output from YES reserve
 /// When buying NO: input goes to YES reserve, output from NO reserve
 /// shares_out = reserve_out - (k / (reserve_in + amount_in))
+#[allow(dead_code)]
 pub fn calculate_shares_out(
     yes_reserve: u128,
     no_reserve: u128,
@@ -146,6 +161,7 @@ pub fn calculate_shares_out(
 /// When selling YES: input adds to YES pool, payout from NO pool
 /// When selling NO: input adds to NO pool, payout from YES pool
 /// payout = reserve_out - (k / (reserve_in + shares_in))
+#[allow(dead_code)]
 pub fn calculate_payout(
     yes_reserve: u128,
     no_reserve: u128,

@@ -1,6 +1,7 @@
 // Transaction helper utilities for atomic operations
 import { PrismaClient } from '@prisma/client';
 import { prisma } from './prisma.js';
+import { logger } from '../utils/logger.js';
 
 export type TransactionCallback<T> = (tx: PrismaClient) => Promise<T>;
 
@@ -30,7 +31,7 @@ export async function executeTransactionWithRetry<T>(
       return await executeTransaction(callback);
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Transaction attempt ${attempt} failed:`, error);
+      logger.warn('Transaction attempt failed', { attempt, error });
 
       if (attempt < maxRetries) {
         // Exponential backoff

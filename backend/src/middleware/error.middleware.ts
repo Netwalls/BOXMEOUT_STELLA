@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger.js';
 
 export class ApiError extends Error {
   constructor(
@@ -18,13 +19,15 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  console.error('Error occurred:', {
+  const log = req.log || logger;
+  log.error('Error occurred', {
     error: err.message,
     stack: err.stack,
     path: req.path,
     method: req.method,
     ip: req.ip,
-    timestamp: new Date().toISOString(),
+    requestId: req.requestId,
+    userId: (req as { user?: { userId: string } }).user?.userId,
   });
 
   let statusCode = 500;

@@ -4,6 +4,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/auth.types.js';
 import { MarketService } from '../services/market.service.js';
+import { logger } from '../utils/logger.js';
 import { MarketCategory, MarketStatus } from '@prisma/client';
 import { z } from 'zod';
 
@@ -132,7 +133,7 @@ export class MarketsController {
         },
       });
     } catch (error) {
-      console.error('Create market error:', error);
+      (req.log || logger).error('Create market error', { error });
 
       // Handle specific errors
       if (error instanceof Error) {
@@ -199,7 +200,7 @@ export class MarketsController {
         },
       });
     } catch (error) {
-      console.error('List markets error:', error);
+      (req.log || logger).error('List markets error', { error });
       res.status(500).json({
         success: false,
         error: {
@@ -238,7 +239,7 @@ export class MarketsController {
         return;
       }
 
-      console.error('Get market details error:', error);
+      (req.log || logger).error('Get market details error', { error });
       res.status(500).json({
         success: false,
         error: {
@@ -278,7 +279,7 @@ export class MarketsController {
         data: result,
       });
     } catch (error) {
-      console.error('Create pool error:', error);
+      (req.log || logger).error('Create pool error', { error });
       res.status(400).json({
         success: false,
         error: {

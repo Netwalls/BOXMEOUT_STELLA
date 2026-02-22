@@ -6,28 +6,30 @@ export const requestLogger = (
   next: NextFunction
 ) => {
   const start = Date.now();
+  const log = req.log;
 
-  console.log('Request:', {
-    method: req.method,
-    path: req.path,
-    query: req.query,
-    ip: req.ip,
-    userAgent: req.get('user-agent'),
-    timestamp: new Date().toISOString(),
-  });
+  if (log) {
+    log.info('Request', {
+      method: req.method,
+      path: req.path,
+      query: req.query,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+  }
 
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const logLevel = res.statusCode >= 400 ? 'error' : 'info';
-
-    console[logLevel]('Response:', {
-      method: req.method,
-      path: req.path,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip,
-      timestamp: new Date().toISOString(),
-    });
+    const level = res.statusCode >= 400 ? 'error' : 'info';
+    if (log) {
+      log[level]('Response', {
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        durationMs: duration,
+        ip: req.ip,
+      });
+    }
   });
 
   next();

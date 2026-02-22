@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { errorHandler, notFoundHandler, ApiError } from '../../src/middleware/error.middleware';
+import { logger } from '../../src/utils/logger';
 
 describe('Error Handler Middleware', () => {
   let app: express.Application;
@@ -152,8 +153,8 @@ describe('Error Handler Middleware', () => {
       process.env.NODE_ENV = originalEnv;
     });
 
-    it('should log errors to console', async () => {
-      const consoleSpy = vi.spyOn(console, 'error');
+    it('should log errors with structured logger', async () => {
+      const loggerSpy = vi.spyOn(logger, 'error');
 
       app.get('/test', (req, res, next) => {
         next(new Error('Test error'));
@@ -162,8 +163,8 @@ describe('Error Handler Middleware', () => {
 
       await request(app).get('/test');
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Error occurred:',
+      expect(loggerSpy).toHaveBeenCalledWith(
+        'Error occurred',
         expect.objectContaining({
           error: 'Test error',
           path: '/test',

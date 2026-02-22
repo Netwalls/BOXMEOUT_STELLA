@@ -11,6 +11,7 @@ import {
   nativeToScVal,
   scValToNative,
 } from '@stellar/stellar-sdk';
+import { logger } from '../../utils/logger.js';
 
 interface CreatePoolParams {
   marketId: string; // hex string (BytesN<32>)
@@ -48,7 +49,7 @@ export class AmmService {
       try {
         this.adminKeypair = Keypair.fromSecret(adminSecret);
       } catch (error) {
-        console.warn('Invalid ADMIN_WALLET_SECRET for AMM service');
+        logger.warn('Invalid ADMIN_WALLET_SECRET for AMM service');
       }
     }
   }

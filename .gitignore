@@ -17,6 +17,7 @@ target/
 .env.local
 .env.production
 .env.development
+.env.contracts
 backend/.env
 backend/.env.local
 frontend/.env
@@ -49,6 +50,7 @@ frontend/coverage/
 # Rust
 Cargo.lock
 **/*.rs.bk
+test_snapshots
 
 # Temporary files
 tmp/

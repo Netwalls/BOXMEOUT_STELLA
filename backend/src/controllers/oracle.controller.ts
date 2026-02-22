@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from '../types/auth.types.js';
 import { MarketService } from '../services/market.service.js';
 import { oracleService } from '../services/blockchain/oracle.js';
 import { marketBlockchainService } from '../services/blockchain/market.js';
+import { logger } from '../utils/logger.js';
 import { z } from 'zod';
 
 const attestSchema = z.object({
@@ -51,7 +52,7 @@ export class OracleController {
         },
       });
     } catch (error) {
-      console.error('Attest error:', error);
+      (req.log || logger).error('Attest error', { error });
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Attestation failed',
@@ -99,7 +100,7 @@ export class OracleController {
         },
       });
     } catch (error) {
-      console.error('Resolve error:', error);
+      (req.log || logger).error('Resolve error', { error });
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Resolution failed',
@@ -142,7 +143,7 @@ export class OracleController {
         },
       });
     } catch (error) {
-      console.error('Claim error:', error);
+      (req.log || logger).error('Claim error', { error });
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Claiming failed',

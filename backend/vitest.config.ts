@@ -27,6 +27,7 @@ export default defineConfig({
       },
     },
     // Test-specific configurations
+    fileParallelism: false, // Run tests serially to avoid database race conditions
     testTimeout: 30000, // 30 seconds for integration tests
     hookTimeout: 10000, // 10 seconds for beforeAll/afterAll
   },

@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { logger } from '../utils/logger.js';
 
 // Environment configuration
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -18,7 +19,7 @@ export function getRedisClient(): Redis {
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
         if (times > 3) {
-          console.error('Redis connection failed after 3 retries');
+          logger.error('Redis connection failed after 3 retries');
           return null; // Stop retrying
         }
         // Exponential backoff: 100ms, 200ms, 400ms
@@ -31,23 +32,23 @@ export function getRedisClient(): Redis {
 
     // Connection event handlers
     redisClient.on('error', (err) => {
-      console.error('❌ Redis connection error:', err.message);
+      logger.error('Redis connection error', { message: err.message });
     });
 
     redisClient.on('connect', () => {
-      console.log('🔌 Redis connecting...');
+      logger.info('Redis connecting');
     });
 
     redisClient.on('ready', () => {
-      console.log('✅ Redis connected and ready');
+      logger.info('Redis connected and ready');
     });
 
     redisClient.on('close', () => {
-      console.log('🔌 Redis connection closed');
+      logger.info('Redis connection closed');
     });
 
     redisClient.on('reconnecting', (delay: number) => {
-      console.log(`🔄 Redis reconnecting in ${delay}ms...`);
+      logger.info('Redis reconnecting', { delayMs: delay });
     });
   }
 
@@ -63,12 +64,12 @@ export async function initializeRedis(): Promise<void> {
 
   // Check if already connected
   if (client.status === 'ready' || client.status === 'connecting') {
-    console.log('✅ Redis already connected/connecting');
+    logger.info('Redis already connected/connecting');
     return;
   }
 
   try {
-    console.log('🔌 Connecting to Redis...');
+    logger.info('Connecting to Redis');
     await client.connect();
 
     // Test the connection
@@ -76,9 +77,9 @@ export async function initializeRedis(): Promise<void> {
     if (pong !== 'PONG') {
       throw new Error('Redis ping failed');
     }
-    console.log('✅ Redis connected successfully');
+    logger.info('Redis connected successfully');
   } catch (error) {
-    console.error('❌ Failed to connect to Redis:', error);
+    logger.error('Failed to connect to Redis', { error });
     throw error;
   }
 }
@@ -91,7 +92,7 @@ export async function closeRedisConnection(): Promise<void> {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
-    console.log('🔌 Redis connection closed gracefully');
+    logger.info('Redis connection closed gracefully');
   }
 }
 

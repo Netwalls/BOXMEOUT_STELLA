@@ -45,9 +45,12 @@ cargo fmt -- --check
 echo "Running Rust lint (clippy)..."
 cargo clippy -- -D warnings
 
-echo "Running Rust tests..."
-cargo test
+echo "Building Rust smart contracts..."
+../../../build_contracts.sh
 
-cd ../../../..
+echo "Running Rust tests..."
+cargo test --features testutils
+
+cd ../../../
 
 echo "All checks passed!"

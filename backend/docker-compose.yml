@@ -57,6 +57,32 @@ services:
     networks:
       - boxmeout_network
 
+  db-backup:
+    image: postgres:16-alpine
+    container_name: boxmeout_db_backup
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: password
+      PGDATABASE: boxmeout_dev
+      BACKUP_DIR: /backups
+      TEST_HOST: postgres_test
+      TEST_DB: boxmeout_test
+    volumes:
+      - db_backups:/backups
+      - ./scripts/backup/backup.sh:/scripts/backup.sh:ro
+      - ./scripts/backup/restore.sh:/scripts/restore.sh:ro
+      - ./scripts/backup/verify.sh:/scripts/verify.sh:ro
+      - ./scripts/backup/crontab:/etc/crontabs/root:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["crond", "-f", "-l", "2"]
+    networks:
+      - boxmeout_network
+
   redis:
     image: redis:7-alpine
     container_name: boxmeout_redis
@@ -81,3 +107,4 @@ volumes:
   postgres_data:
   postgres_test_data:
   redis_data:
+  db_backups:

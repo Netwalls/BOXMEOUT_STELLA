@@ -27,7 +27,9 @@ import {
   noCache,
 } from './middleware/security.middleware.js';
 
+import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 import { requestLogger } from './middleware/logging.middleware.js';
+import { logger } from './utils/logger.js';
 import {
   errorHandler,
   notFoundHandler,
@@ -67,7 +69,8 @@ app.use(noCache);
 app.use(express.json({ limit: '10mb' })); // Increased for blockchain operations
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging
+// Request ID and structured request logging (requestId + userId in logs)
+app.use(requestIdMiddleware);
 app.use(requestLogger);
 
 // Trust proxy (for rate limiting behind reverse proxy)
@@ -228,31 +231,25 @@ app.use(errorHandler);
 async function startServer(): Promise<void> {
   try {
     // Initialize Redis connection
-    console.log('🔌 Connecting to Redis...');
+    logger.info('Connecting to Redis');
     await initializeRedis();
 
     // TODO: Initialize Prisma/Database connection
     // await prisma.$connect();
-    // console.log('🗄️  Database connected');
+    // logger.info('Database connected');
 
     // Start HTTP server
     app.listen(PORT, () => {
-      console.log(`
-╔════════════════════════════════════════════════════════════════╗
-║                                                                ║
-║   🥊 BoxMeOut Stella Backend API                               ║
-║                                                                ║
-║   Environment: ${NODE_ENV.padEnd(32)} ║
-║   Port: ${PORT.toString().padEnd(39)} ║
-║   API: http://localhost:${PORT.toString().padEnd(36)} ║
-║   Docs: http://localhost:${PORT}/api-docs${' '.padEnd(23)} ║
-║   Health: http://localhost:${PORT}/health${' '.padEnd(22)} ║
-║                                                                ║
-╚════════════════════════════════════════════════════════════════╝
-      `);
+      logger.info('BoxMeOut Stella Backend API started', {
+        environment: NODE_ENV,
+        port: PORT,
+        api: `http://localhost:${PORT}`,
+        docs: `http://localhost:${PORT}/api-docs`,
+        health: `http://localhost:${PORT}/health`,
+      });
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logger.error('Failed to start server', { error });
     process.exit(1);
   }
 }
@@ -262,7 +259,7 @@ async function startServer(): Promise<void> {
 // =============================================================================
 
 async function gracefulShutdown(signal: string): Promise<void> {
-  console.log(`\n🛑 ${signal} received. Shutting down gracefully...`);
+  logger.info(`${signal} received. Shutting down gracefully`);
 
   try {
     // Close Redis connection
@@ -271,10 +268,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
     // TODO: Close database connection
     // await prisma.$disconnect();
 
-    console.log('✅ Cleanup completed. Exiting.');
+    logger.info('Cleanup completed. Exiting.');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Error during shutdown:', error);
+    logger.error('Error during shutdown', { error });
     process.exit(1);
   }
 }
@@ -285,12 +282,12 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  logger.error('Uncaught Exception', { error });
   gracefulShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection', { promise, reason });
 });
 
 // Start the server if runs directly

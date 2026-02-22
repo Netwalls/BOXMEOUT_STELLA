@@ -15,10 +15,17 @@
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "test:integration": "vitest --config vitest.integration.config.ts",
+    "test:e2e": "./test-lifecycle.sh",
+    "test:e2e:watch": "vitest --config vitest.integration.config.ts tests/integration/market-lifecycle.e2e.test.ts",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts",
-    "format:check": "prettier --check src/**/*.ts"
+    "format:check": "prettier --check src/**/*.ts",
+    "loadtest": "cd load-tests && ./run-all.sh",
+    "loadtest:baseline": "cd load-tests && ./run-all.sh --scenario baseline",
+    "loadtest:websocket": "cd load-tests && ./run-all.sh --scenario websocket",
+    "loadtest:predictions": "cd load-tests && ./run-all.sh --scenario predictions",
+    "loadtest:amm": "cd load-tests && ./run-all.sh --scenario amm"
   },
   "keywords": [
     "stellar",

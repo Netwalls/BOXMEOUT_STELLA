@@ -1,205 +1,176 @@
-// backend/src/websocket/realtime.ts - WebSocket Real-Time Updates
-// Socket.io event handlers for live updates
+export interface MarketOdds {
+  yes: number;
+  no: number;
+}
 
-/*
-TODO: Initialize WebSocket Server
-- Create Socket.io server on same Express port
-- Setup connection authentication: verify JWT on connect
-- Setup CORS: allow frontend domain only
-- Setup namespaces: /markets, /leaderboard, /notifications
-- Enable compression for large payloads
-- Setup heartbeat: send ping every 30s, expect pong
-- Disconnect on failed authentication
-- Log all connections for monitoring
-*/
+export type OddsDirection = 'YES' | 'NO' | 'UNCHANGED';
 
-/*
-TODO: Market Subscription Events
-- socket.on('subscribe_market', market_id)
-  - Validate market_id exists
-  - Add socket to room: `market:${market_id}`
-  - Return: { subscribed: true, market_id }
-  - Emit to room: { type: 'user_joined', count: room_size }
+export interface OddsChangedEvent {
+  type: 'odds_changed';
+  marketId: string;
+  yesOdds: number;
+  noOdds: number;
+  direction: Exclude<OddsDirection, 'UNCHANGED'>;
+  timestamp: number;
+}
 
-- socket.on('unsubscribe_market', market_id)
-  - Remove socket from room
-  - Emit to room: { type: 'user_left', count: room_size }
+export interface RealtimeOddsBroadcasterOptions {
+  pollIntervalMs?: number;
+  significantChangeThresholdPct?: number;
+}
 
-- socket.on('disconnect')
-  - Remove socket from all rooms
-  - Update user.last_online timestamp
-*/
+export type FetchMarketOdds = (marketId: string) => Promise<MarketOdds>;
+export type BroadcastToMarketSubscribers = (
+  marketId: string,
+  event: OddsChangedEvent
+) => Promise<void> | void;
 
-/*
-TODO: Real-Time Odds Updates
-- Query AMM odds every 5 seconds (background job)
-- On change > 1%: emit to market subscribers
-- Emit: { type: 'odds_changed', market_id, yes_odds, no_odds, timestamp }
-- Include: volume_24h, participant_count_changed
-- Include: direction (odds_moving_yes or odds_moving_no)
-*/
+export function hasSignificantChange(
+  previousOdds: MarketOdds,
+  currentOdds: MarketOdds,
+  thresholdPct: number = 1
+): boolean {
+  const yesChange = relativePercentChange(previousOdds.yes, currentOdds.yes);
+  const noChange = relativePercentChange(previousOdds.no, currentOdds.no);
+  return Math.max(yesChange, noChange) > thresholdPct;
+}
 
-/*
-TODO: New Predictions Broadcast
-- When prediction committed: emit to market subscribers
-- Emit: { type: 'prediction_submitted', market_id, prediction_count_updated }
-- Don't include: predictor identity (privacy), actual prediction
-- Include: outcome_distribution (% betting YES vs NO)
+export function getDirection(
+  previousOdds: MarketOdds,
+  currentOdds: MarketOdds
+): OddsDirection {
+  if (currentOdds.yes > previousOdds.yes) {
+    return 'YES';
+  }
+  if (currentOdds.yes < previousOdds.yes) {
+    return 'NO';
+  }
+  return 'UNCHANGED';
+}
 
-- When prediction revealed: emit
-- Emit: { type: 'prediction_revealed', market_id }
-- Update outcome_distribution for participants
-*/
+function relativePercentChange(previous: number, current: number): number {
+  if (previous === 0) {
+    return current === 0 ? 0 : Number.POSITIVE_INFINITY;
+  }
 
-/*
-TODO: Trade Activity Updates
-- When shares bought/sold: emit to market subscribers
-- Emit: { type: 'trade_executed', market_id, outcome, quantity, price, timestamp }
-- Include: volume_update_24h, largest_trade_flag (if volume > $1000)
-- Track top traders on market (anonymized)
-*/
+  return Math.abs(((current - previous) / previous) * 100);
+}
 
-/*
-TODO: Market Lifecycle Events
-- When market closes: emit to subscribers
-- Emit: { type: 'market_closed', market_id, final_odds }
-- Disable further trading
+export class RealtimeOddsBroadcaster {
+  private readonly pollIntervalMs: number;
+  private readonly significantChangeThresholdPct: number;
+  private readonly marketSubscribers = new Map<string, Set<string>>();
+  private readonly lastPublishedOdds = new Map<string, MarketOdds>();
+  private pollTimer?: NodeJS.Timeout;
+  private pollInProgress = false;
 
-- When market resolves: emit
-- Emit: { type: 'market_resolved', market_id, winning_outcome }
-- Include: winnings_to_be_distributed
-- Include: dispute_period_open (7 days)
+  constructor(
+    private readonly fetchMarketOdds: FetchMarketOdds,
+    private readonly broadcastToMarketSubscribers: BroadcastToMarketSubscribers,
+    options: RealtimeOddsBroadcasterOptions = {}
+  ) {
+    this.pollIntervalMs = options.pollIntervalMs ?? 5000;
+    this.significantChangeThresholdPct =
+      options.significantChangeThresholdPct ?? 1;
+  }
 
-- When market disputed: emit
-- Emit: { type: 'market_disputed', market_id, dispute_count }
+  start(): void {
+    if (this.pollTimer) {
+      return;
+    }
 
-- When dispute resolved: emit
-- Emit: { type: 'dispute_resolved', market_id, final_outcome }
-*/
+    this.pollTimer = setInterval(() => {
+      void this.pollAllSubscribedMarkets();
+    }, this.pollIntervalMs);
+  }
 
-/*
-TODO: User Portfolio Updates
-- socket.on('subscribe_portfolio')
-  - Add socket to user's private room: `portfolio:${user_id}`
-  - Emit: { subscribed: true }
+  stop(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = undefined;
+    }
+  }
 
-- When user's position changes: emit
-- Emit: { type: 'position_updated', market_id, shares, current_value, unrealized_pnl }
-- Frequency: on significant change only (>5% move in user's portfolio)
+  subscribe(marketId: string, subscriberId: string): void {
+    const subscribers =
+      this.marketSubscribers.get(marketId) ?? new Set<string>();
+    subscribers.add(subscriberId);
+    this.marketSubscribers.set(marketId, subscribers);
+  }
 
-- When user claims winnings: emit
-- Emit: { type: 'winnings_claimed', amount, market_id }
-- Update balance in real-time
-*/
+  unsubscribe(marketId: string, subscriberId: string): void {
+    const subscribers = this.marketSubscribers.get(marketId);
+    if (!subscribers) {
+      return;
+    }
 
-/*
-TODO: Leaderboard Updates
-- socket.on('subscribe_leaderboard', timeframe)
-  - timeframe: 'global' | 'weekly' | 'category'
-  - Add socket to: `leaderboard:${timeframe}`
-  - Emit: { subscribed: true, your_rank: X }
+    subscribers.delete(subscriberId);
+    if (subscribers.size === 0) {
+      this.marketSubscribers.delete(marketId);
+      this.lastPublishedOdds.delete(marketId);
+    }
+  }
 
-- Emit rank changes: every 5 minutes or on rank change
-- Emit: { type: 'rank_changed', user_id, new_rank, old_rank, score_change }
-- Send to all leaderboard subscribers
+  getSubscriberCount(marketId: string): number {
+    return this.marketSubscribers.get(marketId)?.size ?? 0;
+  }
 
-- Emit new top predictors
-- Emit: { type: 'new_top_10_member', user_id, username, rank }
+  async pollAllSubscribedMarkets(): Promise<void> {
+    if (this.pollInProgress) {
+      return;
+    }
 
-- Emit streaks
-- Emit: { type: 'streak_updated', user_id, streak_length, streak_type }
-*/
+    this.pollInProgress = true;
+    try {
+      const marketIds = [...this.marketSubscribers.keys()];
+      await Promise.all(marketIds.map((marketId) => this.pollMarket(marketId)));
+    } finally {
+      this.pollInProgress = false;
+    }
+  }
 
-/*
-TODO: Achievement Notifications
-- When user earns achievement: emit
-- Emit to: `portfolio:${user_id}` (private)
-- Emit: { type: 'achievement_earned', achievement_id, name, tier }
-- Include: icon_url, badge
-- Broadcast to global subscribers (limited): top tier achievements only
-*/
+  private async pollMarket(marketId: string): Promise<void> {
+    if (this.getSubscriberCount(marketId) === 0) {
+      return;
+    }
 
-/*
-TODO: System Notifications
-- Emergency maintenance: broadcast to all connected
-- Emit: { type: 'system_alert', message, severity }
+    try {
+      const currentOdds = await this.fetchMarketOdds(marketId);
+      const previousOdds = this.lastPublishedOdds.get(marketId);
 
-- Fee changes: broadcast
-- Emit: { type: 'fee_updated', new_fee_pct }
+      if (!previousOdds) {
+        this.lastPublishedOdds.set(marketId, currentOdds);
+        return;
+      }
 
-- Oracle consensus reached: broadcast
-- Emit: { type: 'oracle_consensus', markets_affected_count }
-*/
+      if (
+        !hasSignificantChange(
+          previousOdds,
+          currentOdds,
+          this.significantChangeThresholdPct
+        )
+      ) {
+        return;
+      }
 
-/*
-TODO: Notification Preferences
-- socket.on('set_preferences', { notification_types })
-  - notification_types: string[] = ['odds_changes', 'trades', 'achievements', ...]
-  - Store per socket connection
-  - Only emit subscribed events to this socket
+      const direction = getDirection(previousOdds, currentOdds);
+      if (direction === 'UNCHANGED') {
+        return;
+      }
 
-- socket.on('set_mute_market', market_id)
-  - Mute updates for specific market
-  - Store in database: user.muted_markets
+      const event: OddsChangedEvent = {
+        type: 'odds_changed',
+        marketId,
+        yesOdds: currentOdds.yes,
+        noOdds: currentOdds.no,
+        direction,
+        timestamp: Date.now(),
+      };
 
-- socket.on('set_mute_user', user_id)
-  - Mute updates from specific user's trades
-*/
-
-/*
-TODO: Typing/Presence Indicators
-- socket.on('user_online')
-  - Emit to leaderboard: { type: 'user_online', user_id }
-
-- socket.on('viewing_market', market_id)
-  - Emit to market: { type: 'viewer_count', count }
-  - Useful for social proof
-
-- On disconnect: emit { type: 'user_offline' }
-*/
-
-/*
-TODO: Rate Limiting per Connection
-- Max events per second: 10
-- Max subscriptions per socket: 50
-- Kick socket if exceeds
-- Track abuse: log IPs sending spam
-*/
-
-/*
-TODO: Error Handling
-- On event error: emit to socket
-- Emit: { type: 'error', message, error_code }
-- Don't disconnect, let user retry
-
-- Connection error: log but don't expose details
-- Reconnection: client auto-reconnect with exponential backoff
-*/
-
-/*
-TODO: Heartbeat & Keep-Alive
-- Emit: every 30 seconds, { type: 'ping', timestamp }
-- Expect pong response within 10 seconds
-- Disconnect if no pong
-- Helps detect stale connections
-*/
-
-/*
-TODO: Monitor & Metrics
-- Track: active connections count
-- Track: messages_per_minute
-- Track: errors_per_hour
-- Alert if connections drop unexpectedly (server restart?)
-- Log high CPU usage from WebSocket processing
-*/
-
-/*
-TODO: Testing Events (Dev Only)
-- socket.on('test_odds_change')
-  - Simulate odds change for testing UI
-- socket.on('test_market_resolved')
-  - Simulate market resolution
-- Disabled in production
-*/
-
-export default {};
+      await this.broadcastToMarketSubscribers(marketId, event);
+      this.lastPublishedOdds.set(marketId, currentOdds);
+    } catch (error) {
+      console.error('Realtime odds polling failed', { marketId, error });
+    }
+  }
+}

@@ -11,6 +11,7 @@ import {
   nativeToScVal,
   scValToNative,
 } from '@stellar/stellar-sdk';
+import { logger } from '../../utils/logger.js';
 
 export interface AttestationResult {
   txHash: string;
@@ -40,7 +41,7 @@ export class OracleService {
       try {
         this.adminKeypair = Keypair.fromSecret(adminSecret);
       } catch (error) {
-        console.warn('Invalid ADMIN_WALLET_SECRET for Oracle service');
+        logger.warn('Invalid ADMIN_WALLET_SECRET for Oracle service');
       }
     }
   }
@@ -102,7 +103,7 @@ export class OracleService {
         throw new Error(`Transaction failed: ${response.status}`);
       }
     } catch (error) {
-      console.error('Oracle.submit_attestation() error:', error);
+      logger.error('Oracle.submit_attestation() error', { error });
       throw new Error(
         `Failed to submit attestation on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -151,7 +152,7 @@ export class OracleService {
 
       return null;
     } catch (error) {
-      console.error('Error checking consensus:', error);
+      logger.error('Error checking consensus', { error });
       return null;
     }
   }

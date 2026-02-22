@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
 import { beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { Keypair } from '@stellar/stellar-sdk';
+import { logger } from '../src/utils/logger.js';
 
 // Load environment variables before anything else
 config();
@@ -51,7 +52,7 @@ beforeAll(async () => {
   const isUnitTest = process.env.VITEST_TEST_FILE?.includes('middleware');
 
   if (isUnitTest) {
-    console.log('🧪 Skipping database setup for middleware unit tests');
+    logger.info('Skipping database setup for middleware unit tests');
     return;
   }
 
@@ -59,7 +60,7 @@ beforeAll(async () => {
   const hasDatabaseUrl = process.env.DATABASE_URL_TEST || process.env.DATABASE_URL;
 
   if (hasDatabaseUrl && !process.env.SKIP_DB_SETUP) {
-    console.log('🔧 Setting up test database for integration tests...');
+    logger.info('Setting up test database for integration tests');
 
     prisma = new PrismaClient({
       datasources: {
@@ -79,7 +80,9 @@ beforeAll(async () => {
         stdio: 'pipe',
       });
     } catch (error: any) {
-      console.warn('⚠️ Database migrations may already be applied:', error.message);
+      logger.warn('Database migrations may already be applied', {
+        message: error.message,
+      });
     }
 
     if (prisma) {
@@ -105,7 +108,7 @@ async function cleanDatabase(client: PrismaClient) {
     await client.auditLog.deleteMany();
     await client.user.deleteMany();
   } catch (error) {
-    console.warn('⚠️ Failed to clean database:', error);
+    logger.warn('Failed to clean database', { error });
   }
 }
 

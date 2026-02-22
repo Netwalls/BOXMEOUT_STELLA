@@ -1,14 +1,15 @@
 // Seed script for development data
 import { PrismaClient, UserTier, MarketCategory, MarketStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { logger } from '../src/utils/logger.js';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting database seed...');
+  logger.info('Starting database seed');
 
   // Clear existing data
-  console.log('🧹 Cleaning existing data...');
+  logger.info('Cleaning existing data');
   await prisma.trade.deleteMany();
   await prisma.prediction.deleteMany();
   await prisma.share.deleteMany();
@@ -23,7 +24,7 @@ async function main() {
   await prisma.user.deleteMany();
 
   // Create users
-  console.log('👥 Creating users...');
+  logger.info('Creating users');
   const passwordHash = await bcrypt.hash('password123', 12);
 
   const users = await Promise.all([
@@ -84,10 +85,10 @@ async function main() {
     }),
   ]);
 
-  console.log(`✅ Created ${users.length} users`);
+  logger.info('Created users', { count: users.length });
 
   // Create markets
-  console.log('🏟️  Creating markets...');
+  logger.info('Creating markets');
   const now = new Date();
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -164,10 +165,10 @@ async function main() {
     }),
   ]);
 
-  console.log(`✅ Created ${markets.length} markets`);
+  logger.info('Created markets', { count: markets.length });
 
   // Create predictions
-  console.log('🎯 Creating predictions...');
+  logger.info('Creating predictions');
   const predictions = await Promise.all([
     prisma.prediction.create({
       data: {
@@ -214,10 +215,10 @@ async function main() {
     }),
   ]);
 
-  console.log(`✅ Created ${predictions.length} predictions`);
+  logger.info('Created predictions', { count: predictions.length });
 
   // Create leaderboard entries
-  console.log('🏆 Creating leaderboard...');
+  logger.info('Creating leaderboard');
   await Promise.all([
     prisma.leaderboard.create({
       data: {
@@ -266,10 +267,10 @@ async function main() {
     }),
   ]);
 
-  console.log('✅ Created leaderboard entries');
+  logger.info('Created leaderboard entries');
 
   // Create achievements
-  console.log('🏅 Creating achievements...');
+  logger.info('Creating achievements');
   await Promise.all([
     prisma.achievement.create({
       data: {
@@ -300,10 +301,10 @@ async function main() {
     }),
   ]);
 
-  console.log('✅ Created achievements');
+  logger.info('Created achievements');
 
   // Create transactions
-  console.log('💰 Creating transactions...');
+  logger.info('Creating transactions');
   await Promise.all([
     prisma.transaction.create({
       data: {
@@ -331,21 +332,19 @@ async function main() {
     }),
   ]);
 
-  console.log('✅ Created transactions');
+  logger.info('Created transactions');
 
-  console.log('🎉 Database seeded successfully!');
-  console.log('\n📊 Summary:');
-  console.log(`   Users: ${users.length}`);
-  console.log(`   Markets: ${markets.length}`);
-  console.log(`   Predictions: ${predictions.length}`);
-  console.log('\n🔐 Test Credentials:');
-  console.log('   Email: admin@boxmeout.com');
-  console.log('   Password: password123');
+  logger.info('Database seeded successfully', {
+    users: users.length,
+    markets: markets.length,
+    predictions: predictions.length,
+    testCredentials: { email: 'admin@boxmeout.com', password: 'password123' },
+  });
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Seed failed:', e);
+    logger.error('Seed failed', { error: e });
     process.exit(1);
   })
   .finally(async () => {

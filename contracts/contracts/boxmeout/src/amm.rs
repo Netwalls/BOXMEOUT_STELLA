@@ -1,7 +1,51 @@
 // contracts/amm.rs - Automated Market Maker for Outcome Shares
 // Enables trading YES/NO outcome shares with dynamic odds pricing (Polymarket model)
 
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contract, contractevent, contractimpl, token, Address, BytesN, Env, Symbol};
+
+#[contractevent]
+pub struct AmmInitializedEvent {
+    pub admin: Address,
+    pub factory: Address,
+    pub max_liquidity_cap: u128,
+}
+
+#[contractevent]
+pub struct PoolCreatedEvent {
+    pub market_id: BytesN<32>,
+    pub initial_liquidity: u128,
+    pub yes_reserve: u128,
+    pub no_reserve: u128,
+}
+
+#[contractevent]
+pub struct BuySharesEvent {
+    pub buyer: Address,
+    pub market_id: BytesN<32>,
+    pub outcome: u32,
+    pub shares_out: u128,
+    pub amount: u128,
+    pub fee_amount: u128,
+}
+
+#[contractevent]
+pub struct SellSharesEvent {
+    pub seller: Address,
+    pub market_id: BytesN<32>,
+    pub outcome: u32,
+    pub shares: u128,
+    pub payout_after_fee: u128,
+    pub fee_amount: u128,
+}
+
+#[contractevent]
+pub struct LiquidityRemovedEvent {
+    pub market_id: BytesN<32>,
+    pub lp_provider: Address,
+    pub lp_tokens: u128,
+    pub yes_amount: u128,
+    pub no_amount: u128,
+}
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -34,6 +78,8 @@ pub struct Pool {
 #[contract]
 pub struct AMM;
 
+/// Soroban contract type for AMM
+pub type AMMContract = AMM;
 #[contractimpl]
 impl AMM {
     /// Initialize AMM with liquidity pools
@@ -85,10 +131,12 @@ impl AMM {
         );
 
         // Emit initialization event
-        env.events().publish(
-            (Symbol::new(&env, "amm_initialized"),),
-            (admin, factory, max_liquidity_cap),
-        );
+        AmmInitializedEvent {
+            admin,
+            factory,
+            max_liquidity_cap,
+        }
+        .publish(&env);
     }
 
     /// Create new liquidity pool for market
@@ -146,15 +194,18 @@ impl AMM {
         let token_client = token::Client::new(&env, &usdc_token);
         token_client.transfer(
             &creator,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &(initial_liquidity as i128),
         );
 
         // Emit PoolCreated event
-        env.events().publish(
-            (Symbol::new(&env, "pool_created"),),
-            (market_id, initial_liquidity, yes_reserve, no_reserve),
-        );
+        PoolCreatedEvent {
+            market_id,
+            initial_liquidity,
+            yes_reserve,
+            no_reserve,
+        }
+        .publish(&env);
     }
 
     /// Buy outcome shares (YES or NO)
@@ -273,7 +324,7 @@ impl AMM {
             .expect("usdc token not set");
 
         let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(&buyer, &env.current_contract_address(), &(amount as i128));
+        token_client.transfer(&buyer, env.current_contract_address(), &(amount as i128));
 
         // Update User Shares Balance
         let user_share_key = (
@@ -288,10 +339,15 @@ impl AMM {
             .set(&user_share_key, &(current_shares + shares_out));
 
         // Record trade (Optional: Simplified to event only for this resolution)
-        env.events().publish(
-            (Symbol::new(&env, "buy_shares"),),
-            (buyer, market_id, outcome, shares_out, amount, fee_amount),
-        );
+        BuySharesEvent {
+            buyer,
+            market_id,
+            outcome,
+            shares_out,
+            amount,
+            fee_amount,
+        }
+        .publish(&env);
 
         shares_out
     }
@@ -420,17 +476,15 @@ impl AMM {
         );
 
         // Emit SellShares event
-        env.events().publish(
-            (Symbol::new(&env, "sell_shares"),),
-            (
-                seller,
-                market_id,
-                outcome,
-                shares,
-                payout_after_fee,
-                fee_amount,
-            ),
-        );
+        SellSharesEvent {
+            seller,
+            market_id,
+            outcome,
+            shares,
+            payout_after_fee,
+            fee_amount,
+        }
+        .publish(&env);
 
         payout_after_fee
     }
@@ -616,10 +670,14 @@ impl AMM {
         );
 
         // Emit LiquidityRemoved event
-        env.events().publish(
-            (Symbol::new(&env, "liquidity_removed"),),
-            (market_id, lp_provider, lp_tokens, yes_amount, no_amount),
-        );
+        LiquidityRemovedEvent {
+            market_id,
+            lp_provider,
+            lp_tokens,
+            yes_amount,
+            no_amount,
+        }
+        .publish(&env);
 
         (yes_amount, no_amount)
     }
@@ -646,6 +704,61 @@ impl AMM {
 
         // Return: (yes_reserve, no_reserve, total_liquidity, yes_odds, no_odds)
         (yes_reserve, no_reserve, total_liquidity, yes_odds, no_odds)
+    }
+
+    /// Pure function: Calculate current YES/NO prices based on reserves
+    /// Returns (yes_price, no_price) in basis points (10000 = 1.00 USDC)
+    /// Accounts for trading fees in the price calculation
+    ///
+    /// Price represents the cost to buy 1 share of the outcome
+    /// Formula: price = reserve_out / (reserve_in + reserve_out)
+    /// With fee adjustment: effective_price = price * (1 + fee_rate)
+    ///
+    /// Returns (0, 0) for invalid inputs (zero reserves)
+    pub fn get_current_prices(env: Env, market_id: BytesN<32>) -> (u32, u32) {
+        // Check if pool exists
+        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        if !env.storage().persistent().has(&pool_exists_key) {
+            return (0, 0); // No pool exists
+        }
+
+        // Get pool reserves
+        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
+        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+
+        let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
+        let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
+
+        // Handle zero liquidity case
+        if yes_reserve == 0 || no_reserve == 0 {
+            return (0, 0);
+        }
+
+        // Get trading fee (default 20 basis points = 0.2%)
+        let trading_fee_bps: u128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, TRADING_FEE_KEY))
+            .unwrap_or(20);
+
+        let total_liquidity = yes_reserve + no_reserve;
+
+        // Calculate base prices (marginal price for infinitesimal trade)
+        // YES price = no_reserve / total_liquidity
+        // NO price = yes_reserve / total_liquidity
+        // This represents the instantaneous exchange rate
+
+        let yes_base_price = (no_reserve * 10000) / total_liquidity;
+        let no_base_price = (yes_reserve * 10000) / total_liquidity;
+
+        // Apply fee adjustment to get effective buying price
+        // Effective price = base_price * (1 + fee_rate)
+        // Since fee is in basis points: effective = base * (10000 + fee) / 10000
+
+        let yes_price = ((yes_base_price * (10000 + trading_fee_bps)) / 10000) as u32;
+        let no_price = ((no_base_price * (10000 + trading_fee_bps)) / 10000) as u32;
+
+        (yes_price, no_price)
     }
 
     // TODO: Implement remaining AMM functions

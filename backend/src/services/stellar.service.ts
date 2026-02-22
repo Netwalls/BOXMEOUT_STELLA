@@ -1,5 +1,6 @@
 import { Keypair } from '@stellar/stellar-sdk';
 import { AuthError } from '../types/auth.types.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Service for Stellar blockchain operations
@@ -97,7 +98,7 @@ export class StellarService {
 
       // Log unexpected errors but return false for security
       // (don't leak internal error details)
-      console.error('Signature verification error:', error);
+      logger.error('Signature verification error', { error });
       return false;
     }
   }
