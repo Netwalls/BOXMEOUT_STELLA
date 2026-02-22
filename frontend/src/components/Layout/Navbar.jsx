@@ -31,7 +31,7 @@ const Navbar = ({ user }) => {
             style={{
               width: "60px",
               height: "60px",
-              border: "4px solid yellow",
+              border: "4px solid var(--color-primary)",
               overflow: "hidden",
               background: "#333",
             }}
@@ -44,7 +44,7 @@ const Navbar = ({ user }) => {
                 justifyContent: "center",
                 alignItems: "center",
                 height: "100%",
-                color: "yellow",
+                color: "var(--color-primary)",
               }}
             >
               {user.username[0]}
@@ -54,7 +54,7 @@ const Navbar = ({ user }) => {
             style={{
               fontSize: "1.5rem",
               fontWeight: "bold",
-              color: "yellow",
+              color: "var(--color-primary)",
               lineHeight: 1,
             }}
           >
@@ -78,7 +78,7 @@ const Navbar = ({ user }) => {
               width: `${healthPercent}%`,
               height: "100%",
               background:
-                "linear-gradient(90deg, #ff0000 0%, #ffff00 50%, #00ff00 100%)",
+                "linear-gradient(90deg, #330000 0%, #990000 50%, #ff0000 100%)",
               transition: "width 0.5s ease-out",
             }}
           ></div>
@@ -100,21 +100,16 @@ const Navbar = ({ user }) => {
         </div>
       </div>
 
-      {/* Center Timer/Logo */}
       <div style={{ textAlign: "center" }}>
-        <h1
-          className="glitch-text"
-          data-text="BOXMEOUT"
+        <img
+          src="/logo.jpeg"
+          alt="BOXMEOUT Logo"
           style={{
-            fontSize: "3rem",
-            margin: 0,
-            color: "white",
-            textShadow: "4px 4px 0 var(--color-primary)",
-            fontStyle: "italic",
+            height: "80px",
+            borderRadius: "10px",
+            boxShadow: "0 0 20px rgba(225, 29, 72, 0.3)",
           }}
-        >
-          BOXMEOUT
-        </h1>
+        />
         <div
           style={{
             background: "rgba(255, 0, 0, 0.2)",

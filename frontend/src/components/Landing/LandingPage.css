@@ -1,0 +1,26 @@
+.landing-page-wrapper {
+  background: var(--color-bg-main);
+  color: #fff;
+  overflow-x: hidden;
+}
+
+.mobile-cta-fab {
+  display: none;
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+}
+
+@media (max-width: 768px) {
+  .mobile-cta-fab {
+    display: block;
+    width: 90%;
+  }
+
+  .mobile-cta-fab .btn {
+    width: 100%;
+    box-shadow: 0 10px 30px rgba(0, 243, 255, 0.4);
+  }
+}
