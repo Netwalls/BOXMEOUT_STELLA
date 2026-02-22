@@ -10,6 +10,10 @@ import {
   encrypt,
   decrypt,
 } from '../utils/crypto.js';
+import {
+  validateNumericInput,
+  validateOutcome,
+} from '../utils/sanitization.js';
 
 export class PredictionService {
   private predictionRepository: PredictionRepository;
@@ -32,6 +36,15 @@ export class PredictionService {
     predictedOutcome: number,
     amountUsdc: number
   ) {
+    // Validate and sanitize inputs
+    const validatedOutcome = validateOutcome(predictedOutcome);
+    const validatedAmount = validateNumericInput(amountUsdc, {
+      min: 0.0000001,
+      max: 922337203685.4775807,
+      allowZero: false,
+      allowDecimals: true,
+    });
+
     // Validate market exists and is open
     const market = await this.marketRepository.findById(marketId);
     if (!market) {
@@ -55,23 +68,13 @@ export class PredictionService {
       throw new Error('User already has a prediction for this market');
     }
 
-    // Validate amount
-    if (amountUsdc <= 0) {
-      throw new Error('Amount must be greater than 0');
-    }
-
-    // Validate outcome
-    if (![0, 1].includes(predictedOutcome)) {
-      throw new Error('Predicted outcome must be 0 (NO) or 1 (YES)');
-    }
-
     // Check user balance
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new Error('User not found');
     }
 
-    if (Number(user.usdcBalance) < amountUsdc) {
+    if (Number(user.usdcBalance) < validatedAmount) {
       throw new Error('Insufficient balance');
     }
 
@@ -80,7 +83,7 @@ export class PredictionService {
     const commitmentHash = createCommitmentHash(
       userId,
       marketId,
-      predictedOutcome,
+      validatedOutcome,
       salt
     );
 
@@ -91,7 +94,7 @@ export class PredictionService {
     // const txHash = await blockchainService.commitPrediction(
     //   marketId,
     //   commitmentHash,
-    //   amountUsdc
+    //   validatedAmount
     // );
     const txHash = 'mock-tx-hash-' + Date.now(); // Mock for now
 

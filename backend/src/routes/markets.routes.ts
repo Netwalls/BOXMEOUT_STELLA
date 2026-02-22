@@ -4,6 +4,8 @@
 import { Router } from 'express';
 import { marketsController } from '../controllers/markets.controller.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.middleware.js';
+import { apiRateLimiter, tradeRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { validate, schemas } from '../middleware/validation.middleware.js';
 
 const router = Router();
 
@@ -11,32 +13,72 @@ const router = Router();
  * POST /api/markets - Create new market
  * Requires authentication and wallet connection
  */
-router.post('/', requireAuth, (req, res) =>
-  marketsController.createMarket(req, res)
+router.post(
+  '/',
+  requireAuth,
+  apiRateLimiter,
+  validate({ body: schemas.createMarket }),
+  (req, res) => marketsController.createMarket(req, res)
 );
 
 /**
  * GET /api/markets - List all markets
  * Optional authentication for personalized results
  */
-router.get('/', optionalAuth, (req, res) =>
-  marketsController.listMarkets(req, res)
+router.get(
+  '/',
+  optionalAuth,
+  apiRateLimiter,
+  validate({ query: schemas.pagination }),
+  (req, res) => marketsController.listMarkets(req, res)
 );
 
 /**
  * GET /api/markets/:id - Get market details
  * Optional authentication for personalized data
  */
-router.get('/:id', optionalAuth, (req, res) =>
-  marketsController.getMarketDetails(req, res)
+router.get(
+  '/:id',
+  optionalAuth,
+  apiRateLimiter,
+  validate({ params: schemas.idParam }),
+  (req, res) => marketsController.getMarketDetails(req, res)
 );
 
 /**
  * POST /api/markets/:id/pool - Create AMM pool for a market
  * Requires authentication and admin/operator privileges (uses admin signer)
  */
-router.post('/:id/pool', requireAuth, (req, res) =>
-  marketsController.createPool(req, res)
+router.post(
+  '/:id/pool',
+  requireAuth,
+  apiRateLimiter,
+  validate({ params: schemas.idParam, body: schemas.createPool }),
+  (req, res) => marketsController.createPool(req, res)
+);
+
+/**
+ * POST /api/markets/:id/buy-shares - Buy shares in a market
+ * Requires authentication, uses trade rate limiter (30/min per wallet)
+ */
+router.post(
+  '/:id/buy-shares',
+  requireAuth,
+  tradeRateLimiter,
+  validate({ params: schemas.idParam, body: schemas.tradeShares }),
+  (req, res) => marketsController.buyShares(req, res)
+);
+
+/**
+ * POST /api/markets/:id/sell-shares - Sell shares in a market
+ * Requires authentication, uses trade rate limiter (30/min per wallet)
+ */
+router.post(
+  '/:id/sell-shares',
+  requireAuth,
+  tradeRateLimiter,
+  validate({ params: schemas.idParam, body: schemas.tradeShares }),
+  (req, res) => marketsController.sellShares(req, res)
 );
 
 export default router;
