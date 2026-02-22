@@ -25,7 +25,7 @@ fn create_test_env() -> Env {
 }
 
 fn register_oracle(env: &Env) -> Address {
-    env.register(OracleManager, ())
+    env.register_contract(None, OracleManager)
 }
 
 #[test]
@@ -564,7 +564,7 @@ fn test_finalize_resolution_integration() {
 
     // Register Market contract
     let market_id_bytes = BytesN::from_array(&env, &[9u8; 32]);
-    let market_contract_id = env.register(PredictionMarket, ());
+    let market_contract_id = env.register_contract(None, PredictionMarket);
     let market_client = PredictionMarketClient::new(&env, &market_contract_id);
 
     // Setup token
@@ -652,7 +652,7 @@ fn test_finalize_resolution_no_consensus() {
     let oracle_id = register_oracle(&env);
     let oracle_client = OracleManagerClient::new(&env, &oracle_id);
 
-    let market_contract_id = env.register(PredictionMarket, ());
+    let market_contract_id = env.register_contract(None, PredictionMarket);
     let market_id_bytes = BytesN::from_array(&env, &[10u8; 32]);
 
     let admin = Address::generate(&env);
@@ -688,7 +688,7 @@ fn test_finalize_resolution_dispute_period_not_elapsed() {
     let oracle_id = register_oracle(&env);
     let oracle_client = OracleManagerClient::new(&env, &oracle_id);
 
-    let market_contract_id = env.register(PredictionMarket, ());
+    let market_contract_id = env.register_contract(None, PredictionMarket);
     let market_id_bytes = BytesN::from_array(&env, &[11u8; 32]);
 
     let admin = Address::generate(&env);
@@ -725,7 +725,7 @@ fn test_finalize_resolution_market_not_registered() {
     let oracle_id = register_oracle(&env);
     let oracle_client = OracleManagerClient::new(&env, &oracle_id);
 
-    let market_contract_id = env.register(PredictionMarket, ());
+    let market_contract_id = env.register_contract(None, PredictionMarket);
     let market_id_bytes = BytesN::from_array(&env, &[12u8; 32]);
 
     let admin = Address::generate(&env);

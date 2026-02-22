@@ -1078,7 +1078,7 @@ mod tests {
         let oracle1 = Address::generate(env);
         let oracle2 = Address::generate(env);
 
-        let oracle_id = env.register(OracleManager, ());
+        let oracle_id = env.register_contract(None, OracleManager);
         let oracle_client = OracleManagerClient::new(env, &oracle_id);
 
         env.mock_all_auths();
