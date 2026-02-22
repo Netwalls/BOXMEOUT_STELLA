@@ -4,23 +4,50 @@
 import { Router } from 'express';
 import { predictionsController } from '../controllers/predictions.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { predictionRateLimiter, apiRateLimiter } from '../middleware/rateLimit.middleware.js';
 
 const router = Router();
 
 /**
  * POST /api/markets/:marketId/commit - Commit Prediction (Phase 1)
  * Server generates and stores salt securely
+ * Rate limit: 10 requests per minute per wallet
  */
-router.post('/:marketId/commit', requireAuth, (req, res) =>
+router.post('/:marketId/commit', requireAuth, predictionRateLimiter, (req, res) =>
   predictionsController.commitPrediction(req, res)
 );
 
 /**
  * POST /api/markets/:marketId/reveal - Reveal Prediction (Phase 2)
  * Server provides stored salt for blockchain verification
+ * Rate limit: 10 requests per minute per wallet
  */
-router.post('/:marketId/reveal', requireAuth, (req, res) =>
+router.post('/:marketId/reveal', requireAuth, predictionRateLimiter, (req, res) =>
   predictionsController.revealPrediction(req, res)
+);
+
+/**
+ * GET /api/markets/:marketId/predictions - Get Market Predictions
+ * Rate limit: 100 requests per minute per wallet/IP
+ */
+router.get('/:marketId/predictions', apiRateLimiter, (req, res) =>
+  predictionsController.getMarketPredictions(req, res)
+);
+
+/**
+ * GET /api/users/:userId/positions - Get User Positions
+ * Rate limit: 100 requests per minute per wallet/IP
+ */
+router.get('/users/:userId/positions', requireAuth, apiRateLimiter, (req, res) =>
+  predictionsController.getUserPositions(req, res)
+);
+
+/**
+ * POST /api/users/:userId/claim-winnings - Claim Winnings
+ * Rate limit: 10 requests per minute per wallet
+ */
+router.post('/users/:userId/claim-winnings', requireAuth, predictionRateLimiter, (req, res) =>
+  predictionsController.claimWinnings(req, res)
 );
 
 export default router;
