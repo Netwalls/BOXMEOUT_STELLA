@@ -2206,7 +2206,7 @@ mod tests {
         // Need to re-commit first since commitment was removed, but prediction exists
         // So even if we try to commit again it'll fail due to duplicate reveal check
         let salt2 = BytesN::from_array(&env, &[5; 32]);
-        let commit_hash2 = compute_commit_hash(&env, &market_id, outcome, &salt2);
+        let _commit_hash2 = compute_commit_hash(&env, &market_id, outcome, &salt2);
 
         // Trying to commit again will fail with DuplicateCommit since commitment was removed
         // but prediction exists. Let's use test helper to set up the scenario:
@@ -2642,7 +2642,7 @@ mod tests {
 mod market_leaderboard_tests {
     use super::*;
     use soroban_sdk::{
-        testutils::{Address as _, Ledger},
+        testutils::Address as _,
         Address, BytesN, Env, Vec,
     };
 
