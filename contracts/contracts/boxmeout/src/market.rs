@@ -1027,16 +1027,13 @@ impl PredictionMarket {
         // Note: This implementation uses a test helper approach
         // In production, you would maintain a list of all participants during prediction phase
         let mut winners: Vec<(Address, i128)> = Vec::new(&env);
-
         // Since Soroban doesn't provide iteration over storage keys,
         // we rely on the test infrastructure to set up predictions
         // The actual collection would happen through a maintained participant list
-
         // For each participant (in production, iterate through stored participant list):
         // - Check if they have a prediction
         // - If prediction.outcome == winning_outcome, calculate payout
         // - Add to winners vector
-
         // This is intentionally left as a framework that works with test helpers
         // Production implementation would require maintaining a participants list
 
@@ -1048,7 +1045,6 @@ impl PredictionMarket {
                 for j in 0..(len - i - 1) {
                     let current = winners.get(j).unwrap();
                     let next = winners.get(j + 1).unwrap();
-
                     // Sort by payout descending
                     if current.1 < next.1 {
                         let temp = current.clone();
@@ -1062,7 +1058,6 @@ impl PredictionMarket {
         // 7. Return top N winners
         let result_len = if limit < len { limit } else { len };
         let mut result: Vec<(Address, i128)> = Vec::new(&env);
-
         for i in 0..result_len {
             result.push_back(winners.get(i).unwrap());
         }
@@ -1394,7 +1389,6 @@ impl PredictionMarket {
         // Return top N
         let result_len = if limit < len { limit } else { len };
         let mut result: Vec<(Address, i128)> = Vec::new(&env);
-
         for i in 0..result_len {
             result.push_back(winners.get(i).unwrap());
         }
@@ -2075,10 +2069,7 @@ mod tests {
 #[cfg(test)]
 mod market_leaderboard_tests {
     use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, Ledger},
-        Address, BytesN, Env, Vec,
-    };
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
     fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::StellarAssetClient<'a> {
         let token_address = env
@@ -2133,7 +2124,6 @@ mod market_leaderboard_tests {
         let winners = market_client.test_get_leaderboard_with_users(&market_id_bytes, &10, &users);
 
         assert_eq!(winners.len(), 3);
-
         // Verify sorted by payout descending
         let winner1 = winners.get(0).unwrap();
         let winner2 = winners.get(1).unwrap();
@@ -2189,7 +2179,6 @@ mod market_leaderboard_tests {
         let winners = market_client.test_get_leaderboard_with_users(&market_id_bytes, &2, &users);
 
         assert_eq!(winners.len(), 2);
-
         let winner1 = winners.get(0).unwrap();
         let winner2 = winners.get(1).unwrap();
 
@@ -2334,7 +2323,6 @@ mod market_leaderboard_tests {
 
         // Should only return 2 winners (loser filtered out)
         assert_eq!(winners.len(), 2);
-
         let w1 = winners.get(0).unwrap();
         let w2 = winners.get(1).unwrap();
 
@@ -2384,7 +2372,6 @@ mod market_leaderboard_tests {
         let winners = market_client.test_get_leaderboard_with_users(&market_id_bytes, &10, &users);
 
         assert_eq!(winners.len(), 3);
-
         // First two should have same payout (tie)
         let w1 = winners.get(0).unwrap();
         let w2 = winners.get(1).unwrap();
