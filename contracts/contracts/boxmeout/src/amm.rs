@@ -163,12 +163,10 @@ impl AMM {
         );
 
         // Emit initialization event
-        AmmInitializedEvent {
-            admin,
-            factory,
-            max_liquidity_cap,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "AmmInitialized"),),
+            (admin, factory, max_liquidity_cap),
+        );
     }
 
     /// Create new liquidity pool for market
@@ -231,13 +229,10 @@ impl AMM {
         );
 
         // Emit PoolCreated event
-        PoolCreatedEvent {
-            market_id,
-            initial_liquidity,
-            yes_reserve,
-            no_reserve,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "PoolCreated"),),
+            (market_id, initial_liquidity, yes_reserve, no_reserve),
+        );
     }
 
     /// Buy outcome shares (YES or NO)
@@ -371,15 +366,10 @@ impl AMM {
             .set(&user_share_key, &(current_shares + shares_out));
 
         // Record trade (Optional: Simplified to event only for this resolution)
-        BuySharesEvent {
-            buyer,
-            market_id,
-            outcome,
-            shares_out,
-            amount,
-            fee_amount,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "BuyShares"),),
+            (buyer, market_id, outcome, shares_out, amount, fee_amount),
+        );
 
         shares_out
     }
@@ -502,21 +492,16 @@ impl AMM {
         let usdc_client = soroban_sdk::token::Client::new(&env, &usdc_address);
 
         usdc_client.transfer(
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &seller,
             &(payout_after_fee as i128),
         );
 
         // Emit SellShares event
-        SellSharesEvent {
-            seller,
-            market_id,
-            outcome,
-            shares,
-            payout_after_fee,
-            fee_amount,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "SellShares"),),
+            (seller, market_id, outcome, shares, payout_after_fee, fee_amount),
+        );
 
         payout_after_fee
     }
@@ -821,20 +806,16 @@ impl AMM {
         let token_client = token::Client::new(&env, &usdc_token);
         let total_withdrawal = yes_amount + no_amount;
         token_client.transfer(
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &lp_provider,
             &(total_withdrawal as i128),
         );
 
         // Emit LiquidityRemoved event
-        LiquidityRemovedEvent {
-            market_id,
-            lp_provider,
-            lp_tokens,
-            yes_amount,
-            no_amount,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "LiquidityRemoved"),),
+            (market_id, lp_provider, lp_tokens, yes_amount, no_amount),
+        );
 
         (yes_amount, no_amount)
     }

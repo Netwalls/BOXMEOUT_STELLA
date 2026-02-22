@@ -66,12 +66,10 @@ impl MarketFactory {
             .set(&Symbol::new(&env, MARKET_COUNT_KEY), &0u32);
 
         // Emit initialization event
-        FactoryInitializedEvent {
-            admin,
-            usdc,
-            treasury,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "FactoryInitialized"),),
+            (admin, usdc, treasury),
+        );
     }
 
     /// Get total markets created
@@ -165,12 +163,10 @@ impl MarketFactory {
         );
 
         // Emit MarketCreated event
-        MarketCreatedEvent {
-            market_id: market_id.clone(),
-            creator,
-            closing_time,
-        }
-        .publish(&env);
+        env.events().publish(
+            (Symbol::new(&env, "MarketCreated"),),
+            (market_id.clone(), creator, closing_time),
+        );
 
         market_id
     }

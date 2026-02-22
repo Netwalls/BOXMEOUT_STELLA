@@ -4,17 +4,20 @@ set -e
 # Backend checks
 cd backend
 
+echo "Installing backend dependencies..."
+npm install
+
 echo "Running Prettier check (backend)..."
-npx prettier --check "src/**/*.ts"
+npm run format:check
 
 echo "Running ESLint (backend)..."
-npx eslint "src/**/*.ts" --config .eslintrc.cjs || echo "ESLint check skipped (config issue)"
+npm run lint || echo "ESLint check skipped (config issue)"
 
 echo "Running TypeScript build (backend)..."
-npx tsc --noEmit
+npm run build
 
 echo "Running backend tests..."
-npx vitest run
+npm test -- run
 
 echo "Running Prisma checks..."
 npx prisma validate
@@ -25,14 +28,17 @@ cd ..
 # Frontend checks
 cd frontend
 
+echo "Installing frontend dependencies..."
+npm install
+
 echo "Running Prettier check (frontend)..."
-npx prettier --check "src/**/*.{js,jsx,ts,tsx}"
+npm run format:check || npx prettier --check "src/**/*.{js,jsx,ts,tsx}"
 
 echo "Running ESLint (frontend)..."
-npx eslint "src/**/*.{js,jsx,ts,tsx}"
+npm run lint || npx eslint "src/**/*.{js,jsx,ts,tsx}"
 
 echo "Running frontend build..."
-npx vite build
+npm run build
 
 cd ..
 
@@ -46,9 +52,11 @@ echo "Running Rust lint (clippy)..."
 cargo clippy -- -D warnings
 
 echo "Building Rust smart contracts..."
-../../../build_contracts.sh
+cd ../../../
+./build_contracts.sh
 
 echo "Running Rust tests..."
+cd contracts/contracts/boxmeout
 cargo test --features testutils
 
 cd ../../../
