@@ -32,7 +32,7 @@ pub struct CreatorRewardsEvent {
 }
 
 #[contractevent]
-pub struct LeaderboardRewardsDistributedEvent {
+pub struct LeaderboardRewardsDistributed {
     pub total_amount: i128,
     pub count: u32,
     pub timestamp: u64,
@@ -321,7 +321,7 @@ impl Treasury {
             .set(&Symbol::new(&env, LEADERBOARD_FEES_KEY), &new_balance);
 
         // Emit LeaderboardRewardsDistributed event
-        LeaderboardRewardsDistributedEvent {
+        LeaderboardRewardsDistributed {
             total_amount,
             count: distributions.len(),
             timestamp: env.ledger().timestamp(),
