@@ -5,8 +5,12 @@ import MatchGrid from "./components/Matches/MatchGrid"; // New Ladder
 import Leaderboard from "./components/Gamification/Leaderboard"; // New High Scores
 import UserStats from "./components/Gamification/UserStats";
 import ActiveBets from "./components/Gamification/ActiveBets";
-import LandingPage from "./components/Onboarding/LandingPage"; // Restored
-import SportCategorySelect from "./components/Onboarding/SportCategorySelect"; // New Sport Select
+import LandingPage from "./components/Landing/LandingPage";
+import AboutUs from "./components/Pages/AboutUs";
+import ContactUs from "./components/Pages/ContactUs";
+import HowItWorks from "./components/Pages/HowItWorks";
+import SportCategorySelect from "./components/Onboarding/SportCategorySelect";
+import SignIn from "./components/Onboarding/SignIn";
 import { MOCK_USER, MOCK_MATCHES, MOCK_LEADERBOARD } from "./data/mockData";
 
 function App() {
@@ -61,8 +65,13 @@ function App() {
     (m) => m.id !== featuredMatch?.id,
   );
 
-  // Transition from Landing Page to Sport Select
+  // Transition from Landing Page to Sign In
   const handleStart = () => {
+    setView("SIGN_IN");
+  };
+
+  const handleLogin = (email) => {
+    setUser((prev) => ({ ...prev, email, username: email.split("@")[0] }));
     setView("SPORT_SELECT");
   };
 
@@ -191,7 +200,13 @@ function App() {
 
   return (
     <div className="arcade-screen">
-      {view === "LANDING" && <LandingPage onStart={handleStart} />}
+      {view === "LANDING" && (
+        <LandingPage onStart={handleStart} onNav={setView} />
+      )}
+      {view === "SIGN_IN" && <SignIn onSignIn={handleLogin} />}
+      {view === "ABOUT" && <AboutUs onNav={setView} />}
+      {view === "CONTACT" && <ContactUs onNav={setView} />}
+      {view === "HOW_IT_WORKS" && <HowItWorks onNav={setView} />}
       {view === "SPORT_SELECT" && (
         <SportCategorySelect onSelect={handleSportSelect} />
       )}

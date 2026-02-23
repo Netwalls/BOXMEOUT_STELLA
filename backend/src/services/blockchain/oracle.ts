@@ -105,7 +105,9 @@ export class OracleService {
     } catch (error) {
       logger.error('Oracle.submit_attestation() error', { error });
       throw new Error(
-        `Failed to submit attestation on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to submit attestation on blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }

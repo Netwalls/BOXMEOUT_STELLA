@@ -24,8 +24,8 @@ function createRedisStore(prefix: string) {
       }) as any,
       prefix: `rl:${prefix}:`,
     });
-  } catch (error) {
-    logger.warn(
+  } catch {
+    console.warn(
       `Failed to create Redis store for rate limiter (${prefix}), using memory store`
     );
     return undefined; // Falls back to memory store
@@ -48,10 +48,8 @@ const rateLimitMessage = (message: string) => ({
  */
 function getIpKey(req: any): string {
   try {
-    // Use the ipKeyGenerator helper function for proper IPv6 support
     return ipKeyGenerator(req, req.ip);
-  } catch (error) {
-    // Fallback if ipKeyGenerator fails
+  } catch {
     return req.ip || 'unknown';
   }
 }
@@ -98,17 +96,15 @@ export const authRateLimiter: RateLimiterMiddleware = rateLimit({
   handler: createRateLimitHandler(
     'Too many authentication attempts. Please try again later.'
   ),
-  skip: () => process.env.NODE_ENV === 'test', // Skip in tests
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 /**
  * Rate limiter for challenge endpoint (moderate)
- * Prevents nonce generation spam
- *
  * Limits: 5 requests per minute per public key or IP
  */
 export const challengeRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
@@ -164,7 +160,7 @@ export const tradeRateLimiter: RateLimiterMiddleware = rateLimit({
  * Limits: 100 requests per minute per wallet or IP
  */
 export const apiRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
@@ -176,12 +172,10 @@ export const apiRateLimiter: RateLimiterMiddleware = rateLimit({
 
 /**
  * Rate limiter for refresh token endpoint
- * Prevents token refresh spam
- *
  * Limits: 10 refreshes per minute per IP
  */
 export const refreshRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
@@ -198,7 +192,7 @@ export const refreshRateLimiter: RateLimiterMiddleware = rateLimit({
  * Limits: 5 requests per hour per wallet
  */
 export const sensitiveOperationRateLimiter: RateLimiterMiddleware = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
@@ -211,8 +205,7 @@ export const sensitiveOperationRateLimiter: RateLimiterMiddleware = rateLimit({
 });
 
 /**
- * Create a custom rate limiter with specified options
- * Useful for endpoints with special requirements
+ * Create a custom rate limiter
  */
 export function createRateLimiter(options: {
   windowMs: number;

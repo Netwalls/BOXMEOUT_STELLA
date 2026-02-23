@@ -7,7 +7,7 @@ import {
   refreshRateLimiter,
 } from '../middleware/rateLimit.middleware.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * @route   POST /api/auth/challenge

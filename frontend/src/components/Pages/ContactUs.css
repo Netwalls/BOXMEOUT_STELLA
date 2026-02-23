@@ -1,0 +1,137 @@
+.contact-page {
+  padding-bottom: 8rem;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 4rem;
+  margin-top: 4rem;
+}
+
+.contact-form-section {
+  padding: 3rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--color-text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-family: var(--font-main);
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: rgba(225, 29, 72, 0.05);
+  box-shadow: 0 0 15px rgba(225, 29, 72, 0.1);
+}
+
+.contact-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.info-card {
+  padding: 2rem;
+  text-align: left;
+}
+
+.info-card h3 {
+  font-size: 1.2rem;
+  color: var(--color-primary);
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+}
+
+.info-card p {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+
+.social-platforms {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.social-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: all 0.3s ease;
+  color: var(--color-text-muted);
+}
+
+.social-btn:hover {
+  border-color: var(--color-primary);
+  color: #fff;
+  background: rgba(225, 29, 72, 0.05);
+  transform: translateY(-3px);
+}
+
+.social-icon-large {
+  font-size: 1.5rem;
+}
+
+.partnership-wallet {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #000;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+  border: 1px dashed var(--color-border);
+  color: var(--color-secondary);
+}
+
+.status-message {
+  padding: 1.5rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 2rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.status-success {
+  background: rgba(0, 255, 0, 0.1);
+  color: #00ff00;
+  border: 1px solid rgba(0, 255, 0, 0.2);
+}
+
+@media (max-width: 992px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+  }
+}

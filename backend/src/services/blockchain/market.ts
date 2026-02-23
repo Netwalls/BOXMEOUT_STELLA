@@ -84,7 +84,9 @@ export class MarketBlockchainService {
     } catch (error) {
       logger.error('Market.resolve_market() error', { error });
       throw new Error(
-        `Failed to resolve market on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to resolve market on blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }
@@ -139,7 +141,9 @@ export class MarketBlockchainService {
     } catch (error) {
       logger.error('Market.claim_winnings() error', { error });
       throw new Error(
-        `Failed to claim winnings on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to claim winnings on blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }

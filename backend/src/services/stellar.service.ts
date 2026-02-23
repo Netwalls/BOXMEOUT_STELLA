@@ -115,7 +115,9 @@ export class StellarService {
     if (!publicKey || publicKey.length < prefixLength + suffixLength + 3) {
       return publicKey;
     }
-    return `${publicKey.slice(0, prefixLength)}...${publicKey.slice(-suffixLength)}`;
+    return `${publicKey.slice(0, prefixLength)}...${publicKey.slice(
+      -suffixLength
+    )}`;
   }
 
   /**

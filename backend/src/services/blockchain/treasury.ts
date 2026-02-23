@@ -88,7 +88,9 @@ export class TreasuryService {
       };
     } catch (error) {
       throw new Error(
-        `Treasury balance fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Treasury balance fetch failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }
@@ -151,7 +153,9 @@ export class TreasuryService {
       throw new Error('Transaction submission failed');
     } catch (error) {
       throw new Error(
-        `Leaderboard distribution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Leaderboard distribution failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }
@@ -211,7 +215,9 @@ export class TreasuryService {
       throw new Error('Transaction submission failed');
     } catch (error) {
       throw new Error(
-        `Creator distribution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Creator distribution failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }
