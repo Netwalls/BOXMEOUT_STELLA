@@ -287,10 +287,19 @@ impl Treasury {
             .get(&Symbol::new(&env, LEADERBOARD_FEES_KEY))
             .unwrap_or(0);
 
-        // Calculate total distribution amount
+        // Validate non-empty distribution list
+        if distributions.is_empty() {
+            panic!("Distribution list cannot be empty");
+        }
+
+        // Calculate total distribution amount and validate positive amounts
         let mut total_amount = 0i128;
         for dist in distributions.iter() {
-            total_amount += dist.1;
+            let amount = dist.1;
+            if amount <= 0 {
+                panic!("Amount must be positive");
+            }
+            total_amount += amount;
         }
 
         // Validate sufficient balance
@@ -599,5 +608,62 @@ mod tests {
 
         // Try to distribute as non-admin
         treasury.distribute_leaderboard_rewards(&unauthorized_user, &distributions);
+    }
+}
+
+    #[test]
+    #[should_panic(expected = "Distribution list cannot be empty")]
+    fn test_distribute_leaderboard_rewards_empty_list() {
+        let env = Env::default();
+        let (treasury, usdc, admin, usdc_admin, _factory) = setup_treasury(&env);
+
+        usdc.mint(&usdc_admin, &1_000_000);
+        usdc.transfer(&usdc_admin, &admin, &1_000_000);
+
+        env.mock_all_auths();
+        treasury.deposit_fees(&admin, &1_000_000);
+
+        let distributions = soroban_sdk::Vec::new(&env);
+
+        // Try to distribute with empty list
+        treasury.distribute_leaderboard_rewards(&admin, &distributions);
+    }
+
+    #[test]
+    #[should_panic(expected = "Amount must be positive")]
+    fn test_distribute_leaderboard_rewards_zero_amount() {
+        let env = Env::default();
+        let (treasury, usdc, admin, usdc_admin, _factory) = setup_treasury(&env);
+
+        usdc.mint(&usdc_admin, &1_000_000);
+        usdc.transfer(&usdc_admin, &admin, &1_000_000);
+
+        env.mock_all_auths();
+        treasury.deposit_fees(&admin, &1_000_000);
+
+        let winner1 = Address::generate(&env);
+        let mut distributions = soroban_sdk::Vec::new(&env);
+        distributions.push_back((winner1, 0)); // Zero amount
+
+        treasury.distribute_leaderboard_rewards(&admin, &distributions);
+    }
+
+    #[test]
+    #[should_panic(expected = "Amount must be positive")]
+    fn test_distribute_leaderboard_rewards_negative_amount() {
+        let env = Env::default();
+        let (treasury, usdc, admin, usdc_admin, _factory) = setup_treasury(&env);
+
+        usdc.mint(&usdc_admin, &1_000_000);
+        usdc.transfer(&usdc_admin, &admin, &1_000_000);
+
+        env.mock_all_auths();
+        treasury.deposit_fees(&admin, &1_000_000);
+
+        let winner1 = Address::generate(&env);
+        let mut distributions = soroban_sdk::Vec::new(&env);
+        distributions.push_back((winner1, -100)); // Negative amount
+
+        treasury.distribute_leaderboard_rewards(&admin, &distributions);
     }
 }
