@@ -100,7 +100,9 @@ export class SharesService {
     currentValue: number;
     unrealizedPnl: number;
   }> {
-    const market = share.market || (await this.marketRepository.findById(share.marketId));
+    const market =
+      share.market ||
+      (await this.marketRepository.findById(share.marketId));
     
     if (!market) {
       throw new Error('Market not found');
@@ -121,7 +123,9 @@ export class SharesService {
 
     // For open/closed markets, get current price from AMM
     try {
-      const poolState = await ammService.getPoolState(market.contractAddress);
+      const poolState = await ammService.getPoolState(
+        market.contractAddress
+      );
       const spotPrice =
         share.outcome === 1 ? poolState.odds.yes : poolState.odds.no;
 

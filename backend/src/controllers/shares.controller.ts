@@ -40,7 +40,10 @@ export class SharesController {
         count: positions.length,
       });
     } catch (error) {
-      logger.error('Error fetching user positions', { error, userId: req.params.userId });
+      logger.error('Error fetching user positions', {
+        error,
+        userId: req.params.userId,
+      });
       next(error);
     }
   };
@@ -72,7 +75,10 @@ export class SharesController {
       if (error instanceof Error && error.message === 'Position not found') {
         return res.status(404).json({ error: 'Position not found' });
       }
-      logger.error('Error fetching position', { error, params: req.params });
+      logger.error('Error fetching position', {
+        error,
+        params: req.params,
+      });
       next(error);
     }
   };
@@ -101,7 +107,10 @@ export class SharesController {
         data: summary,
       });
     } catch (error) {
-      logger.error('Error fetching portfolio summary', { error, userId: req.params.userId });
+      logger.error('Error fetching portfolio summary', {
+        error,
+        userId: req.params.userId,
+      });
       next(error);
     }
   };
@@ -130,7 +139,10 @@ export class SharesController {
         data: breakdown,
       });
     } catch (error) {
-      logger.error('Error fetching position breakdown', { error, userId: req.params.userId });
+      logger.error('Error fetching position breakdown', {
+        error,
+        userId: req.params.userId,
+      });
       next(error);
     }
   };
@@ -160,7 +172,10 @@ export class SharesController {
         data: result,
       });
     } catch (error) {
-      logger.error('Error refreshing portfolio', { error, userId: req.params.userId });
+      logger.error('Error refreshing portfolio', {
+        error,
+        userId: req.params.userId,
+      });
       next(error);
     }
   };
@@ -190,7 +205,10 @@ export class SharesController {
         count: positions.length,
       });
     } catch (error) {
-      logger.error('Error fetching market positions', { error, marketId: req.params.marketId });
+      logger.error('Error fetching market positions', {
+        error,
+        marketId: req.params.marketId,
+      });
       next(error);
     }
   };
