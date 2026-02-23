@@ -2,6 +2,7 @@
 export { UserService } from './user.service.js';
 export { MarketService } from './market.service.js';
 export { PredictionService } from './prediction.service.js';
+export { SharesService } from './shares.service.js';
 
 // Auth services
 export { AuthService, authService } from './auth.service.js';
