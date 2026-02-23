@@ -103,7 +103,7 @@ export class SharesService {
     const market =
       share.market ||
       (await this.marketRepository.findById(share.marketId));
-    
+
     if (!market) {
       throw new Error('Market not found');
     }
