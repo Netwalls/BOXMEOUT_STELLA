@@ -147,6 +147,176 @@ export class MarketBlockchainService {
       );
     }
   }
+  /**
+   * Get the current state of a market (read-only query)
+   * @param marketContractAddress - The contract address of the market
+   * @returns Market state data
+   */
+  async getMarketState(marketContractAddress: string): Promise<any> {
+    try {
+      const contract = new Contract(marketContractAddress);
+
+      // For read-only queries, we don't need to sign or submit a transaction
+      // We can simulate the call to get the result
+      const sourceAccount = await this.rpcServer.getAccount(
+        this.adminKeypair?.publicKey() || Keypair.random().publicKey()
+      );
+
+      const builtTransaction = new TransactionBuilder(sourceAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(contract.call('get_market_state'))
+        .setTimeout(30)
+        .build();
+
+      const simulationResponse =
+        await this.rpcServer.simulateTransaction(builtTransaction);
+
+      if (
+        simulationResponse.results &&
+        simulationResponse.results.length > 0
+      ) {
+        const result = simulationResponse.results[0];
+        return result.retval;
+      } else {
+        throw new Error('No result returned from simulation');
+      }
+    } catch (error) {
+      logger.error('Market.get_market_state() error', { error });
+      throw new Error(
+        `Failed to get market state from blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+
+  /**
+   * Commit a prediction on the blockchain
+   * @param marketContractAddress - The contract address of the market
+   * @param userPublicKey - The user's public key
+   * @param commitmentHash - The hash of the prediction commitment
+   * @returns Transaction hash
+   */
+  async commitPrediction(
+    marketContractAddress: string,
+    userPublicKey: string,
+    commitmentHash: string
+  ): Promise<MarketActionResult> {
+    if (!this.adminKeypair) {
+      throw new Error(
+        'ADMIN_WALLET_SECRET not configured - cannot sign transactions'
+      );
+    }
+    try {
+      const contract = new Contract(marketContractAddress);
+      const sourceAccount = await this.rpcServer.getAccount(
+        this.adminKeypair.publicKey()
+      );
+
+      const builtTransaction = new TransactionBuilder(sourceAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(
+          contract.call(
+            'commit',
+            nativeToScVal(userPublicKey, { type: 'address' }),
+            nativeToScVal(commitmentHash, { type: 'bytes' })
+          )
+        )
+        .setTimeout(30)
+        .build();
+
+      const preparedTransaction =
+        await this.rpcServer.prepareTransaction(builtTransaction);
+      preparedTransaction.sign(this.adminKeypair);
+
+      const response =
+        await this.rpcServer.sendTransaction(preparedTransaction);
+
+      if (response.status === 'PENDING') {
+        const txHash = response.hash;
+        await this.waitForTransaction(txHash);
+        return { txHash };
+      } else {
+        throw new Error(`Transaction failed: ${response.status}`);
+      }
+    } catch (error) {
+      logger.error('Market.commit() error', { error });
+      throw new Error(
+        `Failed to commit prediction on blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+
+  /**
+   * Reveal a prediction on the blockchain
+   * @param marketContractAddress - The contract address of the market
+   * @param userPublicKey - The user's public key
+   * @param prediction - The actual prediction value
+   * @param salt - The salt used in the commitment
+   * @returns Transaction hash
+   */
+  async revealPrediction(
+    marketContractAddress: string,
+    userPublicKey: string,
+    prediction: string,
+    salt: string
+  ): Promise<MarketActionResult> {
+    if (!this.adminKeypair) {
+      throw new Error(
+        'ADMIN_WALLET_SECRET not configured - cannot sign transactions'
+      );
+    }
+    try {
+      const contract = new Contract(marketContractAddress);
+      const sourceAccount = await this.rpcServer.getAccount(
+        this.adminKeypair.publicKey()
+      );
+
+      const builtTransaction = new TransactionBuilder(sourceAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(
+          contract.call(
+            'reveal',
+            nativeToScVal(userPublicKey, { type: 'address' }),
+            nativeToScVal(prediction, { type: 'string' }),
+            nativeToScVal(salt, { type: 'bytes' })
+          )
+        )
+        .setTimeout(30)
+        .build();
+
+      const preparedTransaction =
+        await this.rpcServer.prepareTransaction(builtTransaction);
+      preparedTransaction.sign(this.adminKeypair);
+
+      const response =
+        await this.rpcServer.sendTransaction(preparedTransaction);
+
+      if (response.status === 'PENDING') {
+        const txHash = response.hash;
+        await this.waitForTransaction(txHash);
+        return { txHash };
+      } else {
+        throw new Error(`Transaction failed: ${response.status}`);
+      }
+    } catch (error) {
+      logger.error('Market.reveal() error', { error });
+      throw new Error(
+        `Failed to reveal prediction on blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+
 
   private async waitForTransaction(
     txHash: string,
