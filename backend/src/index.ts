@@ -13,6 +13,7 @@ import tradingRoutes from './routes/trading.js';
 import treasuryRoutes from './routes/treasury.routes.js';
 import referralsRoutes from './routes/referrals.routes.js';
 import leaderboardRoutes from './routes/leaderboard.routes.js';
+import portfolioRoutes from './routes/portfolio.routes.js';
 
 // Import Redis initialization
 import {
@@ -205,6 +206,10 @@ app.use('/api/markets', predictionRoutes);
 
 // Trading routes (buy/sell shares, odds)
 app.use('/api/markets', tradingRoutes);
+
+// Portfolio routes (share positions and PnL)
+app.use('/api/portfolio', portfolioRoutes);
+
 // Treasury routes
 app.use('/api/treasury', treasuryRoutes);
 

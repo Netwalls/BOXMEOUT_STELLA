@@ -2,6 +2,7 @@
 export { UserService } from './user.service.js';
 export { MarketService } from './market.service.js';
 export { PredictionService } from './prediction.service.js';
+export { SharesService, sharesService } from './shares.service.js';
 
 export { ReferralService, referralService } from './referral.service.js';
 
