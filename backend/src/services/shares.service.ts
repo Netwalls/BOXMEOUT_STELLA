@@ -1,4 +1,17 @@
-// Shares service - business logic for portfolio position management
+// Prediction service - business logic for predictions
+import { PredictionRepository } from '../repositories/prediction.repository.js';
+import { MarketRepository } from '../repositories/market.repository.js';
+import { UserRepository } from '../repositories/user.repository.js';
+import { MarketStatus, PredictionStatus } from '@prisma/client';
+import { executeTransaction } from '../database/transaction.js';
+import {
+  generateSalt,
+  createCommitmentHash,
+  encrypt,
+  decrypt,
+} from '../utils/crypto.js';
+
+export // Shares service - business logic for portfolio position management
 import { SharesRepository } from '../repositories/shares.repository.js';
 import { MarketRepository } from '../repositories/market.repository.js';
 import { ammService } from './blockchain/amm.js';
@@ -14,9 +27,6 @@ export class SharesService {
     this.marketRepository = new MarketRepository();
   }
 
-  /**
-   * Get all positions for a user with current values
-   */
   async getUserPositions(
     userId: string,
     options?: {
@@ -30,14 +40,12 @@ export class SharesService {
       includeMarket: true,
     });
 
-    // Update current values based on AMM spot prices
     const updatedShares = await Promise.all(
       shares.map(async (share) => {
         try {
           const { currentValue, unrealizedPnl } =
             await this.calculateCurrentValue(share);
 
-          // Update in database
           await this.sharesRepository.updateShareValue(
             share.id,
             currentValue,
@@ -62,9 +70,6 @@ export class SharesService {
     return updatedShares;
   }
 
-  /**
-   * Get a specific position
-   */
   async getPosition(userId: string, marketId: string, outcome: number) {
     const share = await this.sharesRepository.findUserMarketShare(
       userId,
@@ -76,7 +81,6 @@ export class SharesService {
       throw new Error('Position not found');
     }
 
-    // Update current value
     const { currentValue, unrealizedPnl } =
       await this.calculateCurrentValue(share);
 
@@ -93,9 +97,6 @@ export class SharesService {
     };
   }
 
-  /**
-   * Calculate current value based on AMM spot price
-   */
   private async calculateCurrentValue(share: any): Promise<{
     currentValue: number;
     unrealizedPnl: number;
@@ -108,7 +109,6 @@ export class SharesService {
       throw new Error('Market not found');
     }
 
-    // If market is resolved, use final settlement value
     if (market.status === MarketStatus.RESOLVED) {
       const isWinner = share.outcome === market.winningOutcome;
       const currentValue = isWinner ? Number(share.quantity) : 0;
@@ -116,12 +116,10 @@ export class SharesService {
       return { currentValue, unrealizedPnl };
     }
 
-    // If market is cancelled, shares are worthless
     if (market.status === MarketStatus.CANCELLED) {
       return { currentValue: 0, unrealizedPnl: -Number(share.costBasis) };
     }
 
-    // For open/closed markets, get current price from AMM
     try {
       const poolState = await ammService.getPoolState(
         market.contractAddress
@@ -138,7 +136,6 @@ export class SharesService {
         `Failed to fetch AMM price for market ${market.id}`,
         error
       );
-      // Fallback to last known value
       return {
         currentValue: Number(share.currentValue),
         unrealizedPnl: Number(share.unrealizedPnl),
@@ -146,9 +143,6 @@ export class SharesService {
     }
   }
 
-  /**
-   * Record a new share purchase (called after trade execution)
-   */
   async recordPurchase(
     userId: string,
     marketId: string,
@@ -158,7 +152,6 @@ export class SharesService {
   ) {
     const pricePerShare = totalCost / quantity;
 
-    // Check if user already has a position
     const existingShare = await this.sharesRepository.findUserMarketShare(
       userId,
       marketId,
@@ -166,7 +159,6 @@ export class SharesService {
     );
 
     if (existingShare) {
-      // Average down/up the position
       const newQuantity = Number(existingShare.quantity) + quantity;
       const newCostBasis = Number(existingShare.costBasis) + totalCost;
       const newEntryPrice = newCostBasis / newQuantity;
@@ -181,7 +173,6 @@ export class SharesService {
       );
     }
 
-    // Create new position
     return await this.sharesRepository.createShare({
       userId,
       marketId,
@@ -192,9 +183,6 @@ export class SharesService {
     });
   }
 
-  /**
-   * Record a share sale (called after trade execution)
-   */
   async recordSale(
     userId: string,
     marketId: string,
@@ -216,12 +204,10 @@ export class SharesService {
       throw new Error('Insufficient shares to sell');
     }
 
-    // Calculate realized PnL
     const avgCostPerShare = Number(share.costBasis) / Number(share.quantity);
     const costOfSoldShares = avgCostPerShare * quantity;
     const realizedPnl = saleProceeds - costOfSoldShares;
 
-    // Update the share record
     return await this.sharesRepository.recordSale(
       share.id,
       quantity,
@@ -229,13 +215,9 @@ export class SharesService {
     );
   }
 
-  /**
-   * Get portfolio summary with aggregated metrics
-   */
   async getPortfolioSummary(userId: string) {
     const summary = await this.sharesRepository.getPortfolioSummary(userId);
 
-    // Calculate total PnL and return percentage
     const totalPnl = summary.totalUnrealizedPnl + summary.totalRealizedPnl;
     const returnPercentage =
       summary.totalCostBasis > 0
@@ -249,9 +231,6 @@ export class SharesService {
     };
   }
 
-  /**
-   * Refresh all share values for a user (batch update)
-   */
   async refreshUserPortfolio(userId: string) {
     const shares = await this.sharesRepository.findUserShares(userId, {
       includeMarket: true,
@@ -287,16 +266,10 @@ export class SharesService {
     return { updated: validUpdates.length, total: shares.length };
   }
 
-  /**
-   * Get all positions for a specific market
-   */
   async getMarketPositions(marketId: string) {
     return await this.sharesRepository.findMarketShares(marketId);
   }
 
-  /**
-   * Get position breakdown by outcome
-   */
   async getPositionBreakdown(userId: string) {
     const shares = await this.sharesRepository.findUserShares(userId, {
       includeMarket: true,
@@ -330,3 +303,4 @@ export class SharesService {
     return breakdown;
   }
 }
+
