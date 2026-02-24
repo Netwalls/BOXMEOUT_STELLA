@@ -1,17 +1,4 @@
-// Prediction service - business logic for predictions
-import { PredictionRepository } from '../repositories/prediction.repository.js';
-import { MarketRepository } from '../repositories/market.repository.js';
-import { UserRepository } from '../repositories/user.repository.js';
-import { MarketStatus, PredictionStatus } from '@prisma/client';
-import { executeTransaction } from '../database/transaction.js';
-import {
-  generateSalt,
-  createCommitmentHash,
-  encrypt,
-  decrypt,
-} from '../utils/crypto.js';
-
-export // Shares service - business logic for portfolio position management
+// Shares service - business logic for portfolio position management
 import { SharesRepository } from '../repositories/shares.repository.js';
 import { MarketRepository } from '../repositories/market.repository.js';
 import { ammService } from './blockchain/amm.js';
@@ -303,4 +290,3 @@ export class SharesService {
     return breakdown;
   }
 }
-
