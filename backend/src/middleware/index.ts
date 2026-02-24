@@ -15,7 +15,7 @@ export {
   createRateLimiter,
 } from './rateLimit.middleware.js';
 
-export { validate, schemas } from './validation.middleware';
+export { validate } from './validation.middleware';
 export { errorHandler, notFoundHandler, ApiError } from './error.middleware';
 export { requestLogger } from './logging.middleware';
 export {

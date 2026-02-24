@@ -1,0 +1,83 @@
+.roadmap {
+  padding: 8rem 0;
+  background: #0d0e1b;
+}
+
+.text-center {
+  text-align: center;
+  margin-bottom: 5rem;
+}
+
+.roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2.5rem;
+}
+
+.roadmap-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 3rem;
+  border-radius: var(--radius-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.roadmap-card.active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
+}
+
+.phase-badge {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  font-size: 2.5rem;
+  font-weight: 900;
+  opacity: 0.1;
+  color: #fff;
+}
+
+.roadmap-card h3 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.status-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: 2rem;
+  letter-spacing: 0.1em;
+}
+
+.roadmap-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.roadmap-list li {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.roadmap-list li::before {
+  content: "→";
+  color: var(--color-accent);
+}
+
+.roadmap-card.active .roadmap-list li::before {
+  color: var(--color-secondary);
+}
+
+@media (max-width: 576px) {
+  .roadmap-card {
+    padding: 2rem;
+  }
+}

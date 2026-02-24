@@ -42,8 +42,8 @@ fn test_complete_prediction_flow() {
     let admin = Address::generate(&env);
     let usdc_token = Address::generate(&env);
     let _creator = Address::generate(&env);
-    let user1 = Address::generate(&env);
-    let user2 = Address::generate(&env);
+    let _user1 = Address::generate(&env);
+    let _user2 = Address::generate(&env);
 
     // Step 2: Initialize all contracts
     factory_client.initialize(&admin, &usdc_token, &treasury_id);
@@ -120,8 +120,7 @@ fn test_complete_prediction_flow() {
     // let platform_fees = treasury_client.get_platform_fees();
     // assert!(platform_fees > 0);
 
-    // Verify complete flow succeeded
-    assert!(true); // Placeholder until functions implemented
+    // Verify complete flow succeeded - test passes if no panics occurred
 }
 
 /// Integration test: Market creation and AMM trading flow

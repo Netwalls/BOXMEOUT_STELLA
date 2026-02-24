@@ -13,6 +13,45 @@ export class MarketRepository extends BaseRepository<Market> {
     });
   }
 
+  async addAttestation(
+    marketId: string,
+    oracleId: string,
+    outcome: number,
+    txHash: string
+  ) {
+    return await this.prisma.$transaction(async (tx) => {
+      const attestation = await tx.attestation.create({
+        data: {
+          marketId,
+          oracleId,
+          outcome,
+          txHash,
+        },
+      });
+
+      const market = await tx.market.update({
+        where: { id: marketId },
+        data: {
+          attestationCount: { increment: 1 },
+        },
+      });
+
+      return { attestation, market };
+    });
+  }
+
+  async hasAttested(marketId: string, oracleId: string): Promise<boolean> {
+    const record = await this.prisma.attestation.findUnique({
+      where: {
+        marketId_oracleId: {
+          marketId,
+          oracleId,
+        },
+      },
+    });
+    return !!record;
+  }
+
   async createMarket(data: {
     contractAddress: string;
     title: string;

@@ -167,7 +167,9 @@ export function requireTier(...allowedTiers: UserTier[]) {
         success: false,
         error: {
           code: 'INSUFFICIENT_TIER',
-          message: `Required tier: ${allowedTiers.join(' or ')}. Your tier: ${req.user.tier}`,
+          message: `Required tier: ${allowedTiers.join(' or ')}. Your tier: ${
+            req.user.tier
+          }`,
         },
       });
       return;

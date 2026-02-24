@@ -37,18 +37,20 @@ model User {
   isActive        Boolean   @default(true) @map("is_active")
 
   // Relations
-  createdMarkets    Market[]       @relation("MarketCreator")
-  predictions       Prediction[]
-  shares            Share[]
-  trades            Trade[]
-  transactions      Transaction[]
-  achievements      Achievement[]
-  leaderboard       Leaderboard?
-  referralsGiven    Referral[]     @relation("Referrer")
-  referralsReceived Referral[]     @relation("Referred")
-  refreshTokens     RefreshToken[]
-  disputes          Dispute[]
-  auditLogs         AuditLog[]
+  createdMarkets       Market[]              @relation("MarketCreator")
+  predictions          Prediction[]
+  shares               Share[]
+  trades               Trade[]
+  transactions         Transaction[]
+  achievements         Achievement[]
+  notifications        Notification[]
+  categoryLeaderboards CategoryLeaderboard[]
+  leaderboard          Leaderboard?
+  referralsGiven       Referral[]            @relation("Referrer")
+  referralsReceived    Referral[]            @relation("Referred")
+  refreshTokens        RefreshToken[]
+  disputes             Dispute[]
+  auditLogs            AuditLog[]
 
   @@index([email])
   @@index([username])
@@ -62,6 +64,33 @@ enum UserTier {
   ADVANCED
   EXPERT
   LEGENDARY
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  isRead    Boolean          @default(false) @map("is_read")
+  metadata  Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TIER_UPGRADE
+  ACHIEVEMENT
+  SYSTEM
+  MARKET_RESOLVED
 }
 
 // ============================================================================
@@ -85,6 +114,7 @@ model Market {
   resolvedAt       DateTime?      @map("resolved_at")
   totalVolume      Decimal        @default(0) @map("total_volume") @db.Decimal(18, 6)
   participantCount Int            @default(0) @map("participant_count")
+  attestationCount Int            @default(0) @map("attestation_count")
   yesLiquidity     Decimal        @default(0) @map("yes_liquidity") @db.Decimal(18, 6)
   noLiquidity      Decimal        @default(0) @map("no_liquidity") @db.Decimal(18, 6)
   feesCollected    Decimal        @default(0) @map("fees_collected") @db.Decimal(18, 6)
@@ -94,11 +124,12 @@ model Market {
   updatedAt        DateTime       @updatedAt @map("updated_at")
 
   // Relations
-  creator     User         @relation("MarketCreator", fields: [creatorId], references: [id])
+  creator     User         @relation("MarketCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   predictions Prediction[]
   shares      Share[]
   trades      Trade[]
   disputes    Dispute[]
+  attestations Attestation[]
 
   @@index([contractAddress])
   @@index([category])
@@ -128,6 +159,28 @@ enum MarketStatus {
 }
 
 // ============================================================================
+// ORACLE & ATTESTATIONS
+// ============================================================================
+
+model Attestation {
+  id        String   @id @default(uuid())
+  marketId  String   @map("market_id")
+  oracleId  String   @map("oracle_id")
+  outcome   Int
+  txHash    String   @map("tx_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([marketId, oracleId])
+  @@index([marketId])
+  @@index([oracleId])
+  @@index([createdAt])
+  @@map("attestations")
+}
+
+// ============================================================================
 // PREDICTIONS & BETTING
 // ============================================================================
 
@@ -152,7 +205,7 @@ model Prediction {
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
   // Relations
-  user   User   @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   market Market @relation(fields: [marketId], references: [id])
 
   @@unique([userId, marketId, commitmentHash])
@@ -191,7 +244,7 @@ model Share {
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  user   User   @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   market Market @relation(fields: [marketId], references: [id])
 
   @@index([userId])
@@ -218,7 +271,7 @@ model Trade {
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
   // Relations
-  user   User   @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   market Market @relation(fields: [marketId], references: [id])
 
   @@index([userId])
@@ -263,7 +316,7 @@ model Transaction {
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([txType])
@@ -304,7 +357,7 @@ model Leaderboard {
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([globalRank])
   @@index([weeklyRank])
@@ -319,6 +372,24 @@ enum StreakType {
   NONE
 }
 
+model CategoryLeaderboard {
+  userId          String         @map("user_id")
+  category        MarketCategory
+  rank            Int            @default(0)
+  totalPnl        Decimal        @default(0) @map("total_pnl") @db.Decimal(18, 6)
+  winRate         Decimal        @default(0) @map("win_rate") @db.Decimal(5, 2)
+  predictionCount Int            @default(0) @map("prediction_count")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, category])
+  @@index([category, rank])
+  @@index([category, totalPnl(sort: Desc)])
+  @@map("category_leaderboard")
+}
+
 model Achievement {
   id              String          @id @default(uuid())
   userId          String          @map("user_id")
@@ -329,7 +400,7 @@ model Achievement {
   badgeUrl        String          @map("badge_url")
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, achievementName])
   @@index([userId])
@@ -360,8 +431,8 @@ model Referral {
   referredSignupAt     DateTime? @map("referred_signup_at")
 
   // Relations
-  referrer     User @relation("Referrer", fields: [referrerId], references: [id])
-  referredUser User @relation("Referred", fields: [referredUserId], references: [id])
+  referrer     User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser User @relation("Referred", fields: [referredUserId], references: [id], onDelete: Cascade)
 
   @@unique([referrerId, referredUserId])
   @@index([referralCode])
@@ -384,7 +455,7 @@ model RefreshToken {
   isValid   Boolean   @default(true) @map("is_valid")
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([tokenHash])
@@ -410,7 +481,7 @@ model Dispute {
 
   // Relations
   market Market @relation(fields: [marketId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([marketId])
   @@index([userId])
@@ -443,7 +514,7 @@ model AuditLog {
   createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
-  user User? @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([action])
@@ -485,4 +556,35 @@ enum DistributionStatus {
   PENDING
   CONFIRMED
   FAILED
+}
+
+// ============================================================================
+// BLOCKCHAIN MONITORING
+// ============================================================================
+
+model BlockchainDeadLetterQueue {
+  id           String    @id @default(uuid())
+  txHash       String    @unique @map("tx_hash")
+  serviceName  String    @map("service_name")
+  functionName String    @map("function_name")
+  params       Json
+  error        String    @db.Text
+  status       DlqStatus @default(PENDING)
+  retryCount   Int       @default(0) @map("retry_count")
+  lastRetryAt  DateTime? @map("last_retry_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([serviceName])
+  @@index([status])
+  @@index([createdAt])
+  @@map("blockchain_dlq")
+}
+
+enum DlqStatus {
+  PENDING
+  RETRYING
+  RESOLVED
+  FAILED
+  PERMANENT_FAILURE
 }

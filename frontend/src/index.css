@@ -1,23 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap");
 
 :root {
   /* Brand Colors */
-  --color-bg-main: #0a0b14;
-  /* Deep Midnight */
-  --color-bg-card: #141625;
-  --color-bg-card-hover: #1f2236;
+  --color-bg-main: #050505;
+  /* Deep Black */
+  --color-bg-card: #121212;
+  /* Dark Grey */
+  --color-bg-card-hover: #1a1a1a;
 
-  --color-primary: #00f3ff;
-  /* Electric Blue */
-  --color-secondary: #00ff9d;
-  /* Neon Green */
-  --color-accent: #ff0055;
-  /* Hot Pink (KO) */
+  --color-primary: #e11d48;
+  /* Premium Rose/Red */
+  --color-secondary: #ffffff;
+  /* Pure White */
+  --color-accent: #e11d48;
+  /* Red Accent */
 
   --color-text-main: #ffffff;
-  --color-text-muted: #8899ac;
+  --color-text-muted: #9ca3af;
 
-  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border: rgba(255, 255, 255, 0.08);
 
   /* Spacing */
   --spacing-xs: 0.5rem;
@@ -32,8 +33,8 @@
   --radius-full: 9999px;
 
   /* Fonts */
-  --font-main: 'Outfit', system-ui, sans-serif;
-  --font-arcade: 'Courier New', monospace;
+  --font-main: "Outfit", system-ui, sans-serif;
+  --font-arcade: "Courier New", monospace;
   /* Fallback, would ideally utilize a pixel font */
 }
 
@@ -73,9 +74,18 @@ body {
   left: 0;
   bottom: 0;
   right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.06),
+      rgba(0, 255, 0, 0.02),
+      rgba(0, 0, 255, 0.06)
+    );
   z-index: 1000;
-  background-size: 100% 2px, 3px 100%;
+  background-size:
+    100% 2px,
+    3px 100%;
   pointer-events: none;
 }
 
@@ -88,7 +98,11 @@ body {
   left: 0;
   bottom: 0;
   right: 0;
-  background: radial-gradient(circle, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.6) 100%);
+  background: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
   z-index: 1000;
   pointer-events: none;
 }
@@ -113,7 +127,6 @@ body {
 
 /* Animations */
 @keyframes pulse-glow {
-
   0%,
   100% {
     opacity: 1;
@@ -224,7 +237,11 @@ button {
 }
 
 .title-gradient {
-  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  background: linear-gradient(
+    90deg,
+    var(--color-primary),
+    var(--color-secondary)
+  );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -276,7 +293,6 @@ button {
 
 /* Animations */
 @keyframes pulse-glow {
-
   0%,
   100% {
     opacity: 1;

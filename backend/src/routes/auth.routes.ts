@@ -6,8 +6,15 @@ import {
   challengeRateLimiter,
   refreshRateLimiter,
 } from '../middleware/rateLimit.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import {
+  challengeBody,
+  loginBody,
+  refreshBody,
+  logoutBody,
+} from '../schemas/validation.schemas.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * @route   POST /api/auth/challenge
@@ -16,8 +23,11 @@ const router = Router();
  * @body    { publicKey: string }
  * @returns { nonce: string, message: string, expiresAt: number }
  */
-router.post('/challenge', challengeRateLimiter, (req, res) =>
-  authController.challenge(req, res)
+router.post(
+  '/challenge',
+  challengeRateLimiter,
+  validate({ body: challengeBody }),
+  (req, res) => authController.challenge(req, res)
 );
 
 /**
@@ -27,8 +37,11 @@ router.post('/challenge', challengeRateLimiter, (req, res) =>
  * @body    { publicKey: string, signature: string, nonce: string }
  * @returns { accessToken, refreshToken, expiresIn, tokenType, user }
  */
-router.post('/login', authRateLimiter, (req, res) =>
-  authController.login(req, res)
+router.post(
+  '/login',
+  authRateLimiter,
+  validate({ body: loginBody }),
+  (req, res) => authController.login(req, res)
 );
 
 /**
@@ -38,8 +51,11 @@ router.post('/login', authRateLimiter, (req, res) =>
  * @body    { refreshToken: string }
  * @returns { accessToken, refreshToken, expiresIn }
  */
-router.post('/refresh', refreshRateLimiter, (req, res) =>
-  authController.refresh(req, res)
+router.post(
+  '/refresh',
+  refreshRateLimiter,
+  validate({ body: refreshBody }),
+  (req, res) => authController.refresh(req, res)
 );
 
 /**
@@ -49,7 +65,9 @@ router.post('/refresh', refreshRateLimiter, (req, res) =>
  * @body    { refreshToken: string }
  * @returns { success: true, message: string }
  */
-router.post('/logout', (req, res) => authController.logout(req, res));
+router.post('/logout', validate({ body: logoutBody }), (req, res) =>
+  authController.logout(req, res)
+);
 
 /**
  * @route   POST /api/auth/logout-all

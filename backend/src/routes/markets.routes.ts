@@ -4,15 +4,24 @@
 import { Router } from 'express';
 import { marketsController } from '../controllers/markets.controller.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import {
+  createMarketBody,
+  createPoolBody,
+  uuidParam,
+} from '../schemas/validation.schemas.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/markets - Create new market
  * Requires authentication and wallet connection
  */
-router.post('/', requireAuth, (req, res) =>
-  marketsController.createMarket(req, res)
+router.post(
+  '/',
+  requireAuth,
+  validate({ body: createMarketBody }),
+  (req, res) => marketsController.createMarket(req, res)
 );
 
 /**
@@ -27,7 +36,7 @@ router.get('/', optionalAuth, (req, res) =>
  * GET /api/markets/:id - Get market details
  * Optional authentication for personalized data
  */
-router.get('/:id', optionalAuth, (req, res) =>
+router.get('/:id', optionalAuth, validate({ params: uuidParam }), (req, res) =>
   marketsController.getMarketDetails(req, res)
 );
 
@@ -35,8 +44,11 @@ router.get('/:id', optionalAuth, (req, res) =>
  * POST /api/markets/:id/pool - Create AMM pool for a market
  * Requires authentication and admin/operator privileges (uses admin signer)
  */
-router.post('/:id/pool', requireAuth, (req, res) =>
-  marketsController.createPool(req, res)
+router.post(
+  '/:id/pool',
+  requireAuth,
+  validate({ params: uuidParam, body: createPoolBody }),
+  (req, res) => marketsController.createPool(req, res)
 );
 
 export default router;

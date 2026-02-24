@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { validate, schemas } from '../../src/middleware/validation.middleware';
+import { validate } from '../../src/middleware/validation.middleware';
 import { errorHandler } from '../../src/middleware/error.middleware';
+import {
+  challengeBody,
+  loginBody,
+  uuidParam,
+  stellarAddress,
+  attestBody,
+} from '../../src/schemas/validation.schemas';
 import { z } from 'zod';
 
 describe('Validation Middleware', () => {
@@ -14,9 +21,9 @@ describe('Validation Middleware', () => {
   });
 
   describe('validate() - Body Validation', () => {
-    it('should accept valid registration data', async () => {
-      app.post('/register',
-        validate({ body: schemas.register }),
+    it('should accept valid challenge data', async () => {
+      app.post('/challenge',
+        validate({ body: challengeBody }),
         (req, res) => {
           res.json({ success: true, data: req.body });
         }
@@ -24,64 +31,54 @@ describe('Validation Middleware', () => {
       app.use(errorHandler);
 
       const response = await request(app)
-        .post('/register')
+        .post('/challenge')
         .send({
-          email: 'test@example.com',
-          password: 'Password123!',
-          username: 'testuser_123'
+          publicKey: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ'
         });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.email).toBe('test@example.com');
+      expect(response.body.data.publicKey).toBe('GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ');
     });
 
-    it('should reject invalid email format', async () => {
-      app.post('/register',
-        validate({ body: schemas.register }),
+    it('should reject invalid Stellar public key', async () => {
+      app.post('/challenge',
+        validate({ body: challengeBody }),
         (req, res) => res.json({ success: true })
       );
       app.use(errorHandler);
 
       const response = await request(app)
-        .post('/register')
+        .post('/challenge')
         .send({
-          email: 'invalid-email',
-          password: 'Password123!',
-          username: 'testuser'
+          publicKey: 'invalid-key'
         });
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe('VALIDATION_ERROR');
-      expect(response.body.error.details[0].field).toBe('email');
-      expect(response.body.error.details[0].message).toContain('email');
+      expect(response.body.error.details[0].field).toBe('publicKey');
     });
 
-    it('should reject password that is too short', async () => {
-      app.post('/register',
-        validate({ body: schemas.register }),
+    it('should reject missing required fields', async () => {
+      app.post('/challenge',
+        validate({ body: challengeBody }),
         (req, res) => res.json({ success: true })
       );
       app.use(errorHandler);
 
       const response = await request(app)
-        .post('/register')
-        .send({
-          email: 'test@example.com',
-          password: 'short',
-          username: 'testuser'
-        });
+        .post('/challenge')
+        .send({});
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
-      expect(response.body.error.details[0].field).toBe('password');
-      expect(response.body.error.details[0].message).toContain('8');
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('should accept optional wallet address', async () => {
-      app.post('/register',
-        validate({ body: schemas.register }),
+    it('should accept valid login data', async () => {
+      app.post('/login',
+        validate({ body: loginBody }),
         (req, res) => {
           res.json({ success: true, data: req.body });
         }
@@ -89,64 +86,75 @@ describe('Validation Middleware', () => {
       app.use(errorHandler);
 
       const response = await request(app)
-        .post('/register')
+        .post('/login')
         .send({
-          email: 'test@example.com',
-          password: 'Password123!',
-          username: 'testuser',
-          walletAddress: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ'
+          publicKey: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ',
+          signature: 'test-signature',
+          nonce: 'test-nonce'
         });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.walletAddress).toBe('GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ');
+    });
+
+    it('should reject empty signature in login', async () => {
+      app.post('/login',
+        validate({ body: loginBody }),
+        (req, res) => res.json({ success: true })
+      );
+      app.use(errorHandler);
+
+      const response = await request(app)
+        .post('/login')
+        .send({
+          publicKey: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ',
+          signature: '',
+          nonce: 'test-nonce'
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.details[0].field).toBe('signature');
     });
   });
 
-  describe('validate() - Query Validation', () => {
-    it('should validate pagination query parameters', async () => {
-      app.get('/markets',
-        validate({ query: schemas.pagination }),
+  describe('validate() - Body Validation with attestBody', () => {
+    it('should accept valid attest data', async () => {
+      app.post('/attest',
+        validate({ body: attestBody }),
         (req, res) => {
-          res.json({ success: true, data: req.query });
+          res.json({ success: true, data: req.body });
         }
       );
       app.use(errorHandler);
 
       const response = await request(app)
-        .get('/markets')
-        .query({ page: '2', limit: '50', order: 'asc' });
+        .post('/attest')
+        .send({ outcome: 1 });
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.page).toBe(2);
-      expect(response.body.data.limit).toBe(50);
-      expect(response.body.data.order).toBe('asc');
+      expect(response.body.data.outcome).toBe(1);
     });
 
-    it('should use default values for missing pagination params', async () => {
-      app.get('/markets',
-        validate({ query: schemas.pagination }),
-        (req, res) => {
-          res.json({ success: true, data: req.query });
-        }
+    it('should reject invalid outcome value', async () => {
+      app.post('/attest',
+        validate({ body: attestBody }),
+        (req, res) => res.json({ success: true })
       );
       app.use(errorHandler);
 
-      const response = await request(app).get('/markets');
+      const response = await request(app)
+        .post('/attest')
+        .send({ outcome: 5 });
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.page).toBe(1);
-      expect(response.body.data.limit).toBe(20);
-      expect(response.body.data.order).toBe('desc');
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
     });
   });
 
   describe('validate() - Params Validation', () => {
     it('should validate UUID in URL parameters', async () => {
       app.get('/users/:id',
-        validate({ params: schemas.idParam }),
+        validate({ params: uuidParam }),
         (req, res) => {
           res.json({ success: true, data: req.params });
         }
@@ -163,7 +171,7 @@ describe('Validation Middleware', () => {
 
     it('should reject invalid UUID', async () => {
       app.get('/users/:id',
-        validate({ params: schemas.idParam }),
+        validate({ params: uuidParam }),
         (req, res) => res.json({ success: true })
       );
       app.use(errorHandler);
@@ -176,84 +184,79 @@ describe('Validation Middleware', () => {
     });
   });
 
-  describe('schemas object', () => {
-    it('should contain all expected schemas', () => {
-      expect(schemas).toHaveProperty('register');
-      expect(schemas).toHaveProperty('login');
-      expect(schemas).toHaveProperty('createMarket');
-      expect(schemas).toHaveProperty('pagination');
-      expect(schemas).toHaveProperty('idParam');
-      expect(schemas).toHaveProperty('stellarAddress');
-      expect(schemas).toHaveProperty('walletChallenge');
+  describe('validate() - Combined Body + Params', () => {
+    it('should validate both params and body simultaneously', async () => {
+      app.post('/markets/:id/attest',
+        validate({ params: uuidParam, body: attestBody }),
+        (req, res) => {
+          res.json({ success: true, params: req.params, body: req.body });
+        }
+      );
+      app.use(errorHandler);
+
+      const response = await request(app)
+        .post('/markets/123e4567-e89b-12d3-a456-426614174000/attest')
+        .send({ outcome: 0 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.params.id).toBe('123e4567-e89b-12d3-a456-426614174000');
+      expect(response.body.body.outcome).toBe(0);
     });
 
-    describe('login schema', () => {
-      it('should accept valid login data', () => {
-        const validData = {
-          email: 'user@example.com',
-          password: 'password123'
-        };
+    it('should reject if params are invalid even when body is valid', async () => {
+      app.post('/markets/:id/attest',
+        validate({ params: uuidParam, body: attestBody }),
+        (req, res) => res.json({ success: true })
+      );
+      app.use(errorHandler);
 
-        expect(() => schemas.login.parse(validData)).not.toThrow();
-      });
+      const response = await request(app)
+        .post('/markets/not-a-uuid/attest')
+        .send({ outcome: 0 });
 
-      it('should reject invalid email', () => {
-        const invalidData = {
-          email: 'invalid-email',
-          password: 'password123'
-        };
-
-        expect(() => schemas.login.parse(invalidData)).toThrow();
-      });
-
-      it('should reject empty password', () => {
-        const invalidData = {
-          email: 'user@example.com',
-          password: ''
-        };
-
-        expect(() => schemas.login.parse(invalidData)).toThrow();
-      });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
     });
+  });
 
-    describe('pagination schema', () => {
-      it('should transform string numbers to numbers', () => {
-        const data = {
-          page: '3',
-          limit: '50'
-        };
+  describe('validate() - Stellar address', () => {
+    it('should accept valid Stellar address in body', async () => {
+      const stellarAddressBody = z.object({ address: stellarAddress });
+      app.post('/verify',
+        validate({ body: stellarAddressBody }),
+        (req, res) => {
+          res.json({ success: true, data: req.body });
+        }
+      );
+      app.use(errorHandler);
 
-        const result = schemas.pagination.parse(data);
-        expect(result.page).toBe(3);
-        expect(result.limit).toBe(50);
-      });
-
-      it('should provide default values', () => {
-        const data = {};
-        const result = schemas.pagination.parse(data);
-
-        expect(result.page).toBe(1);
-        expect(result.limit).toBe(20);
-        expect(result.order).toBe('desc');
-      });
-    });
-
-    describe('stellarAddress schema', () => {
-      it('should accept valid Stellar address', () => {
-        const validAddress = {
+      const response = await request(app)
+        .post('/verify')
+        .send({
           address: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ'
-        };
+        });
 
-        expect(() => schemas.stellarAddress.parse(validAddress)).not.toThrow();
-      });
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.address).toBe('GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ');
+    });
 
-      it('should reject invalid Stellar address', () => {
-        const invalidAddress = {
+    it('should reject invalid Stellar address', async () => {
+      const stellarAddressBody = z.object({ address: stellarAddress });
+      app.post('/verify',
+        validate({ body: stellarAddressBody }),
+        (req, res) => res.json({ success: true })
+      );
+      app.use(errorHandler);
+
+      const response = await request(app)
+        .post('/verify')
+        .send({
           address: 'not-a-stellar-address'
-        };
+        });
 
-        expect(() => schemas.stellarAddress.parse(invalidAddress)).toThrow();
-      });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
     });
   });
 });

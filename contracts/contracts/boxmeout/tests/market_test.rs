@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use boxmeout::market::{MarketError, MarketState, PredictionMarketClient};
+use boxmeout::market::{MarketError, PredictionMarketClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger, LedgerInfo},
     token, Address, BytesN, Env, Symbol,
@@ -156,7 +156,7 @@ fn test_market_initialize() {
 #[test]
 fn test_commit_prediction_happy_path() {
     let env = create_test_env();
-    let (client, _market_id, _creator, admin, usdc_address, _market_contract) =
+    let (client, _market_id, _creator, _admin, usdc_address, _market_contract) =
         setup_test_market(&env);
 
     // Setup user with USDC balance
@@ -205,7 +205,7 @@ fn test_commit_prediction_happy_path() {
 #[test]
 fn test_commit_prediction_duplicate_rejected() {
     let env = create_test_env();
-    let (client, _market_id, _creator, admin, usdc_address, _market_contract) =
+    let (client, _market_id, _creator, _admin, usdc_address, _market_contract) =
         setup_test_market(&env);
 
     let user = Address::generate(&env);
@@ -271,7 +271,7 @@ fn test_commit_prediction_negative_amount_rejected() {
 #[test]
 fn test_multiple_users_commit() {
     let env = create_test_env();
-    let (client, _market_id, _creator, admin, usdc_address, _market_contract) =
+    let (client, _market_id, _creator, _admin, usdc_address, _market_contract) =
         setup_test_market(&env);
 
     let token = token::StellarAssetClient::new(&env, &usdc_address);
@@ -911,5 +911,5 @@ fn test_get_market_state_serializable() {
     let _winning_outcome = state.winning_outcome;
 
     // If we got here, the struct is properly serializable
-    assert!(true);
+    // Verification complete
 }

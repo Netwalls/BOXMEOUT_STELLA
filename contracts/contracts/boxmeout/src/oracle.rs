@@ -948,16 +948,23 @@ impl OracleManager {
             .set(&Symbol::new(&env, LAST_OVERRIDE_TIME_KEY), &current_time);
 
         // 12. Emit EmergencyOverride event with all details
-        env.events().publish(
-            (Symbol::new(&env, "EmergencyOverride"),),
-            (
-                market_id,
-                forced_outcome,
-                justification_hash,
-                approvers,
-                current_time,
-            ),
-        );
+        #[contractevent]
+        pub struct EmergencyOverrideEvent {
+            pub market_id: BytesN<32>,
+            pub forced_outcome: u32,
+            pub justification_hash: BytesN<32>,
+            pub approvers: Vec<Address>,
+            pub timestamp: u64,
+        }
+
+        EmergencyOverrideEvent {
+            market_id,
+            forced_outcome,
+            justification_hash,
+            approvers,
+            timestamp: current_time,
+        }
+        .publish(&env);
     }
 
     /// Get emergency override record for a market (for audit purposes)

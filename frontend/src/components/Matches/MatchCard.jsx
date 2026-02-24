@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import CombatBetButton from "./CombatBetButton";
+import SlideToConfirm from "./SlideToConfirm";
 
 const MatchCard = ({ match, onPredict }) => {
   const [previousOdds, setPreviousOdds] = useState(match.odds);
   const [damageNumber, setDamageNumber] = useState(null); // { value: 100, id: Date.now() }
+  const [showSlider, setShowSlider] = useState(null); // null | { fighter, label, odds, color, stakes }
 
   // Monitor odds changes for animation
   useEffect(() => {
@@ -17,6 +19,28 @@ const MatchCard = ({ match, onPredict }) => {
   }, [match.odds]);
 
   const handleCombatBet = (fighter) => {
+    // Determine stakes based on match type or other criteria
+    let stakes = "standard";
+    if (match.type === "CHAMPIONSHIP" || match.type === "MAIN EVENT") {
+      stakes = "main-event";
+    } else if (match.type === "CO-MAIN" || match.status === "LIVE") {
+      stakes = "high";
+    }
+
+    // Show slider for confirmation
+    setShowSlider({
+      fighter,
+      label: fighter.name,
+      odds:
+        fighter === match.fighterA ? match.odds.fighterA : match.odds.fighterB,
+      color: fighter === match.fighterA ? "red" : "blue",
+      stakes,
+    });
+  };
+
+  const handleSliderConfirm = () => {
+    if (!showSlider) return;
+
     // Calculate damage/bet amount (e.g., 100 fixed for now)
     const amount = 100;
 
@@ -24,10 +48,13 @@ const MatchCard = ({ match, onPredict }) => {
     setDamageNumber({ value: amount, id: Date.now() });
 
     // Trigger actual prediction
-    onPredict(match, fighter);
+    onPredict(match, showSlider.fighter);
 
     // Clear damage number after animation
     setTimeout(() => setDamageNumber(null), 1000);
+
+    // Close slider
+    setShowSlider(null);
   };
 
   return (
@@ -134,6 +161,82 @@ const MatchCard = ({ match, onPredict }) => {
             prevOdds={previousOdds.fighterB}
           />
         </div>
+
+        {/* Slide to Confirm Overlay */}
+        {showSlider && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0, 0, 0, 0.9)",
+              zIndex: 1000,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "2rem",
+            }}
+            onClick={() => setShowSlider(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "500px",
+                width: "100%",
+              }}
+            >
+              <div
+                style={{
+                  color: "white",
+                  fontSize: "1.5rem",
+                  fontWeight: "bold",
+                  marginBottom: "1rem",
+                  textAlign: "center",
+                  fontFamily: "var(--font-arcade)",
+                }}
+              >
+                CONFIRM YOUR PREDICTION
+              </div>
+              <div
+                style={{
+                  color: "#ccc",
+                  fontSize: "1rem",
+                  marginBottom: "2rem",
+                  textAlign: "center",
+                }}
+              >
+                {match.fighterA.name} vs {match.fighterB.name}
+              </div>
+              <SlideToConfirm
+                label={showSlider.label}
+                odds={showSlider.odds}
+                color={showSlider.color}
+                stakes={showSlider.stakes}
+                onConfirm={handleSliderConfirm}
+              />
+              <button
+                onClick={() => setShowSlider(null)}
+                style={{
+                  marginTop: "1.5rem",
+                  width: "100%",
+                  padding: "0.8rem",
+                  background: "transparent",
+                  border: "2px solid #666",
+                  borderRadius: "8px",
+                  color: "#ccc",
+                  fontSize: "1rem",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-arcade)",
+                }}
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

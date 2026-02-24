@@ -4,23 +4,35 @@
 import { Router } from 'express';
 import { predictionsController } from '../controllers/predictions.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import {
+  marketIdParam,
+  commitPredictionBody,
+  revealPredictionBody,
+} from '../schemas/validation.schemas.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/markets/:marketId/commit - Commit Prediction (Phase 1)
  * Server generates and stores salt securely
  */
-router.post('/:marketId/commit', requireAuth, (req, res) =>
-  predictionsController.commitPrediction(req, res)
+router.post(
+  '/:marketId/commit',
+  requireAuth,
+  validate({ params: marketIdParam, body: commitPredictionBody }),
+  (req, res) => predictionsController.commitPrediction(req, res)
 );
 
 /**
  * POST /api/markets/:marketId/reveal - Reveal Prediction (Phase 2)
  * Server provides stored salt for blockchain verification
  */
-router.post('/:marketId/reveal', requireAuth, (req, res) =>
-  predictionsController.revealPrediction(req, res)
+router.post(
+  '/:marketId/reveal',
+  requireAuth,
+  validate({ params: marketIdParam, body: revealPredictionBody }),
+  (req, res) => predictionsController.revealPrediction(req, res)
 );
 
 export default router;

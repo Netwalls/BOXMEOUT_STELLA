@@ -5,44 +5,35 @@ import {
   Contract,
   rpc,
   TransactionBuilder,
-  Networks,
   BASE_FEE,
   Keypair,
   nativeToScVal,
   scValToNative,
 } from '@stellar/stellar-sdk';
+import { BaseBlockchainService } from './base.js';
 import { logger } from '../../utils/logger.js';
 
 export interface AttestationResult {
   txHash: string;
+  oraclePublicKey: string;
 }
 
-export class OracleService {
-  private rpcServer: rpc.Server;
+export class OracleService extends BaseBlockchainService {
   private oracleContractId: string;
-  private networkPassphrase: string;
-  private adminKeypair?: Keypair;
+  private oracleKeypairs: Keypair[] = [];
 
   constructor() {
-    const rpcUrl =
-      process.env.STELLAR_SOROBAN_RPC_URL ||
-      'https://soroban-testnet.stellar.org';
-    const network = process.env.STELLAR_NETWORK || 'testnet';
-
-    this.rpcServer = new rpc.Server(rpcUrl, {
-      allowHttp: rpcUrl.includes('localhost'),
-    });
+    super('OracleService');
     this.oracleContractId = process.env.ORACLE_CONTRACT_ADDRESS || '';
-    this.networkPassphrase =
-      network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
 
-    const adminSecret = process.env.ADMIN_WALLET_SECRET;
-    if (adminSecret) {
-      try {
-        this.adminKeypair = Keypair.fromSecret(adminSecret);
-      } catch (error) {
-        logger.warn('Invalid ADMIN_WALLET_SECRET for Oracle service');
-      }
+    const oracleSecrets = process.env.ORACLE_NODE_SECRETS?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (oracleSecrets && oracleSecrets.length > 0) {
+      this.oracleKeypairs = oracleSecrets.map((s) => Keypair.fromSecret(s));
+    } else if (this.adminKeypair) {
+      // Fallback to admin keypair as single oracle
+      this.oracleKeypairs = [this.adminKeypair];
     }
   }
 
@@ -50,26 +41,27 @@ export class OracleService {
    * Submit an attestation to the oracle contract
    * @param marketId - The ID of the market (BytesN<32>)
    * @param outcome - The outcome being attested (0 or 1)
-   * @returns Transaction hash
+   * @param oracleIndex - Index to select which oracle keypair to use
+   * @returns Transaction hash and the oracle public key used
    */
   async submitAttestation(
     marketId: string,
-    outcome: number
+    outcome: number,
+    oracleIndex: number = 0
   ): Promise<AttestationResult> {
     if (!this.oracleContractId) {
       throw new Error('Oracle contract address not configured');
     }
-    if (!this.adminKeypair) {
-      throw new Error(
-        'ADMIN_WALLET_SECRET not configured - cannot sign transactions'
-      );
+
+    const signerCount = this.oracleKeypairs.length;
+    if (signerCount === 0) {
+      throw new Error('No oracle secrets configured');
     }
+    const signer = this.oracleKeypairs[oracleIndex % signerCount];
 
     try {
       const contract = new Contract(this.oracleContractId);
-      const sourceAccount = await this.rpcServer.getAccount(
-        this.adminKeypair.publicKey()
-      );
+      const sourceAccount = await this.rpcServer.getAccount(signer.publicKey());
 
       // marketId is hex string, convert to Buffer
       const marketIdBuffer = Buffer.from(marketId, 'hex');
@@ -90,22 +82,29 @@ export class OracleService {
 
       const preparedTransaction =
         await this.rpcServer.prepareTransaction(builtTransaction);
-      preparedTransaction.sign(this.adminKeypair);
+      preparedTransaction.sign(signer);
 
       const response =
         await this.rpcServer.sendTransaction(preparedTransaction);
 
       if (response.status === 'PENDING') {
         const txHash = response.hash;
-        await this.waitForTransaction(txHash);
-        return { txHash };
+        // Use unified retry logic from BaseBlockchainService
+        await this.waitForTransaction(txHash, 'submitAttestation', {
+          marketId,
+          outcome,
+          oraclePublicKey: signer.publicKey(),
+        });
+        return { txHash, oraclePublicKey: signer.publicKey() };
       } else {
         throw new Error(`Transaction failed: ${response.status}`);
       }
     } catch (error) {
       logger.error('Oracle.submit_attestation() error', { error });
       throw new Error(
-        `Failed to submit attestation on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to submit attestation on blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }
@@ -125,7 +124,18 @@ export class OracleService {
       const marketIdBuffer = Buffer.from(marketId, 'hex');
       const accountKey =
         this.adminKeypair?.publicKey() || Keypair.random().publicKey();
-      const sourceAccount = await this.rpcServer.getAccount(accountKey);
+
+      let sourceAccount;
+      try {
+        sourceAccount = await this.rpcServer.getAccount(accountKey);
+      } catch (e) {
+        logger.warn(
+          'Could not load source account for checkConsensus simulation, using random keypair fallback'
+        );
+        sourceAccount = await this.rpcServer.getAccount(
+          Keypair.random().publicKey()
+        );
+      }
 
       const builtTransaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
@@ -155,28 +165,6 @@ export class OracleService {
       logger.error('Error checking consensus', { error });
       return null;
     }
-  }
-
-  private async waitForTransaction(
-    txHash: string,
-    maxRetries: number = 10
-  ): Promise<any> {
-    let retries = 0;
-    while (retries < maxRetries) {
-      try {
-        const txResponse = await this.rpcServer.getTransaction(txHash);
-        if (txResponse.status === 'SUCCESS') return txResponse;
-        if (txResponse.status === 'FAILED')
-          throw new Error('Transaction failed');
-        await new Promise((r) => setTimeout(r, 2000));
-        retries++;
-      } catch (error) {
-        if (retries >= maxRetries - 1) throw error;
-        await new Promise((r) => setTimeout(r, 2000));
-        retries++;
-      }
-    }
-    throw new Error('Transaction timeout');
   }
 }
 

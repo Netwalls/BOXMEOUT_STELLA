@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { validate, schemas } from '../../src/middleware/validation.middleware';
+import { validate } from '../../src/middleware/validation.middleware';
 import { errorHandler, ApiError } from '../../src/middleware/error.middleware';
+import {
+  challengeBody,
+  createMarketBody,
+} from '../../src/schemas/validation.schemas';
 
 describe('Validation and Error Handling Integration', () => {
   let app: express.Application;
@@ -14,13 +18,12 @@ describe('Validation and Error Handling Integration', () => {
 
   it('should process valid request through complete middleware chain', async () => {
     app.post('/api/test',
-      validate({ body: schemas.register }),
+      validate({ body: challengeBody }),
       (req, res) => {
         res.json({
           success: true,
           data: {
-            email: req.body.email,
-            username: req.body.username
+            publicKey: req.body.publicKey,
           }
         });
       }
@@ -30,19 +33,17 @@ describe('Validation and Error Handling Integration', () => {
     const response = await request(app)
       .post('/api/test')
       .send({
-        email: 'integration@test.com',
-        password: 'Password123!',
-        username: 'integration_test'
+        publicKey: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ'
       });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(response.body.data.email).toBe('integration@test.com');
+    expect(response.body.data.publicKey).toBe('GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ');
   });
 
   it('should handle validation error with custom business logic', async () => {
     app.post('/api/market',
-      validate({ body: schemas.createMarket }),
+      validate({ body: createMarketBody }),
       (req, res, next) => {
         // Business logic after validation
         if (req.body.title.toLowerCase().includes('spam')) {
@@ -53,65 +54,40 @@ describe('Validation and Error Handling Integration', () => {
     );
     app.use(errorHandler);
 
+    // Future closing date for valid market data
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 30);
+    const closingAt = futureDate.toISOString();
+
     // Use a title that passes validation but contains "spam"
     const spamResponse = await request(app)
       .post('/api/market')
       .send({
-        title: 'Is this product considered spam?', // Valid title that contains "spam"
-        description: 'A valid description that passes validation',
+        title: 'Is this product considered spam?',
+        description: 'A valid description that passes all validation checks',
         category: 'CRYPTO',
-        outcomeA: 'Outcome A',
-        outcomeB: 'Outcome B',
-        closingAt: '2024-12-31T23:59:59.999Z'
+        outcomeA: 'Yes',
+        outcomeB: 'No',
+        closingAt,
       });
 
     // Should be 422 (business logic rejection) not 400 (validation error)
     expect(spamResponse.status).toBe(422);
     expect(spamResponse.body.error.code).toBe('SPAM_DETECTED');
 
-    // Check if the response has the expected message format
-    // Based on the test failures, the error handler might be using different message formats
-    // Accept either format for now
-    const validMessages = [
-      'Market title contains spam content',
-      'Something went wrong'
-    ];
-    expect(validMessages).toContain(spamResponse.body.error.message);
-
     // Valid request that passes all checks
     const validResponse = await request(app)
       .post('/api/market')
       .send({
-        title: 'Legitimate market question without spam',
-        description: 'A valid description',
+        title: 'Legitimate market question here',
+        description: 'A valid description that passes all validation checks',
         category: 'CRYPTO',
         outcomeA: 'Yes',
         outcomeB: 'No',
-        closingAt: '2024-12-31T23:59:59.999Z'
+        closingAt,
       });
 
-    // Check if it's a validation error or success
-    // If validation fails, we need to see what's wrong
-    if (validResponse.status === 400) {
-      const { logger } = await import('../../src/utils/logger.js');
-      logger.debug('Validation error details', { body: validResponse.body });
-      if (validResponse.body.error?.details) {
-        logger.debug('Validation details', {
-          details: validResponse.body.error.details,
-        });
-      }
-    }
-
-    // Accept either 200 (if schema validation passes) or 400 (if it fails)
-    // Update the expectation based on your actual schema requirements
-    expect([200, 400]).toContain(validResponse.status);
-
-    if (validResponse.status === 200) {
-      expect(validResponse.body.success).toBe(true);
-    } else if (validResponse.status === 400) {
-      // It's a validation error - check the error format
-      expect(validResponse.body.success).toBe(false);
-      expect(validResponse.body.error.code).toBeDefined();
-    }
+    expect(validResponse.status).toBe(200);
+    expect(validResponse.body.success).toBe(true);
   });
 });

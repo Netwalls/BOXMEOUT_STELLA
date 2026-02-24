@@ -6,7 +6,7 @@ import {
   getRedisClient,
 } from '../config/redis.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * Check PostgreSQL connectivity with detailed metrics

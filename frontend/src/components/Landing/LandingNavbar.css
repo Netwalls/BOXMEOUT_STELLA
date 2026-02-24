@@ -1,0 +1,103 @@
+.landing-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1000;
+  padding: 1.5rem 0;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.landing-navbar.scrolled {
+  padding: 1rem 0;
+  background: rgba(10, 11, 20, 0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.navbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 1.5rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.02em;
+}
+
+.logo-text {
+  background: linear-gradient(90deg, #fff, var(--color-primary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2.5rem;
+}
+
+.nav-links a,
+.nav-link-btn {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  transition: color 0.3s ease;
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+.nav-links a:hover,
+.nav-link-btn:hover {
+  color: #fff;
+}
+
+.nav-links a::after,
+.nav-link-btn::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+.nav-links a:hover::after,
+.nav-link-btn:hover::after {
+  width: 100%;
+}
+
+.nav-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: #fff;
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #fff;
+}
+
+@media (max-width: 992px) {
+  .nav-links {
+    display: none;
+  }
+}

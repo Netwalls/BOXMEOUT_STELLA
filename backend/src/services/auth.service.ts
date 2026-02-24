@@ -123,7 +123,9 @@ export class AuthService {
 
       user = await this.userRepository.createUser({
         // Generate unique email for wallet users (required by schema)
-        email: `${publicKey.toLowerCase().slice(0, 16)}.${timestamp}@wallet.boxmeout.io`,
+        email: `${publicKey
+          .toLowerCase()
+          .slice(0, 16)}.${timestamp}@wallet.boxmeout.io`,
         username: `stellar_${shortKey}_${timestamp}`,
         passwordHash: '', // No password for wallet auth
         walletAddress: publicKey,

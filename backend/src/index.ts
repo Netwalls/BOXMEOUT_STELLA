@@ -9,8 +9,10 @@ import authRoutes from './routes/auth.routes.js';
 import marketRoutes from './routes/markets.routes.js';
 import oracleRoutes from './routes/oracle.js';
 import predictionRoutes from './routes/predictions.js';
+import tradingRoutes from './routes/trading.js';
 import treasuryRoutes from './routes/treasury.routes.js';
-import sharesRoutes from './routes/shares.routes.js';
+import referralsRoutes from './routes/referrals.routes.js';
+import leaderboardRoutes from './routes/leaderboard.routes.js';
 
 // Import Redis initialization
 import {
@@ -30,6 +32,7 @@ import {
 
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 import { requestLogger } from './middleware/logging.middleware.js';
+import { metricsMiddleware } from './middleware/metrics.middleware.js';
 import { logger } from './utils/logger.js';
 import {
   errorHandler,
@@ -46,8 +49,11 @@ import {
 // Import Swagger setup
 import { setupSwagger } from './config/swagger.js';
 
+// Import Cron initialization
+import { cronService } from './services/cron.service.js';
+
 // Initialize Express app
-const app = express();
+const app: express.Express = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -74,12 +80,19 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestIdMiddleware);
 app.use(requestLogger);
 
+// Metrics tracking middleware
+app.use(metricsMiddleware);
+
 // Trust proxy (for rate limiting behind reverse proxy)
 app.set('trust proxy', 1);
 
 // Health Routes
 import healthRoutes from './routes/health.js';
 app.use('/api', healthRoutes);
+
+// Metrics Routes (before rate limiting)
+import metricsRoutes from './routes/metrics.routes.js';
+app.use('/metrics', metricsRoutes);
 
 /**
  * @swagger
@@ -182,24 +195,6 @@ app.use('/api', apiRateLimiter);
 
 // Authentication routes with specific rate limiting
 app.use('/api/auth', authRateLimiter, authRoutes);
-// Metrics
-import client from 'prom-client';
-// Collect default metrics
-const collectDefaultMetrics = client.collectDefaultMetrics;
-collectDefaultMetrics({ register: client.register });
-
-app.get('/metrics', async (_req: Request, res: Response) => {
-  try {
-    res.set('Content-Type', client.register.contentType);
-    const metrics = await client.register.metrics();
-    res.end(metrics);
-  } catch (error) {
-    res.status(500).end(error);
-  }
-});
-
-// Authentication routes
-app.use('/api/auth', authRoutes);
 
 // Market routes
 app.use('/api/markets', marketRoutes);
@@ -208,15 +203,16 @@ app.use('/api/markets', oracleRoutes);
 // Prediction routes (commit-reveal flow)
 app.use('/api/markets', predictionRoutes);
 
+// Trading routes (buy/sell shares, odds)
+app.use('/api/markets', tradingRoutes);
 // Treasury routes
 app.use('/api/treasury', treasuryRoutes);
 
-// Shares/Portfolio routes
-app.use('/api', sharesRoutes);
+// Referral routes
+app.use('/api/referrals', referralsRoutes);
 
-// TODO: Add other routes as they are implemented
-// app.use('/api/users', userRoutes);
-// app.use('/api/leaderboard', leaderboardRoutes);
+// Leaderboard routes
+app.use('/api/leaderboard', leaderboardRoutes);
 
 // =============================================================================
 // ERROR HANDLING - UPDATED WITH NEW ERROR HANDLER
@@ -241,6 +237,9 @@ async function startServer(): Promise<void> {
     // TODO: Initialize Prisma/Database connection
     // await prisma.$connect();
     // logger.info('Database connected');
+
+    // Initialize Cron Service
+    await cronService.initialize();
 
     // Start HTTP server
     app.listen(PORT, () => {

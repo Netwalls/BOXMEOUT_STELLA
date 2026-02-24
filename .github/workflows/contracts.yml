@@ -1,0 +1,79 @@
+name: Contracts CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/contracts.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/contracts.yml'
+
+jobs:
+  test-contracts:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          components: clippy, rustfmt
+          override: true
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            contracts/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run cargo test
+        working-directory: contracts/contracts/boxmeout
+        run: cargo test --features testutils
+
+      - name: Run cargo clippy
+        working-directory: contracts/contracts/boxmeout
+        run: cargo clippy --all-targets --features testutils -- -D warnings
+
+      - name: Check formatting
+        working-directory: contracts/contracts/boxmeout
+        run: cargo fmt -- --check
+
+      - name: Build WASM contracts
+        working-directory: contracts/contracts/boxmeout
+        run: cargo build --release --target wasm32-unknown-unknown
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Generate test coverage
+        working-directory: contracts/contracts/boxmeout
+        run: cargo tarpaulin --features testutils --out Xml --output-dir coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: contracts/contracts/boxmeout/coverage/cobertura.xml
+          flags: contracts
+          name: contract-coverage
+          fail_ci_if_error: false
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-wasm
+          path: contracts/target/wasm32-unknown-unknown/release/boxmeout.wasm
+          retention-days: 7

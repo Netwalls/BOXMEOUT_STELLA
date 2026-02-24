@@ -268,6 +268,7 @@ fn register_factory(env: &Env) -> Address {
 }
 
 // Helper to create a mock USDC token
+#[allow(dead_code)]
 fn create_mock_token(env: &Env, admin: &Address) -> Address {
     let token_address = env.register_stellar_asset_contract_v2(admin.clone());
     token_address.address()
