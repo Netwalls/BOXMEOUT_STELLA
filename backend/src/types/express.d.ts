@@ -10,6 +10,13 @@ declare global {
         error: (msg: string, meta?: object) => void;
         child: (meta: object) => Express.Request['log'];
       };
+      /** Authenticated user from JWT token */
+      user?: {
+        id: string;
+        email: string;
+        username: string;
+        isAdmin?: boolean;
+      };
     }
   }
 }

@@ -1,0 +1,16 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Force LF line endings for all text files in backend
+backend/**/*.ts text eol=lf
+backend/**/*.js text eol=lf
+backend/**/*.json text eol=lf
+backend/**/*.md text eol=lf
+
+# Force LF line endings for all text files in frontend
+frontend/**/*.ts text eol=lf
+frontend/**/*.tsx text eol=lf
+frontend/**/*.js text eol=lf
+frontend/**/*.jsx text eol=lf
+frontend/**/*.json text eol=lf
+frontend/**/*.md text eol=lf
