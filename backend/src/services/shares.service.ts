@@ -330,4 +330,3 @@ export class SharesService {
     return breakdown;
   }
 }
-
