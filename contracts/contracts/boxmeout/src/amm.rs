@@ -926,11 +926,49 @@ impl AMM {
         (yes_price, no_price)
     }
 
-    // TODO: Implement remaining AMM functions
-    // - add_liquidity()
-    // - get_lp_position() / claim_lp_fees()
-    // - calculate_spot_price()
-    // - get_trade_history()
+    /// Read-only query for LP token balance and pool share.
+    /// Returns (lp_token_balance, share_of_pool_bps, unrealized_pnl).
+    /// - lp_token_balance: user's LP tokens for this market
+    /// - share_of_pool_bps: share of pool in basis points (10000 = 100%)
+    /// - unrealized_pnl: current USDC value of position (redeemable value if withdrawn now)
+    pub fn get_lp_position(
+        env: Env,
+        market_id: BytesN<32>,
+        lp_provider: Address,
+    ) -> (u128, u32, u128) {
+        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        if !env.storage().persistent().has(&pool_exists_key) {
+            return (0, 0, 0);
+        }
+
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            market_id.clone(),
+            lp_provider,
+        );
+        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
+        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id);
+
+        let lp_balance: u128 = env.storage().persistent().get(&lp_balance_key).unwrap_or(0);
+        if lp_balance == 0 {
+            return (0, 0, 0);
+        }
+
+        let lp_supply: u128 = env.storage().persistent().get(&lp_supply_key).unwrap_or(0);
+        if lp_supply == 0 {
+            return (lp_balance, 0, 0);
+        }
+
+        let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
+        let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
+        let total_liquidity = yes_reserve + no_reserve;
+
+        let share_bps = ((lp_balance * 10000) / lp_supply) as u32;
+        let unrealized_pnl = (lp_balance * total_liquidity) / lp_supply;
+
+        (lp_balance, share_bps, unrealized_pnl)
+    }
 }
 
 #[cfg(test)]
@@ -1033,5 +1071,47 @@ mod tests {
         assert_eq!(new_k, yes_after * no_after);
         assert_eq!(new_k, 562_500_000_000);
         assert!(new_k > old_k);
+    }
+
+    #[test]
+    fn test_get_lp_position() {
+        let env = Env::default();
+        let (amm, _usdc, initial_lp, _admin, market_id) = setup_amm_pool(&env);
+
+        // Creator has 100% of pool: 1_000_000 LP, 1_000_000 total liquidity
+        let (lp_balance, share_bps, unrealized_pnl) =
+            amm.get_lp_position(&market_id, &initial_lp);
+        assert_eq!(lp_balance, 1_000_000);
+        assert_eq!(share_bps, 10000); // 100%
+        assert_eq!(unrealized_pnl, 1_000_000);
+
+        // Non-LP gets zeros
+        let other = Address::generate(&env);
+        let (lp_bal, share, pnl) = amm.get_lp_position(&market_id, &other);
+        assert_eq!(lp_bal, 0);
+        assert_eq!(share, 0);
+        assert_eq!(pnl, 0);
+    }
+
+    #[test]
+    fn test_get_lp_position_after_add_liquidity() {
+        let env = Env::default();
+        let (amm, usdc, initial_lp, _admin, market_id) = setup_amm_pool(&env);
+        let second_lp = Address::generate(&env);
+        usdc.mint(&second_lp, &500_000i128);
+
+        amm.add_liquidity(&second_lp, &market_id, &500_000u128);
+
+        // Initial LP: 1M of 1.5M supply = 2/3, pool total 1.5M
+        let (lp1, share1, pnl1) = amm.get_lp_position(&market_id, &initial_lp);
+        assert_eq!(lp1, 1_000_000);
+        assert_eq!(share1, 6666); // 66.66% (1000000*10000/1500000)
+        assert_eq!(pnl1, 1_000_000); // 2/3 of 1.5M
+
+        // Second LP: 500k of 1.5M supply = 1/3
+        let (lp2, share2, pnl2) = amm.get_lp_position(&market_id, &second_lp);
+        assert_eq!(lp2, 500_000);
+        assert_eq!(share2, 3333); // 33.33%
+        assert_eq!(pnl2, 500_000);
     }
 }
