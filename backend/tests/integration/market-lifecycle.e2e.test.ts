@@ -235,7 +235,7 @@ describe('Market Lifecycle E2E', () => {
       },
     });
 
-    // Update user balance with winnings
+    // Update user balance with net payout
     await prisma.user.update({
       where: { id: testUser.id },
       data: {
