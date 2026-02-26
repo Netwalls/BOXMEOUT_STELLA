@@ -36,6 +36,13 @@ model User {
   updatedAt       DateTime  @updatedAt @map("updated_at")
   isActive        Boolean   @default(true) @map("is_active")
 
+  // Notification Preferences
+  notifyPredictionResult Boolean @default(true) @map("notify_prediction_result")
+  notifyMarketResolution Boolean @default(true) @map("notify_market_resolution")
+  notifyWinnings         Boolean @default(true) @map("notify_winnings")
+  notifyAchievements     Boolean @default(true) @map("notify_achievements")
+  emailNotifications     Boolean @default(false) @map("email_notifications")
+
   // Relations
   createdMarkets       Market[]              @relation("MarketCreator")
   predictions          Prediction[]
@@ -91,6 +98,8 @@ enum NotificationType {
   ACHIEVEMENT
   SYSTEM
   MARKET_RESOLVED
+  PREDICTION_RESULT
+  WINNINGS_AVAILABLE
 }
 
 // ============================================================================

@@ -2448,6 +2448,50 @@ mod tests {
     }
 
     #[test]
+    fn test_reveal_rejects_wrong_amount() {
+        let (env, market_id, market_client, _usdc_client, user) = setup_reveal_test();
+
+        let salt = BytesN::from_array(&env, &[14; 32]);
+        let outcome = 1u32;
+        let amount = 100i128;
+
+        let commit_hash = compute_commit_hash(&env, &market_id, outcome, &salt);
+        market_client.commit_prediction(&user, &commit_hash, &amount);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1000;
+        });
+
+        // Reveal with WRONG amount
+        let wrong_amount = 200i128;
+        let result =
+            market_client.try_reveal_prediction(&user, &market_id, &outcome, &wrong_amount, &salt);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_reveal_rejects_wrong_outcome_explicit() {
+        let (env, market_id, market_client, _usdc_client, user) = setup_reveal_test();
+
+        let salt = BytesN::from_array(&env, &[15; 32]);
+        let outcome = 1u32;
+        let amount = 100i128;
+
+        let commit_hash = compute_commit_hash(&env, &market_id, outcome, &salt);
+        market_client.commit_prediction(&user, &commit_hash, &amount);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1000;
+        });
+
+        // Reveal with WRONG outcome
+        let wrong_outcome = 0u32;
+        let result =
+            market_client.try_reveal_prediction(&user, &market_id, &wrong_outcome, &amount, &salt);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_reveal_full_lifecycle_commit_reveal_resolve_claim() {
         let (env, market_id, market_client, usdc_client, user) = setup_reveal_test();
 

@@ -263,6 +263,15 @@ export function initializeSocketIO(
       userId: socketData.userId,
     });
 
+    // Join user's personal room for notifications
+    const userRoom = `user:${socketData.userId}`;
+    socket.join(userRoom);
+    logger.debug('Socket joined user room', {
+      socketId: socket.id,
+      userId: socketData.userId,
+      room: userRoom,
+    });
+
     // Initialize rate limit tracker
     rateLimits.set(socket.id, {
       subscribeCount: 0,
