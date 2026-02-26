@@ -42,7 +42,7 @@ describe('Market Lifecycle E2E', () => {
         email: 'lifecycle@test.com',
         username: 'lifecycle_user',
         passwordHash: 'hash',
-        walletAddress: 'GTEST' + 'X'.repeat(51),
+        walletAddress: 'GAW2MORAONSQ2XHCUYFIUPHXQ2G6PCQ5K37JTS6A4RANJ4LDVEUFUCXG',
         usdcBalance: 10000,
         xlmBalance: 1000,
       },
@@ -53,27 +53,27 @@ describe('Market Lifecycle E2E', () => {
     if (testUser) {
       await prisma.trade
         .deleteMany({ where: { userId: testUser.id } })
-        .catch(() => {});
+        .catch(() => { });
       await prisma.prediction
         .deleteMany({ where: { userId: testUser.id } })
-        .catch(() => {});
+        .catch(() => { });
       await prisma.share
         .deleteMany({ where: { userId: testUser.id } })
-        .catch(() => {});
+        .catch(() => { });
       await prisma.leaderboard
         .deleteMany({ where: { userId: testUser.id } })
-        .catch(() => {});
+        .catch(() => { });
       await prisma.categoryLeaderboard
         .deleteMany({ where: { userId: testUser.id } })
-        .catch(() => {});
+        .catch(() => { });
     }
     if (testMarket) {
       await prisma.market
         .delete({ where: { id: testMarket.id } })
-        .catch(() => {});
+        .catch(() => { });
     }
     if (testUser) {
-      await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
+      await prisma.user.delete({ where: { id: testUser.id } }).catch(() => { });
     }
     await prisma.$disconnect();
   });

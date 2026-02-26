@@ -10,10 +10,7 @@ export class CronService {
   private marketRepository: MarketRepository;
   private marketService: MarketService;
 
-  constructor(
-    marketRepo?: MarketRepository,
-    marketSvc?: MarketService
-  ) {
+  constructor(marketRepo?: MarketRepository, marketSvc?: MarketService) {
     this.marketRepository = marketRepo || new MarketRepository();
     this.marketService = marketSvc || new MarketService();
   }
@@ -53,7 +50,8 @@ export class CronService {
 
     let markets;
     try {
-      markets = await this.marketRepository.getClosedMarketsAwaitingResolution();
+      markets =
+        await this.marketRepository.getClosedMarketsAwaitingResolution();
     } catch (error) {
       logger.error('Oracle polling: failed to fetch closed markets', { error });
       return;
@@ -64,20 +62,27 @@ export class CronService {
       return;
     }
 
-    logger.info(`Oracle polling: checking consensus for ${markets.length} market(s)`);
+    logger.info(
+      `Oracle polling: checking consensus for ${markets.length} market(s)`
+    );
 
     for (const market of markets) {
       try {
         const winningOutcome = await oracleService.checkConsensus(market.id);
 
         if (winningOutcome === null) {
-          logger.info(`Oracle polling: no consensus yet for market ${market.id}`);
+          logger.info(
+            `Oracle polling: no consensus yet for market ${market.id}`
+          );
           continue;
         }
 
-        logger.info(`Oracle polling: consensus reached for market ${market.id}`, {
-          winningOutcome,
-        });
+        logger.info(
+          `Oracle polling: consensus reached for market ${market.id}`,
+          {
+            winningOutcome,
+          }
+        );
 
         const resolved = await this.marketService.resolveMarket(
           market.id,
@@ -85,10 +90,13 @@ export class CronService {
           'oracle-consensus'
         );
 
-        logger.info(`Oracle polling: market ${market.id} resolved successfully`, {
-          winningOutcome,
-          resolvedAt: resolved.resolvedAt,
-        });
+        logger.info(
+          `Oracle polling: market ${market.id} resolved successfully`,
+          {
+            winningOutcome,
+            resolvedAt: resolved.resolvedAt,
+          }
+        );
       } catch (error) {
         logger.error(`Oracle polling: failed to process market ${market.id}`, {
           error,

@@ -118,7 +118,7 @@ describe('Auth Integration Tests', () => {
     it('should decode valid access token', () => {
       const payload = {
         userId: 'user-123',
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         tier: 'EXPERT' as const,
       };
 
@@ -133,7 +133,7 @@ describe('Auth Integration Tests', () => {
     it('should reject tampered token', () => {
       const token = signAccessToken({
         userId: 'user-123',
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         tier: 'BEGINNER',
       });
 
@@ -149,7 +149,7 @@ describe('Auth Integration Tests', () => {
       const sessionData = {
         userId: 'user-123',
         tokenId: 'token-456',
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -166,7 +166,7 @@ describe('Auth Integration Tests', () => {
       const oldSession = {
         userId: 'user-123',
         tokenId: 'old-token',
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -174,7 +174,7 @@ describe('Auth Integration Tests', () => {
       const newSession = {
         userId: 'user-123',
         tokenId: 'new-token',
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -380,7 +380,7 @@ describe('Auth Integration Tests', () => {
       const oldSession = {
         userId,
         tokenId: oldTokenId,
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -390,7 +390,7 @@ describe('Auth Integration Tests', () => {
       const newSession = {
         userId,
         tokenId: newTokenId,
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -429,7 +429,7 @@ describe('Auth Integration Tests', () => {
       const oldSession = {
         userId,
         tokenId: oldTokenId,
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -440,7 +440,7 @@ describe('Auth Integration Tests', () => {
       const newSession = {
         userId,
         tokenId: newTokenId,
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -461,7 +461,7 @@ describe('Auth Integration Tests', () => {
       const session = {
         userId,
         tokenId,
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
@@ -481,7 +481,7 @@ describe('Auth Integration Tests', () => {
         await sessionService.createSession({
           userId,
           tokenId,
-          publicKey: 'GBTEST',
+          publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
           createdAt: Date.now(),
           expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         });
@@ -527,7 +527,7 @@ describe('Auth Integration Tests', () => {
       await sessionService.createSession({
         userId,
         tokenId,
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });
@@ -548,7 +548,7 @@ describe('Auth Integration Tests', () => {
         await sessionService.createSession({
           userId,
           tokenId: `concurrent-token-${i}`,
-          publicKey: 'GBTEST',
+          publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
           createdAt: Date.now(),
           expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         });
@@ -566,7 +566,7 @@ describe('Auth Integration Tests', () => {
         await sessionService.createSession({
           userId,
           tokenId,
-          publicKey: 'GBTEST',
+          publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
           createdAt: Date.now(),
           expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         });
@@ -586,7 +586,7 @@ describe('Auth Integration Tests', () => {
         await sessionService.createSession({
           userId,
           tokenId,
-          publicKey: 'GBTEST',
+          publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
           createdAt: Date.now(),
           expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         });
@@ -611,7 +611,7 @@ describe('Auth Integration Tests', () => {
         sessionService.createSession({
           userId,
           tokenId: `race-token-${i}`,
-          publicKey: 'GBTEST',
+          publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
           createdAt: Date.now(),
           expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         })
@@ -631,7 +631,7 @@ describe('Auth Integration Tests', () => {
       await sessionService.createSession({
         userId,
         tokenId,
-        publicKey: 'GBTEST',
+        publicKey: 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM',
         createdAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });

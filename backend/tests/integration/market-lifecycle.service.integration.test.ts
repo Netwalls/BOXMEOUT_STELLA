@@ -45,7 +45,7 @@ describe('Market Lifecycle Service Integration', () => {
                 email: `lifecycle-${Date.now()}@test.com`,
                 username: `lifecycle_user_${Date.now()}`,
                 passwordHash: 'hash',
-                walletAddress: 'GTEST' + Math.random().toString(36).substring(2, 15).toUpperCase() + 'X'.repeat(40),
+                walletAddress: 'GAW2MORAONSQ2XHCUYFIUPHXQ2G6PCQ5K37JTS6A4RANJ4LDVEUFUCXG',
                 usdcBalance: 10000,
                 xlmBalance: 1000
             }

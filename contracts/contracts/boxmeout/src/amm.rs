@@ -1,7 +1,9 @@
 // contracts/amm.rs - Automated Market Maker for Outcome Shares
 // Enables trading YES/NO outcome shares with dynamic odds pricing (Polymarket model)
 
-use soroban_sdk::{contract, contractevent, contractimpl, token, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractevent, contractimpl, token, Address, BytesN, Env, Symbol, Vec,
+};
 
 #[contractevent]
 pub struct AmmInitializedEvent {
@@ -100,7 +102,6 @@ fn calculate_lp_tokens_to_mint(
         .expect("lp mint calculation overflow")
 }
 
-
 /// AUTOMATED MARKET MAKER - Manages liquidity pools and share trading
 #[contract]
 pub struct AMM;
@@ -136,10 +137,9 @@ impl AMM {
             .set(&Symbol::new(&env, "usdc"), &usdc_token);
 
         // Set max_liquidity_cap per market
-        env.storage().persistent().set(
-            &Symbol::new(&env, "max_liquidity_cap"),
-            &max_liquidity_cap,
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "max_liquidity_cap"), &max_liquidity_cap);
 
         // Set slippage_protection default (2% = 200 basis points)
         env.storage()
@@ -378,13 +378,7 @@ impl AMM {
 
         // Record trade in history
         Self::record_trade(
-            &env,
-            &market_id,
-            buyer,
-            outcome,
-            amount,
-            shares_out,
-            true, // is_buy
+            &env, &market_id, buyer, outcome, amount, shares_out, true, // is_buy
         );
 
         shares_out

@@ -1,9 +1,7 @@
 #![cfg(test)]
 
 use boxmeout::amm::{AMMClient, AMM};
-use soroban_sdk::{
-    token, Address, BytesN, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};
 
 fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::StellarAssetClient<'a> {
     let token_address = env
@@ -74,7 +72,7 @@ fn test_trade_history_buy_shares() {
     assert_eq!(trade.shares, shares_bought);
     assert_eq!(trade.is_buy, true);
     assert_eq!(trade.timestamp, env.ledger().timestamp());
-    
+
     // Price should be the odds BEFORE the trade (or after? Usually after for historical price points, but record_trade uses get_odds which returns CURRENT odds)
     // Actually record_trade calls AMM::get_odds before pushing, so it's the odds AFTER the pool state was updated in buy_shares.
     let (yes_odds_after, _) = amm.get_odds(&market_id);
@@ -91,7 +89,7 @@ fn test_trade_history_sell_shares() {
 
     // Buy first to have shares to sell
     let shares_bought = amm.buy_shares(&trader, &market_id, &1u32, &5000u128, &0u128);
-    
+
     // Sell shares
     let payout = amm.sell_shares(&trader, &market_id, &1u32, &shares_bought, &0u128);
     assert!(payout > 0);

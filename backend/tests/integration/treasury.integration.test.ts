@@ -4,8 +4,8 @@ import express from 'express';
 import { signAccessToken } from '../../src/utils/jwt.js';
 import { prisma } from '../../src/database/prisma.js';
 
-const ADMIN_PUBLIC_KEY = 'GADMINTEST1234567890123456789012345678901234567890123456';
-const USER_PUBLIC_KEY = 'GUSERTEST12345678901234567890123456789012345678901234567';
+const ADMIN_PUBLIC_KEY = 'GAM7RGBZYHAZIQIAFGY526I76IXQO3GL6ZPBNFND2HZZRZU2G7JNCPTZ';
+const USER_PUBLIC_KEY = 'GBD3V6YULHA5L2EKMBSB5EWPU3HUA4SR34YWBBQSBTH4HHYO44XEILKF';
 
 process.env.ADMIN_WALLET_ADDRESSES = ADMIN_PUBLIC_KEY;
 process.env.JWT_ACCESS_SECRET = 'test-jwt-access-secret-min-32-chars-here-for-testing';
@@ -92,7 +92,10 @@ describe('Treasury API Integration Tests', () => {
 
     it('should return 403 when non-admin tries to distribute', async () => {
       const recipients = [
-        { address: 'GUSER1TEST12345678901234567890123456789012345678901', amount: '1000' },
+        {
+          address: 'GCZYAMWDARYXBWWDZSD7VU5IW5W5XP3OXFTWSC7ZZ5AR7RZ5EWM3IH2A',
+          amount: '1000',
+        },
       ];
 
       const response = await request(app)
@@ -126,7 +129,8 @@ describe('Treasury API Integration Tests', () => {
       vi.mocked(blockchainTreasuryService.distributeCreator).mockResolvedValue(mockResult);
 
       const marketId = '123e4567-e89b-12d3-a456-426614174000';
-      const creatorAddress = 'GCREATORTEST12345678901234567890123456789012345678901234'; // 56 chars
+      const creatorAddress =
+        'GDVF3MDO5RBB5ER7IH5EDONQ33ZWY2HVDUPII2DVSBURNUULEQ5W6GRN'; // 56 chars
 
       const response = await request(app)
         .post('/api/treasury/distribute-creator')
@@ -157,7 +161,8 @@ describe('Treasury API Integration Tests', () => {
         .set('Authorization', `Bearer ${userToken}`)
         .send({
           marketId: 'market-123',
-          creatorAddress: 'GCREATORTEST12345678901234567890123456789012345678901234',
+          creatorAddress:
+            'GDVF3MDO5RBB5ER7IH5EDONQ33ZWY2HVDUPII2DVSBURNUULEQ5W6GRN',
           amount: '2000',
         });
 

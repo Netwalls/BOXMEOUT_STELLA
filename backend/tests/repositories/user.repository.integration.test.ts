@@ -101,7 +101,7 @@ describe('UserRepository Integration Tests', () => {
         passwordHash: 'hashed_password',
       });
 
-      const walletAddress = `GTEST${timestamp}ABCDEFGHIJKLMNOPQRSTUVWXYZ`;
+      const walletAddress = 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM';
       const updated = await userRepo.updateWalletAddress(user.id, walletAddress);
 
       expect(updated.walletAddress).toBe(walletAddress);

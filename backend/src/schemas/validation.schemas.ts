@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MarketCategory } from '@prisma/client';
+import { stellarService } from '../services/stellar.service.js';
 
 // --- Sanitization helper ---
 
@@ -33,7 +34,9 @@ export function sanitizedString(min: number, max: number) {
 
 export const stellarAddress = z
   .string()
-  .regex(/^G[A-Z0-9]{55}$/, 'Invalid Stellar public key');
+  .refine((val) => stellarService.isValidPublicKey(val), {
+    message: 'Invalid Stellar public key format or checksum',
+  });
 
 export const uuidParam = z.object({
   id: z.string().uuid(),
