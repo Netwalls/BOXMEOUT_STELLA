@@ -1,6 +1,7 @@
 // Market service - business logic for market management
 import { MarketRepository } from '../repositories/market.repository.js';
 import { PredictionRepository } from '../repositories/prediction.repository.js';
+import { TradeRepository } from '../repositories/trade.repository.js';
 import { MarketCategory, MarketStatus } from '@prisma/client';
 import { executeTransaction } from '../database/transaction.js';
 import { logger } from '../utils/logger.js';
@@ -247,16 +248,93 @@ export class MarketService {
     const predictions =
       await this.predictionRepository.findMarketPredictions(marketId);
 
+    // Get fee percentage from environment or use default 2%
+    const feePercentage = parseFloat(process.env.PLATFORM_FEE_PERCENTAGE || '2') / 100;
+
+    // Handle edge case: if only 1 participant, they get their money back minus fees
+    if (predictions.length === 1) {
+      await executeTransaction(async (tx) => {
+        const predictionRepo = new PredictionRepository(tx);
+        const prediction = predictions[0];
+        const amountUsdc = Number(prediction.amountUsdc);
+        const refundAmount = amountUsdc * (1 - feePercentage);
+        const pnlUsd = refundAmount - amountUsdc;
+
+        await predictionRepo.settlePrediction(prediction.id, false, pnlUsd);
+      });
+      return;
+    }
+
     await executeTransaction(async (tx) => {
       const predictionRepo = new PredictionRepository(tx);
+      const tradeRepo = new TradeRepository(tx);
 
       for (const prediction of predictions) {
         const isWinner = prediction.predictedOutcome === winningOutcome;
+        const amountUsdc = Number(prediction.amountUsdc);
 
-        // Calculate PnL (simplified - actual calculation would involve odds)
-        const pnlUsd = isWinner
-          ? Number(prediction.amountUsdc) * 0.9 // 90% return (10% fee)
-          : -Number(prediction.amountUsdc);
+        let pnlUsd: number;
+
+        if (isWinner) {
+          // Get user's trades for this market to find their entry price
+          const userTrades = await tradeRepo.findByUserAndMarket(
+            prediction.userId,
+            marketId
+          );
+
+          // Find the buy trade that matches this prediction's outcome
+          const buyTrade = userTrades.find(
+            (trade) =>
+              trade.tradeType === 'BUY' &&
+              trade.outcome === prediction.predictedOutcome &&
+              trade.status === 'CONFIRMED'
+          );
+
+          if (buyTrade) {
+            // Calculate payout based on actual entry price (odds at time of trade)
+            // Winner gets 1 USDC per share, minus fees
+            const sharesOwned = Number(buyTrade.quantity);
+            const grossPayout = sharesOwned; // 1 USDC per share for winners
+            const netPayout = grossPayout * (1 - feePercentage);
+            const costBasis = Number(buyTrade.totalAmount);
+            pnlUsd = netPayout - costBasis;
+          } else {
+            // Fallback: if no trade found, calculate based on prediction amount
+            // This handles predictions made before trading was implemented
+            // Assume they would have gotten shares at market odds
+            const market = await tx.market.findUnique({
+              where: { id: marketId },
+              select: { yesLiquidity: true, noLiquidity: true },
+            });
+
+            if (market) {
+              const totalLiquidity =
+                Number(market.yesLiquidity) + Number(market.noLiquidity);
+              const outcomeLiquidity =
+                prediction.predictedOutcome === 1
+                  ? Number(market.yesLiquidity)
+                  : Number(market.noLiquidity);
+
+              // Calculate implied odds from liquidity
+              const impliedOdds =
+                totalLiquidity > 0 ? outcomeLiquidity / totalLiquidity : 0.5;
+
+              // Shares they would have gotten at these odds
+              const impliedShares = amountUsdc / impliedOdds;
+              const grossPayout = impliedShares;
+              const netPayout = grossPayout * (1 - feePercentage);
+              pnlUsd = netPayout - amountUsdc;
+            } else {
+              // Ultimate fallback: simple calculation
+              const grossReturn = amountUsdc * 2; // 2x for binary market
+              const netReturn = grossReturn * (1 - feePercentage);
+              pnlUsd = netReturn - amountUsdc;
+            }
+          }
+        } else {
+          // Loser loses their entire stake
+          pnlUsd = -amountUsdc;
+        }
 
         await predictionRepo.settlePrediction(prediction.id, isWinner, pnlUsd);
       }
