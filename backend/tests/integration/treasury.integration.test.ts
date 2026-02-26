@@ -4,15 +4,21 @@ import express from 'express';
 import { signAccessToken } from '../../src/utils/jwt.js';
 import { prisma } from '../../src/database/prisma.js';
 
-const ADMIN_PUBLIC_KEY = 'GADMINTEST1234567890123456789012345678901234567890123456';
-const USER_PUBLIC_KEY = 'GUSERTEST12345678901234567890123456789012345678901234567';
+const ADMIN_PUBLIC_KEY =
+  'GADMINTEST1234567890123456789012345678901234567890123456';
+const USER_PUBLIC_KEY =
+  'GUSERTEST12345678901234567890123456789012345678901234567';
 
 process.env.ADMIN_WALLET_ADDRESSES = ADMIN_PUBLIC_KEY;
-process.env.JWT_ACCESS_SECRET = 'test-jwt-access-secret-min-32-chars-here-for-testing';
-process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-min-32-chars-here-for-testing';
+process.env.JWT_ACCESS_SECRET =
+  'test-jwt-access-secret-min-32-chars-here-for-testing';
+process.env.JWT_REFRESH_SECRET =
+  'test-jwt-refresh-secret-min-32-chars-here-for-testing';
 
-const { treasuryService: blockchainTreasuryService } = await import('../../src/services/blockchain/treasury.js');
-const treasuryRoutesModule = await import('../../src/routes/treasury.routes.js');
+const { treasuryService: blockchainTreasuryService } =
+  await import('../../src/services/blockchain/treasury.js');
+const treasuryRoutesModule =
+  await import('../../src/routes/treasury.routes.js');
 const treasuryRoutes = treasuryRoutesModule.default;
 
 vi.mock('../../src/services/blockchain/treasury.js', async () => {
@@ -25,16 +31,19 @@ vi.mock('../../src/services/blockchain/treasury.js', async () => {
   };
 });
 
+const { errorHandler } =
+  await import('../../src/middleware/error.middleware.js');
+
 const app = express();
 app.use(express.json());
 app.use('/api/treasury', treasuryRoutes);
+app.use(errorHandler);
 
 describe('Treasury API Integration Tests', () => {
   let adminToken: string;
   let userToken: string;
 
   beforeAll(async () => {
-
     adminToken = signAccessToken({
       userId: 'admin-user-id',
       publicKey: ADMIN_PUBLIC_KEY,
@@ -65,7 +74,9 @@ describe('Treasury API Integration Tests', () => {
         platformFees: '500000',
       };
 
-      vi.mocked(blockchainTreasuryService.getBalances).mockResolvedValue(mockBalances);
+      vi.mocked(blockchainTreasuryService.getBalances).mockResolvedValue(
+        mockBalances
+      );
 
       const response = await request(app)
         .get('/api/treasury/balances')
@@ -89,7 +100,10 @@ describe('Treasury API Integration Tests', () => {
 
     it('should return 403 when non-admin tries to distribute', async () => {
       const recipients = [
-        { address: 'GUSER1TEST12345678901234567890123456789012345678901', amount: '1000' },
+        {
+          address: 'GUSER1TEST12345678901234567890123456789012345678901',
+          amount: '1000',
+        },
       ];
 
       const response = await request(app)
@@ -120,14 +134,20 @@ describe('Treasury API Integration Tests', () => {
         totalDistributed: '2000',
       };
 
-      vi.mocked(blockchainTreasuryService.distributeCreator).mockResolvedValue(mockResult);
+      vi.mocked(blockchainTreasuryService.distributeCreator).mockResolvedValue(
+        mockResult
+      );
+
+      const marketId = '123e4567-e89b-12d3-a456-426614174000';
+      const creatorAddress =
+        'GCREATORTEST12345678901234567890123456789012345678901234'; // 56 chars
 
       const response = await request(app)
         .post('/api/treasury/distribute-creator')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
-          marketId: 'market-123',
-          creatorAddress: 'GCREATORTEST12345678901234567890123456789012345678901234',
+          marketId,
+          creatorAddress,
           amount: '2000',
         });
 
@@ -151,7 +171,8 @@ describe('Treasury API Integration Tests', () => {
         .set('Authorization', `Bearer ${userToken}`)
         .send({
           marketId: 'market-123',
-          creatorAddress: 'GCREATORTEST12345678901234567890123456789012345678901234',
+          creatorAddress:
+            'GCREATORTEST12345678901234567890123456789012345678901234',
           amount: '2000',
         });
 

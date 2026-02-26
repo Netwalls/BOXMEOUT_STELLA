@@ -5,20 +5,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/auth.types.js';
 import { MarketService } from '../services/market.service.js';
 import { logger } from '../utils/logger.js';
-import { MarketCategory, MarketStatus } from '@prisma/client';
-import { z } from 'zod';
-
-// Validation schema for market creation
-const createMarketSchema = z.object({
-  title: z.string().min(5).max(200),
-  description: z.string().min(10).max(5000),
-  category: z.nativeEnum(MarketCategory),
-  outcomeA: z.string().min(1).max(100),
-  outcomeB: z.string().min(1).max(100),
-  closingAt: z.string().datetime(),
-  resolutionTime: z.string().datetime().optional(),
-});
-
+import { MarketCategory } from '@prisma/client';
 export class MarketsController {
   private marketService: MarketService;
 
@@ -55,63 +42,28 @@ export class MarketsController {
         return;
       }
 
-      // Validate request body
-      const validation = createMarketSchema.safeParse(req.body);
-      if (!validation.success) {
-        res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: validation.error.errors,
-          },
-        });
-        return;
-      }
-
-      const data = validation.data;
-
-      // Parse timestamps
-      const closingAt = new Date(data.closingAt);
-      const resolutionTime = data.resolutionTime
-        ? new Date(data.resolutionTime)
-        : undefined;
-
-      // Validate timestamps are in the future
-      const now = new Date();
-      if (closingAt <= now) {
-        res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_TIMESTAMP',
-            message: 'Closing time must be in the future',
-          },
-        });
-        return;
-      }
-
-      if (resolutionTime && resolutionTime <= closingAt) {
-        res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_TIMESTAMP',
-            message: 'Resolution time must be after closing time',
-          },
-        });
-        return;
-      }
+      // req.body is already validated and sanitized by middleware
+      const {
+        title,
+        description,
+        category,
+        outcomeA,
+        outcomeB,
+        closingAt,
+        resolutionTime,
+      } = req.body;
 
       // Create market via service
       const market = await this.marketService.createMarket({
-        title: data.title,
-        description: data.description,
-        category: data.category,
+        title,
+        description,
+        category,
         creatorId: req.user.userId,
         creatorPublicKey: req.user.publicKey,
-        outcomeA: data.outcomeA,
-        outcomeB: data.outcomeB,
-        closingAt,
-        resolutionTime,
+        outcomeA,
+        outcomeB,
+        closingAt: new Date(closingAt),
+        resolutionTime: resolutionTime ? new Date(resolutionTime) : undefined,
       });
 
       // Return success response
@@ -255,19 +207,9 @@ export class MarketsController {
    */
   async createPool(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
+      // params and body are already validated by middleware
       const marketId = req.params.id as string;
       const { initialLiquidity } = req.body;
-
-      if (!initialLiquidity || BigInt(initialLiquidity) <= 0n) {
-        res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_LIQUIDITY',
-            message: 'Initial liquidity must be greater than 0',
-          },
-        });
-        return;
-      }
 
       const result = await this.marketService.createPool(
         marketId,
@@ -286,6 +228,49 @@ export class MarketsController {
           code: 'POOL_CREATION_FAILED',
           message:
             error instanceof Error ? error.message : 'Failed to create pool',
+        },
+      });
+    }
+  }
+
+  /**
+   * PATCH /api/markets/:id/deactivate - Deactivate a market
+   */
+  async deactivateMarket(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      const marketId = req.params.id as string;
+
+      const result = await this.marketService.deactivateMarket(marketId);
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      (req.log || logger).error('Deactivate market error', { error });
+
+      if (error instanceof Error && error.message === 'Market not found') {
+        res.status(404).json({
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Market not found',
+          },
+        });
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Failed to deactivate market',
         },
       });
     }

@@ -1,12 +1,107 @@
-import { Keypair } from '@stellar/stellar-sdk';
+import {
+  Keypair,
+  TransactionBuilder,
+  Networks,
+  BASE_FEE,
+  Operation,
+  Asset,
+  Horizon,
+} from '@stellar/stellar-sdk';
 import { AuthError } from '../types/auth.types.js';
 import { logger } from '../utils/logger.js';
+
+const STELLAR_HORIZON_URL =
+  process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+const STELLAR_NETWORK = process.env.STELLAR_NETWORK || 'testnet';
+const USDC_ISSUER =
+  process.env.USDC_ISSUER ||
+  'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'; // Circle testnet issuer
 
 /**
  * Service for Stellar blockchain operations
  * Handles signature verification and public key validation
  */
 export class StellarService {
+  private _server: Horizon.Server | null = null;
+  private _adminKeypair: Keypair | null = null;
+  private _initialized = false;
+
+  constructor() {
+    // Constructor is now empty for lazy initialization
+  }
+
+  /**
+   * Lazy initializer — only runs on first call to sendUsdc().
+   * This avoids Horizon.Server construction on module load (which breaks tests).
+   */
+  private init(): void {
+    if (this._initialized) return;
+    this._server = new Horizon.Server(STELLAR_HORIZON_URL);
+    const secret = process.env.ADMIN_WALLET_SECRET;
+    this._adminKeypair = secret ? Keypair.fromSecret(secret) : null;
+    this._initialized = true;
+  }
+
+  /**
+   * Send USDC to a destination wallet address.
+   * Signed by the platform admin keypair.
+   *
+   * @param destination - Stellar public key of the recipient
+   * @param amount - Amount in USDC (e.g. "10.50")
+   * @param memo - Optional memo (max 28 bytes)
+   * @returns txHash on success
+   */
+  async sendUsdc(
+    destination: string,
+    amount: string,
+    memo?: string
+  ): Promise<{ txHash: string }> {
+    this.init();
+
+    if (!this._adminKeypair) {
+      throw new Error('ADMIN_WALLET_SECRET not configured — cannot send USDC');
+    }
+
+    const usdcAsset = new Asset('USDC', USDC_ISSUER);
+
+    try {
+      const sourceAccount = await this._server!.loadAccount(
+        this._adminKeypair.publicKey()
+      );
+
+      const txBuilder = new TransactionBuilder(sourceAccount, {
+        fee: BASE_FEE,
+        networkPassphrase:
+          STELLAR_NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
+      }).addOperation(
+        Operation.payment({
+          destination,
+          asset: usdcAsset,
+          amount, // string, e.g. "10.50"
+        })
+      );
+
+      if (memo) {
+        txBuilder.addMemo({ type: 'text', value: memo } as any);
+      }
+
+      const tx = txBuilder.setTimeout(30).build();
+      tx.sign(this._adminKeypair);
+
+      const response = await this._server!.submitTransaction(tx);
+
+      const txHash = (response as any).hash || (response as any).id;
+      logger.info('USDC sent successfully', { destination, amount, txHash });
+
+      return { txHash };
+    } catch (error) {
+      logger.error('Failed to send USDC', { destination, amount, error });
+      throw new Error(
+        `USDC transfer failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
   /**
    * Validate Stellar public key format
    * Stellar public keys start with 'G' and are 56 characters (base32 encoded)

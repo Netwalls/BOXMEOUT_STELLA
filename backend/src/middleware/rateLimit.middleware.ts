@@ -143,6 +143,27 @@ export const sensitiveOperationRateLimiter: RateLimiterMiddleware = rateLimit({
 });
 
 /**
+ * Rate limiter for USDC withdrawals
+ * Limits: 3 withdrawals per 24 hours per authenticated user
+ */
+export const withdrawalRateLimiter: RateLimiterMiddleware = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createRedisStore('withdrawal'),
+  keyGenerator: (req: any) => {
+    const authReq = req as AuthenticatedRequest;
+    return `withdrawal:${authReq.user?.userId || getIpKey(req)}`;
+  },
+  validate: { ip: false },
+  message: rateLimitMessage(
+    'Withdrawal limit reached. Maximum 3 withdrawals per 24 hours.'
+  ),
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+/**
  * Create a custom rate limiter
  */
 export function createRateLimiter(options: {

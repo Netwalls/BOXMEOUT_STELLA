@@ -86,13 +86,19 @@ describe('UserService Integration Tests', () => {
       });
 
       await expect(
-        userService.authenticateUser(`wrongpass-${timestamp}@example.com`, 'WrongPassword')
+        userService.authenticateUser(
+          `wrongpass-${timestamp}@example.com`,
+          'WrongPassword'
+        )
       ).rejects.toThrow('Invalid credentials');
     });
 
     it('should reject non-existent user', async () => {
       await expect(
-        userService.authenticateUser(`nonexistent-${Date.now()}@example.com`, 'AnyPassword')
+        userService.authenticateUser(
+          `nonexistent-${Date.now()}@example.com`,
+          'AnyPassword'
+        )
       ).rejects.toThrow('Invalid credentials');
     });
   });
@@ -172,7 +178,7 @@ describe('UserService Integration Tests', () => {
         password: 'SecurePass123!',
       });
 
-        // Removed failing test: should search users by username
+      // Removed failing test: should search users by username
     });
   });
 });

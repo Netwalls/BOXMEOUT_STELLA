@@ -3,12 +3,23 @@ import bcrypt from 'bcrypt';
 import { UserRepository } from '../repositories/user.repository.js';
 import { UserTier } from '@prisma/client';
 import { executeTransaction } from '../database/transaction.js';
+import {
+  notificationService,
+  NotificationService,
+} from './notification.service.js';
+import { logger } from '../utils/logger.js';
 
 export class UserService {
   private userRepository: UserRepository;
 
-  constructor() {
-    this.userRepository = new UserRepository();
+  private notificationService: NotificationService;
+
+  constructor(
+    userRepository?: UserRepository,
+    notificationSvc?: NotificationService
+  ) {
+    this.userRepository = userRepository || new UserRepository();
+    this.notificationService = notificationSvc || notificationService;
   }
 
   async registerUser(data: {
@@ -138,20 +149,55 @@ export class UserService {
   }
 
   async calculateAndUpdateTier(userId: string) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new Error('User not found');
+
     const stats = await this.userRepository.getUserStats(userId);
     const { predictionCount, winRate } = stats;
 
     let newTier: UserTier = UserTier.BEGINNER;
 
+    // TIER CRITERIA:
+    // LEGENDARY: 500 predictions + 75% win rate
+    // EXPERT: 200 predictions + 65% win rate
+    // ADVANCED: 50 predictions + 60% win rate
     if (predictionCount >= 500 && winRate >= 75) {
       newTier = UserTier.LEGENDARY;
-    } else if (predictionCount >= 100 && winRate >= 60) {
+    } else if (predictionCount >= 200 && winRate >= 65) {
       newTier = UserTier.EXPERT;
-    } else if (predictionCount >= 10 && winRate >= 40) {
+    } else if (predictionCount >= 50 && winRate >= 60) {
       newTier = UserTier.ADVANCED;
     }
 
-    return await this.userRepository.updateTier(userId, newTier);
+    // Only update if tier has changed
+    if (newTier !== user.tier) {
+      const updatedUser = await this.userRepository.updateTier(userId, newTier);
+
+      // If promoted (not demoted, though current logic only promotes or stays same), send notification
+      const tierLevels = {
+        [UserTier.BEGINNER]: 0,
+        [UserTier.ADVANCED]: 1,
+        [UserTier.EXPERT]: 2,
+        [UserTier.LEGENDARY]: 3,
+      };
+
+      if (tierLevels[newTier] > tierLevels[user.tier]) {
+        logger.info('User promoted to new tier', {
+          userId,
+          oldTier: user.tier,
+          newTier,
+        });
+        await this.notificationService.createTierUpgradeNotification(
+          userId,
+          user.tier,
+          newTier
+        );
+      }
+
+      return updatedUser;
+    }
+
+    return user;
   }
 
   async searchUsers(query: string, limit: number = 10) {

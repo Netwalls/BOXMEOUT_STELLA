@@ -10,16 +10,27 @@ import {
   encrypt,
   decrypt,
 } from '../utils/crypto.js';
+import {
+  marketBlockchainService,
+  MarketBlockchainService,
+} from './blockchain/market.js';
 
 export class PredictionService {
   private predictionRepository: PredictionRepository;
   private marketRepository: MarketRepository;
   private userRepository: UserRepository;
+  private blockchainService: MarketBlockchainService;
 
-  constructor() {
-    this.predictionRepository = new PredictionRepository();
-    this.marketRepository = new MarketRepository();
-    this.userRepository = new UserRepository();
+  constructor(
+    predictionRepo?: PredictionRepository,
+    marketRepo?: MarketRepository,
+    userRepo?: UserRepository,
+    blockchainSvc?: MarketBlockchainService
+  ) {
+    this.predictionRepository = predictionRepo || new PredictionRepository();
+    this.marketRepository = marketRepo || new MarketRepository();
+    this.userRepository = userRepo || new UserRepository();
+    this.blockchainService = blockchainSvc || marketBlockchainService;
   }
 
   /**
@@ -87,13 +98,12 @@ export class PredictionService {
     // Encrypt salt for secure storage
     const { encrypted: encryptedSalt, iv: saltIv } = encrypt(salt);
 
-    // TODO: Call blockchain contract - Market.commit_prediction()
-    // const txHash = await blockchainService.commitPrediction(
-    //   marketId,
-    //   commitmentHash,
-    //   amountUsdc
-    // );
-    const txHash = 'mock-tx-hash-' + Date.now(); // Mock for now
+    // Call blockchain contract - Market.commit_prediction()
+    const { txHash } = await this.blockchainService.commitPrediction(
+      market.contractAddress,
+      commitmentHash,
+      amountUsdc
+    );
 
     // Create prediction and update balances in transaction
     return await executeTransaction(async (tx) => {
@@ -170,15 +180,10 @@ export class PredictionService {
     // Decrypt the stored salt
     const salt = decrypt(prediction.encryptedSalt, prediction.saltIv);
 
-    // TODO: Call blockchain contract - Market.reveal_prediction()
-    // const revealTxHash = await blockchainService.revealPrediction(
-    //   marketId,
-    //   predictedOutcome,
-    //   salt
-    // );
-    const revealTxHash = 'mock-reveal-tx-' + Date.now(); // Mock for now
-
-    // Calculate the original predicted outcome from commitment hash
+    // Call blockchain contract - Market.reveal_prediction()
+    // We reveal ONLY after finding the correct outcome below
+    // (Actually the reveal call on chain needs the outcome and salt)
+    // First, calculate the original predicted outcome from commitment hash
     // We need to try both outcomes to verify which one matches
     let predictedOutcome: number | null = null;
     for (const outcome of [0, 1]) {
@@ -194,6 +199,13 @@ export class PredictionService {
         'Invalid commitment hash - cannot determine predicted outcome'
       );
     }
+
+    const { txHash: revealTxHash } =
+      await this.blockchainService.revealPrediction(
+        market.contractAddress,
+        predictedOutcome,
+        salt
+      );
 
     // Update prediction to revealed status
     return await this.predictionRepository.revealPrediction(

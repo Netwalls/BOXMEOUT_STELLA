@@ -1,112 +1,95 @@
-// backend/src/controllers/leaderboard.controller.ts - Leaderboard Controller
-// Handles leaderboard and ranking requests
+// Leaderboard Controller - handles ranking and performance requests
+import { Request, Response } from 'express';
+import { leaderboardService } from '../services/leaderboard.service.js';
+import { MarketCategory } from '@prisma/client';
+import { logger } from '../utils/logger.js';
 
-/*
-TODO: Leaderboard Controller - Request Handling Layer
-- Import LeaderboardService
-- Extract query parameters: offset, limit, timeframe
-- Validate pagination
-- Call appropriate service methods
-- Format and return leaderboard data
-*/
+export class LeaderboardController {
+  /**
+   * GET /api/leaderboard/global
+   */
+  async getGlobal(req: Request, res: Response) {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
 
-/*
-TODO: GET /api/leaderboard/global - Global Leaderboard Controller
-- Extract: offset, limit (default limit: 100, max: 500)
-- Call: LeaderboardService.getGlobalLeaderboard(offset, limit)
-- Return: ranked users with scores
-*/
+      const leaderboard = await leaderboardService.getGlobalLeaderboard(
+        limit,
+        offset
+      );
 
-/*
-TODO: GET /api/leaderboard/weekly - Weekly Leaderboard Controller
-- Extract: offset, limit
-- Call: LeaderboardService.getWeeklyLeaderboard(offset, limit)
-- Return: users ranked by 7-day performance
-*/
+      return res.status(200).json({
+        success: true,
+        data: leaderboard,
+        pagination: { limit, offset },
+      });
+    } catch (error) {
+      logger.error('LeaderboardController.getGlobal error', { error });
+      return res
+        .status(500)
+        .json({ success: false, message: 'Internal server error' });
+    }
+  }
 
-/*
-TODO: GET /api/leaderboard/market/:market_id - Market Leaderboard Controller
-- Extract market_id, offset, limit
-- Validate market exists
-- Call: LeaderboardService.getMarketLeaderboard(market_id, offset, limit)
-- Return: top predictors on specific market
-*/
+  /**
+   * GET /api/leaderboard/weekly
+   */
+  async getWeekly(req: Request, res: Response) {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
 
-/*
-TODO: GET /api/leaderboard/category/:category - Category Leaderboard Controller
-- Extract category, offset, limit
-- Validate category in enum
-- Call: LeaderboardService.getCategoryLeaderboard(category, offset, limit)
-- Return: top predictors in category
-*/
+      const leaderboard = await leaderboardService.getWeeklyLeaderboard(
+        limit,
+        offset
+      );
 
-/*
-TODO: GET /api/leaderboard/my-rank - My Leaderboard Rank Controller
-- Require authentication
-- Get user_id from JWT
-- Call: LeaderboardService.getUserLeaderboardInfo(user_id)
-- Return: user's rank (global, weekly, category), percentile, nearby users
-*/
+      return res.status(200).json({
+        success: true,
+        data: leaderboard,
+        pagination: { limit, offset },
+      });
+    } catch (error) {
+      logger.error('LeaderboardController.getWeekly error', { error });
+      return res
+        .status(500)
+        .json({ success: false, message: 'Internal server error' });
+    }
+  }
 
-/*
-TODO: GET /api/leaderboard/top-by-metric/:metric - Top by Metric Controller
-- Extract metric parameter
-- Validate metric in [win_rate, total_pnl, highest_streak, roi_percent, most_predictions]
-- Call: LeaderboardService.getTopByMetric(metric)
-- Return: top 50 users sorted by metric
-*/
+  /**
+   * GET /api/leaderboard/category/:category
+   */
+  async getByCategory(req: Request, res: Response) {
+    try {
+      const { category } = req.params;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
 
-/*
-TODO: GET /api/leaderboard/trending - Trending Predictors Controller
-- Call: LeaderboardService.getTrendingPredictors()
-- Return: top 20 users with biggest improvement (7d)
-*/
+      if (!Object.values(MarketCategory).includes(category as MarketCategory)) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid category' });
+      }
 
-/*
-TODO: GET /api/achievements - All Achievements Controller
-- Call: LeaderboardService.getAllAchievements()
-- Return: complete list of achievements with unlock percentages
-*/
+      const leaderboard = await leaderboardService.getCategoryLeaderboard(
+        category as MarketCategory,
+        limit,
+        offset
+      );
 
-/*
-TODO: GET /api/users/:user_id/achievements - User Achievements Controller
-- Extract user_id
-- Call: LeaderboardService.getUserAchievements(user_id)
-- Return: earned achievements with progress on unearned
-*/
+      return res.status(200).json({
+        success: true,
+        data: leaderboard,
+        pagination: { limit, offset, category },
+      });
+    } catch (error) {
+      logger.error('LeaderboardController.getByCategory error', { error });
+      return res
+        .status(500)
+        .json({ success: false, message: 'Internal server error' });
+    }
+  }
+}
 
-/*
-TODO: GET /api/tiers - User Tier Information Controller
-- Call: LeaderboardService.getUserTiers()
-- Return: tier definitions and benefits
-*/
-
-/*
-TODO: GET /api/leaderboard/by-friends - Friends Leaderboard Controller
-- Require authentication
-- Get user_id from JWT
-- Call: LeaderboardService.getFriendsLeaderboard(user_id)
-- Return: friends ranked by performance
-*/
-
-/*
-TODO: GET /api/leaderboard/search - Search Leaderboard Controller
-- Extract query parameter (username)
-- Call: LeaderboardService.searchLeaderboard(query)
-- Return: top 10 matching users
-*/
-
-/*
-TODO: POST /api/leaderboard/compare - Compare Users Controller
-- Extract: user_id_1, user_id_2
-- Call: LeaderboardService.compareUsers(user_id_1, user_id_2)
-- Return: head-to-head comparison stats
-*/
-
-/*
-TODO: GET /api/leaderboard/hall-of-fame - Hall of Fame Controller
-- Call: LeaderboardService.getHallOfFame()
-- Return: all-time top predictors
-*/
-
-export default {};
+export const leaderboardController = new LeaderboardController();

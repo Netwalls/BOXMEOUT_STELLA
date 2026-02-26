@@ -1,0 +1,159 @@
+.hiw-page {
+  padding-bottom: 8rem;
+}
+
+.hiw-hero {
+  text-align: center;
+  margin-bottom: 6rem;
+}
+
+.hiw-subtitle {
+  color: var(--color-primary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.process-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4rem;
+  margin-bottom: 8rem;
+  position: relative;
+}
+
+.process-steps::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 2rem;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(to bottom, var(--color-primary), transparent);
+  opacity: 0.2;
+}
+
+.step-card {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.step-number {
+  width: 60px;
+  height: 60px;
+  background: var(--color-bg-card);
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(225, 29, 72, 0.4);
+  position: relative;
+  z-index: 2;
+}
+
+.step-content {
+  padding: 3rem;
+  text-align: left;
+}
+
+.step-title {
+  font-size: 2rem;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+
+.step-description {
+  color: var(--color-text-muted);
+  font-size: 1.15rem;
+  line-height: 1.8;
+  max-width: 800px;
+}
+
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 8rem;
+}
+
+.tech-card {
+  padding: 2.5rem;
+  text-align: left;
+}
+
+.tech-icon {
+  font-size: 2rem;
+  color: var(--color-primary);
+  margin-bottom: 1.5rem;
+}
+
+.tech-card h3 {
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+  color: #fff;
+}
+
+.tech-card p {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.lifecycle-diagram {
+  margin-bottom: 8rem;
+  padding: 4rem;
+  text-align: center;
+}
+
+.diagram-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 3rem;
+  gap: 1rem;
+}
+
+.diagram-node {
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  flex: 1;
+}
+
+.diagram-arrow {
+  color: var(--color-primary);
+  font-size: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .process-steps::before {
+    display: none;
+  }
+
+  .step-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .step-number {
+    margin: 0 auto;
+  }
+
+  .diagram-wrapper {
+    flex-direction: column;
+  }
+
+  .diagram-arrow {
+    transform: rotate(90deg);
+  }
+}

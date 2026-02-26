@@ -32,7 +32,7 @@ export function metricsMiddleware(
     }
 
     // Call the original end function
-    // @ts-ignore - Express res.end has complex overloads
+    // @ts-expect-error - Express res.end has complex overloads
     return originalEnd.apply(this, args);
   };
 

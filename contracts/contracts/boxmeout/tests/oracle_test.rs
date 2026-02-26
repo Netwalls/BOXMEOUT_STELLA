@@ -287,11 +287,201 @@ fn test_check_consensus_tie_handling() {
     assert!(!reached);
 }
 
+// ===== DEREGISTER ORACLE TESTS =====
+
+/// Test successful deregistration of an oracle
 #[test]
-fn test_remove_oracle() {
-    // TODO: Implement when remove_oracle is ready
-    // Admin removes misbehaving oracle
-    // Only admin can remove
+fn test_deregister_oracle_success() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let client = OracleManagerClient::new(&env, &oracle_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &2u32);
+
+    // Register an oracle
+    let oracle1 = Address::generate(&env);
+    client.register_oracle(&oracle1, &Symbol::new(&env, "Oracle1"));
+
+    // Deregister the oracle
+    client.deregister_oracle(&oracle1);
+
+    // Oracle should be inactive - submitting attestation should fail
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let resolution_time = 1000u64;
+    client.register_market(&market_id, &resolution_time);
+    env.ledger().set_timestamp(1500);
+
+    let data_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+    // This should panic because oracle is no longer active
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.submit_attestation(&oracle1, &market_id, &1u32, &data_hash);
+    }));
+    assert!(result.is_err());
+}
+
+/// Test deregistering an oracle that is not registered
+#[test]
+#[should_panic(expected = "Oracle not registered or already inactive")]
+fn test_deregister_oracle_not_registered() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let client = OracleManagerClient::new(&env, &oracle_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &2u32);
+
+    // Try to deregister an oracle that was never registered
+    let oracle1 = Address::generate(&env);
+    client.deregister_oracle(&oracle1);
+}
+
+/// Test deregistering an already deregistered oracle
+#[test]
+#[should_panic(expected = "Oracle not registered or already inactive")]
+fn test_deregister_oracle_already_inactive() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let client = OracleManagerClient::new(&env, &oracle_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &2u32);
+
+    let oracle1 = Address::generate(&env);
+    client.register_oracle(&oracle1, &Symbol::new(&env, "Oracle1"));
+
+    // Deregister once
+    client.deregister_oracle(&oracle1);
+
+    // Try to deregister again - should fail
+    client.deregister_oracle(&oracle1);
+}
+
+/// Test that consensus threshold is recalculated after deregistration
+#[test]
+fn test_deregister_oracle_recalculates_threshold() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let client = OracleManagerClient::new(&env, &oracle_id);
+
+    let admin = Address::generate(&env);
+    // Set threshold to 3
+    client.initialize(&admin, &3u32);
+
+    // Register 3 oracles
+    let oracle1 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    let oracle3 = Address::generate(&env);
+    client.register_oracle(&oracle1, &Symbol::new(&env, "O1"));
+    client.register_oracle(&oracle2, &Symbol::new(&env, "O2"));
+    client.register_oracle(&oracle3, &Symbol::new(&env, "O3"));
+
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let resolution_time = 1000u64;
+    client.register_market(&market_id, &resolution_time);
+    env.ledger().set_timestamp(1500);
+
+    let data_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+    // Deregister one oracle (count goes from 3 to 2, threshold adjusted from 3 to 2)
+    client.deregister_oracle(&oracle3);
+
+    // Now 2 votes should be enough for consensus (threshold adjusted to 2)
+    client.submit_attestation(&oracle1, &market_id, &1u32, &data_hash);
+    client.submit_attestation(&oracle2, &market_id, &1u32, &data_hash);
+
+    let (reached, outcome) = client.check_consensus(&market_id);
+    assert!(reached);
+    assert_eq!(outcome, 1);
+}
+
+/// Test deregistering multiple oracles
+#[test]
+fn test_deregister_multiple_oracles() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let client = OracleManagerClient::new(&env, &oracle_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &2u32);
+
+    let oracle1 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    let oracle3 = Address::generate(&env);
+    client.register_oracle(&oracle1, &Symbol::new(&env, "O1"));
+    client.register_oracle(&oracle2, &Symbol::new(&env, "O2"));
+    client.register_oracle(&oracle3, &Symbol::new(&env, "O3"));
+
+    // Deregister two oracles
+    client.deregister_oracle(&oracle1);
+    client.deregister_oracle(&oracle2);
+
+    // Remaining oracle can still submit attestations
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let resolution_time = 1000u64;
+    client.register_market(&market_id, &resolution_time);
+    env.ledger().set_timestamp(1500);
+
+    let data_hash = BytesN::from_array(&env, &[0u8; 32]);
+    client.submit_attestation(&oracle3, &market_id, &1u32, &data_hash);
+
+    // Consensus should be reached with 1 vote (threshold adjusted to 1)
+    let (reached, outcome) = client.check_consensus(&market_id);
+    assert!(reached);
+    assert_eq!(outcome, 1);
+}
+
+/// Test that existing attestations are not affected by deregistration
+#[test]
+fn test_deregister_oracle_preserves_existing_attestations() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let oracle_id = register_oracle(&env);
+    let client = OracleManagerClient::new(&env, &oracle_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &2u32);
+
+    let oracle1 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    client.register_oracle(&oracle1, &Symbol::new(&env, "O1"));
+    client.register_oracle(&oracle2, &Symbol::new(&env, "O2"));
+
+    let market_id = BytesN::from_array(&env, &[1u8; 32]);
+    let resolution_time = 1000u64;
+    client.register_market(&market_id, &resolution_time);
+    env.ledger().set_timestamp(1500);
+
+    let data_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+    // Submit attestation before deregistration
+    client.submit_attestation(&oracle1, &market_id, &1u32, &data_hash);
+    client.submit_attestation(&oracle2, &market_id, &1u32, &data_hash);
+
+    // Deregister oracle1 after attestation
+    client.deregister_oracle(&oracle1);
+
+    // Existing attestation should still be accessible
+    let attestation = client.get_attestation(&market_id, &oracle1);
+    assert!(attestation.is_some());
+    assert_eq!(attestation.unwrap().outcome, 1);
+
+    // Consensus should still hold with existing votes
+    let (reached, outcome) = client.check_consensus(&market_id);
+    assert!(reached);
+    assert_eq!(outcome, 1);
 }
 
 #[test]

@@ -1,14 +1,16 @@
+// backend/src/services/blockchain/treasury.ts
+// Treasury contract interaction service
+
 import {
   Contract,
   rpc,
   TransactionBuilder,
-  Networks,
   BASE_FEE,
-  Keypair,
   nativeToScVal,
   scValToNative,
-  Address,
+  Keypair,
 } from '@stellar/stellar-sdk';
+import { BaseBlockchainService } from './base.js';
 import { logger } from '../../utils/logger.js';
 
 export interface TreasuryBalances {
@@ -24,33 +26,12 @@ interface DistributeResult {
   totalDistributed: string;
 }
 
-export class TreasuryService {
-  private rpcServer: rpc.Server;
+export class TreasuryService extends BaseBlockchainService {
   private treasuryContractId: string;
-  private networkPassphrase: string;
-  private adminKeypair?: Keypair; // Optional - only needed for write operations
 
   constructor() {
-    const rpcUrl =
-      process.env.STELLAR_SOROBAN_RPC_URL ||
-      'https://soroban-testnet.stellar.org';
-    const network = process.env.STELLAR_NETWORK || 'testnet';
-
-    this.rpcServer = new rpc.Server(rpcUrl, {
-      allowHttp: rpcUrl.includes('localhost'),
-    });
+    super('TreasuryService');
     this.treasuryContractId = process.env.TREASURY_CONTRACT_ADDRESS || '';
-    this.networkPassphrase =
-      network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
-
-    const adminSecret = process.env.ADMIN_WALLET_SECRET;
-    if (adminSecret) {
-      try {
-        this.adminKeypair = Keypair.fromSecret(adminSecret);
-      } catch (error) {
-        logger.warn('Invalid ADMIN_WALLET_SECRET for Treasury service');
-      }
-    }
   }
 
   async getBalances(): Promise<TreasuryBalances> {
@@ -60,10 +41,20 @@ export class TreasuryService {
 
     try {
       const contract = new Contract(this.treasuryContractId);
-      // Read-only call - use admin if available, otherwise dummy keypair
       const accountKey =
         this.adminKeypair?.publicKey() || Keypair.random().publicKey();
-      const sourceAccount = await this.rpcServer.getAccount(accountKey);
+
+      let sourceAccount;
+      try {
+        sourceAccount = await this.rpcServer.getAccount(accountKey);
+      } catch (e) {
+        logger.warn(
+          'Could not load source account for getBalances simulation, using random keypair fallback'
+        );
+        sourceAccount = await this.rpcServer.getAccount(
+          Keypair.random().publicKey()
+        );
+      }
 
       const builtTransaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
@@ -87,10 +78,9 @@ export class TreasuryService {
         platformFees: balances.platform_fees?.toString() || '0',
       };
     } catch (error) {
+      logger.error('Treasury balance fetch failed', { error });
       throw new Error(
-        `Treasury balance fetch failed: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`
+        `Treasury balance fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -137,14 +127,18 @@ export class TreasuryService {
         await this.rpcServer.sendTransaction(preparedTransaction);
 
       if (response.status === 'PENDING') {
-        await this.pollTransactionResult(response.hash);
+        const txHash = response.hash;
+        // Use unified retry logic from BaseBlockchainService
+        await this.waitForTransaction(txHash, 'distributeLeaderboard', {
+          recipientsCount: recipients.length,
+        });
 
         const totalDistributed = recipients
           .reduce((sum, r) => sum + BigInt(r.amount), BigInt(0))
           .toString();
 
         return {
-          txHash: response.hash,
+          txHash,
           recipientCount: recipients.length,
           totalDistributed,
         };
@@ -152,10 +146,9 @@ export class TreasuryService {
 
       throw new Error('Transaction submission failed');
     } catch (error) {
+      logger.error('Leaderboard distribution failed', { error });
       throw new Error(
-        `Leaderboard distribution failed: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`
+        `Leaderboard distribution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -203,10 +196,16 @@ export class TreasuryService {
         await this.rpcServer.sendTransaction(preparedTransaction);
 
       if (response.status === 'PENDING') {
-        await this.pollTransactionResult(response.hash);
+        const txHash = response.hash;
+        // Use unified retry logic from BaseBlockchainService
+        await this.waitForTransaction(txHash, 'distributeCreator', {
+          marketId,
+          creatorAddress,
+          amount,
+        });
 
         return {
-          txHash: response.hash,
+          txHash,
           recipientCount: 1,
           totalDistributed: amount,
         };
@@ -214,33 +213,11 @@ export class TreasuryService {
 
       throw new Error('Transaction submission failed');
     } catch (error) {
+      logger.error('Creator distribution failed', { error });
       throw new Error(
-        `Creator distribution failed: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`
+        `Creator distribution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
-  }
-
-  private async pollTransactionResult(
-    hash: string,
-    maxAttempts = 20
-  ): Promise<any> {
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const transaction = await this.rpcServer.getTransaction(hash);
-
-      if (transaction.status === 'SUCCESS') {
-        return transaction;
-      }
-
-      if (transaction.status === 'FAILED') {
-        throw new Error('Transaction failed');
-      }
-    }
-
-    throw new Error('Transaction polling timeout');
   }
 }
 

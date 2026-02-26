@@ -218,6 +218,37 @@ We use GitHub Actions for automated CI/CD. See [.github/workflows/README.md](.gi
 - ✅ Code quality analysis
 - ✅ PR validation
 
+## GitHub Issues & Project Management
+
+We've created a comprehensive issue tracking system to manage development:
+
+**📋 45 Issues Documented** across all components:
+- 12 Smart Contract issues
+- 8 Backend issues
+- 7 Frontend issues
+- 6 DevOps issues
+- 5 Testing issues
+- 4 Documentation issues
+- 3 Security issues
+
+**Quick Links:**
+- 📊 [Issues Summary](ISSUES_SUMMARY.md) - High-level overview
+- 📝 [Complete Issue List](.github/GITHUB_ISSUES.md) - All 45 issues detailed
+- 🚀 [Quick Start Guide](.github/QUICK_START_ISSUES.md) - Create top 10 priority issues
+- 📋 [Project Board Guide](.github/PROJECT_BOARD.md) - Sprint planning & management
+- ✅ [Setup Checklist](GITHUB_SETUP_CHECKLIST.md) - Step-by-step setup guide
+- 🏗️ [Structure Overview](.github/STRUCTURE.md) - Visual diagrams
+
+**Get Started:**
+```bash
+# Create GitHub issues using our script
+cd .github/scripts
+./create_issues.sh
+
+# Or follow the quick start guide
+cat .github/QUICK_START_ISSUES.md
+```
+
 ### Contributing
 
 Please follow [Conventional Commits](https://www.conventionalcommits.org/) format:

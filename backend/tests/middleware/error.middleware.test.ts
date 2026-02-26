@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { errorHandler, notFoundHandler, ApiError } from '../../src/middleware/error.middleware';
+import {
+  errorHandler,
+  notFoundHandler,
+  ApiError,
+} from '../../src/middleware/error.middleware';
 import { logger } from '../../src/utils/logger';
 
 describe('Error Handler Middleware', () => {
@@ -15,7 +19,7 @@ describe('Error Handler Middleware', () => {
   describe('ApiError class', () => {
     it('should create an instance with correct properties', () => {
       const error = new ApiError(400, 'VALIDATION_ERROR', 'Validation failed', [
-        { field: 'email', message: 'Invalid email' }
+        { field: 'email', message: 'Invalid email' },
       ]);
 
       expect(error).toBeInstanceOf(Error);
@@ -23,7 +27,9 @@ describe('Error Handler Middleware', () => {
       expect(error.statusCode).toBe(400);
       expect(error.code).toBe('VALIDATION_ERROR');
       expect(error.message).toBe('Validation failed');
-      expect(error.details).toEqual([{ field: 'email', message: 'Invalid email' }]);
+      expect(error.details).toEqual([
+        { field: 'email', message: 'Invalid email' },
+      ]);
       expect(error.name).toBe('ApiError');
     });
 
@@ -40,9 +46,11 @@ describe('Error Handler Middleware', () => {
   describe('errorHandler', () => {
     it('should handle ApiError with correct response format', async () => {
       app.get('/test', (req, res, next) => {
-        next(new ApiError(400, 'TEST_ERROR', 'Test error', [
-          { field: 'test', message: 'Test detail' }
-        ]));
+        next(
+          new ApiError(400, 'TEST_ERROR', 'Test error', [
+            { field: 'test', message: 'Test detail' },
+          ])
+        );
       });
       app.use(errorHandler);
 
@@ -54,11 +62,11 @@ describe('Error Handler Middleware', () => {
         error: {
           code: 'TEST_ERROR',
           message: 'Test error',
-          details: [{ field: 'test', message: 'Test detail' }]
+          details: [{ field: 'test', message: 'Test detail' }],
         },
         meta: {
-          timestamp: expect.any(String)
-        }
+          timestamp: expect.any(String),
+        },
       });
     });
 
@@ -92,8 +100,8 @@ describe('Error Handler Middleware', () => {
             code: 'invalid_string',
             validation: 'email',
             message: 'Invalid email',
-            path: ['email']
-          }
+            path: ['email'],
+          },
         ]);
         next(error);
       });
@@ -126,7 +134,9 @@ describe('Error Handler Middleware', () => {
           expect(errorMessage).toContain('Invalid email');
         } else {
           // Or it might be "Validation failed"
-          expect(['Validation failed', 'Invalid email']).toContain(errorMessage);
+          expect(['Validation failed', 'Invalid email']).toContain(
+            errorMessage
+          );
         }
       }
     });
@@ -169,16 +179,28 @@ describe('Error Handler Middleware', () => {
           error: 'Test error',
           path: '/test',
           method: 'GET',
-          ip: expect.any(String)
+          ip: expect.any(String),
         })
       );
     });
 
     it('should handle different error types by message', async () => {
       const testCases = [
-        { message: 'Unauthorized access', expectedCode: 'UNAUTHORIZED', expectedStatus: 401 },
-        { message: 'Insufficient permissions', expectedCode: 'FORBIDDEN', expectedStatus: 403 },
-        { message: 'Resource not found', expectedCode: 'NOT_FOUND', expectedStatus: 404 }
+        {
+          message: 'Unauthorized access',
+          expectedCode: 'UNAUTHORIZED',
+          expectedStatus: 401,
+        },
+        {
+          message: 'Insufficient permissions',
+          expectedCode: 'FORBIDDEN',
+          expectedStatus: 403,
+        },
+        {
+          message: 'Resource not found',
+          expectedCode: 'NOT_FOUND',
+          expectedStatus: 404,
+        },
       ];
 
       for (const testCase of testCases) {
@@ -193,7 +215,9 @@ describe('Error Handler Middleware', () => {
         });
         app.use(errorHandler);
 
-        const response = await request(app).get(`/test-${testCase.expectedCode}`);
+        const response = await request(app).get(
+          `/test-${testCase.expectedCode}`
+        );
 
         expect(response.status).toBe(testCase.expectedStatus);
         expect(response.body.error.code).toBe(testCase.expectedCode);
@@ -215,7 +239,9 @@ describe('Error Handler Middleware', () => {
       const notFoundResponse = await request(app).get('/does-not-exist');
       expect(notFoundResponse.status).toBe(404);
       expect(notFoundResponse.body.error.code).toBe('NOT_FOUND');
-      expect(notFoundResponse.body.error.message).toBe('Cannot GET /does-not-exist');
+      expect(notFoundResponse.body.error.message).toBe(
+        'Cannot GET /does-not-exist'
+      );
     });
 
     it('should include correct HTTP method in error message', async () => {

@@ -1,9 +1,7 @@
 // contracts/amm.rs - Automated Market Maker for Outcome Shares
 // Enables trading YES/NO outcome shares with dynamic odds pricing (Polymarket model)
 
-use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol,
-};
+use soroban_sdk::{contract, contractevent, contractimpl, token, Address, BytesN, Env, Symbol};
 
 #[contractevent]
 pub struct AmmInitializedEvent {
@@ -76,7 +74,7 @@ pub struct Pool {
     pub created_at: u64,
 }
 
-#[contracttype]
+#[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LiquidityAdded {
     pub provider: Address,
@@ -685,7 +683,7 @@ impl AMM {
         let token_client = token::Client::new(&env, &usdc_token);
         token_client.transfer(
             &lp_provider,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &(usdc_amount as i128),
         );
 
@@ -696,8 +694,7 @@ impl AMM {
             new_reserve: new_total_liquidity,
             k: new_k,
         };
-        env.events()
-            .publish((Symbol::new(&env, "liquidity_added"),), event);
+        event.publish(&env);
 
         lp_tokens_to_mint
     }

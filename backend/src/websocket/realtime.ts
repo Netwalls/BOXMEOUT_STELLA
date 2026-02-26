@@ -1,3 +1,9 @@
+import { Server as HttpServer } from 'http';
+import { Server as SocketIOServer, Socket } from 'socket.io';
+import { verifyAccessToken } from '../utils/jwt.js';
+import { logger } from '../utils/logger.js';
+import { AuthError } from '../types/auth.types.js';
+
 export interface MarketOdds {
   yes: number;
   no: number;
@@ -17,6 +23,13 @@ export interface OddsChangedEvent {
 export interface RealtimeOddsBroadcasterOptions {
   pollIntervalMs?: number;
   significantChangeThresholdPct?: number;
+}
+
+export interface SocketData {
+  userId: string;
+  publicKey: string;
+  connectedAt: number;
+  lastHeartbeat: number;
 }
 
 export type FetchMarketOdds = (marketId: string) => Promise<MarketOdds>;
@@ -173,4 +186,233 @@ export class RealtimeOddsBroadcaster {
       console.error('Realtime odds polling failed', { marketId, error });
     }
   }
+}
+
+// Rate limiting per connection
+const CONNECTION_RATE_LIMITS = {
+  SUBSCRIBE_PER_MINUTE: 30,
+  UNSUBSCRIBE_PER_MINUTE: 30,
+};
+
+interface RateLimitTracker {
+  subscribeCount: number;
+  unsubscribeCount: number;
+  windowStart: number;
+}
+
+/**
+ * Initialize Socket.io server with authentication and room management
+ */
+export function initializeSocketIO(
+  httpServer: HttpServer,
+  corsOrigin: string | string[]
+): SocketIOServer {
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: corsOrigin,
+      methods: ['GET', 'POST'],
+      credentials: true,
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+  });
+
+  // Rate limit tracking per socket
+  const rateLimits = new Map<string, RateLimitTracker>();
+
+  // JWT authentication middleware
+  io.use(async (socket: Socket, next: (err?: Error) => void) => {
+    try {
+      const token = socket.handshake.auth.token;
+
+      if (!token) {
+        throw new AuthError('NO_TOKEN', 'Authentication token required', 401);
+      }
+
+      const payload = verifyAccessToken(token);
+
+      // Attach user data to socket
+      socket.data = {
+        userId: payload.userId,
+        publicKey: payload.publicKey,
+        connectedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      } as SocketData;
+
+      logger.info('WebSocket authenticated', {
+        socketId: socket.id,
+        userId: payload.userId,
+      });
+
+      next();
+    } catch (error) {
+      logger.warn('WebSocket authentication failed', {
+        socketId: socket.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      next(new Error('Authentication failed'));
+    }
+  });
+
+  // Connection handler
+  io.on('connection', (socket: Socket) => {
+    const socketData = socket.data as SocketData;
+
+    logger.info('WebSocket connected', {
+      socketId: socket.id,
+      userId: socketData.userId,
+    });
+
+    // Join user's personal room for notifications
+    const userRoom = `user:${socketData.userId}`;
+    socket.join(userRoom);
+    logger.debug('Socket joined user room', {
+      socketId: socket.id,
+      userId: socketData.userId,
+      room: userRoom,
+    });
+
+    // Initialize rate limit tracker
+    rateLimits.set(socket.id, {
+      subscribeCount: 0,
+      unsubscribeCount: 0,
+      windowStart: Date.now(),
+    });
+
+    // Heartbeat handler
+    socket.on('heartbeat', () => {
+      socketData.lastHeartbeat = Date.now();
+      socket.emit('heartbeat_ack', { timestamp: Date.now() });
+    });
+
+    // Subscribe to market updates
+    socket.on('subscribe_market', (marketId: string) => {
+      if (!isValidMarketId(marketId)) {
+        socket.emit('error', { message: 'Invalid market ID' });
+        return;
+      }
+
+      if (!checkRateLimit(socket.id, 'subscribe', rateLimits)) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
+
+      const room = `market:${marketId}`;
+      socket.join(room);
+
+      logger.debug('Socket subscribed to market', {
+        socketId: socket.id,
+        userId: socketData.userId,
+        marketId,
+      });
+
+      socket.emit('subscribed', { marketId });
+    });
+
+    // Unsubscribe from market updates
+    socket.on('unsubscribe_market', (marketId: string) => {
+      if (!isValidMarketId(marketId)) {
+        socket.emit('error', { message: 'Invalid market ID' });
+        return;
+      }
+
+      if (!checkRateLimit(socket.id, 'unsubscribe', rateLimits)) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
+
+      const room = `market:${marketId}`;
+      socket.leave(room);
+
+      logger.debug('Socket unsubscribed from market', {
+        socketId: socket.id,
+        userId: socketData.userId,
+        marketId,
+      });
+
+      socket.emit('unsubscribed', { marketId });
+    });
+
+    // Disconnect handler
+    socket.on('disconnect', (reason: string) => {
+      logger.info('WebSocket disconnected', {
+        socketId: socket.id,
+        userId: socketData.userId,
+        reason,
+      });
+
+      // Cleanup rate limit tracker
+      rateLimits.delete(socket.id);
+    });
+  });
+
+  // Heartbeat cleanup interval (remove stale connections)
+  setInterval(() => {
+    const now = Date.now();
+    const staleThreshold = 90000; // 90 seconds
+
+    io.sockets.sockets.forEach((socket: Socket) => {
+      const socketData = socket.data as SocketData;
+      if (now - socketData.lastHeartbeat > staleThreshold) {
+        logger.warn('Disconnecting stale socket', {
+          socketId: socket.id,
+          userId: socketData.userId,
+          lastHeartbeat: socketData.lastHeartbeat,
+        });
+        socket.disconnect(true);
+      }
+    });
+  }, 30000); // Check every 30 seconds
+
+  return io;
+}
+
+/**
+ * Validate market ID format
+ */
+function isValidMarketId(marketId: unknown): marketId is string {
+  return (
+    typeof marketId === 'string' &&
+    marketId.length > 0 &&
+    marketId.length <= 100
+  );
+}
+
+/**
+ * Check rate limit for socket operations
+ */
+function checkRateLimit(
+  socketId: string,
+  operation: 'subscribe' | 'unsubscribe',
+  rateLimits: Map<string, RateLimitTracker>
+): boolean {
+  const tracker = rateLimits.get(socketId);
+  if (!tracker) return false;
+
+  const now = Date.now();
+  const windowDuration = 60000; // 1 minute
+
+  // Reset window if expired
+  if (now - tracker.windowStart > windowDuration) {
+    tracker.subscribeCount = 0;
+    tracker.unsubscribeCount = 0;
+    tracker.windowStart = now;
+  }
+
+  // Check limit
+  if (operation === 'subscribe') {
+    if (tracker.subscribeCount >= CONNECTION_RATE_LIMITS.SUBSCRIBE_PER_MINUTE) {
+      return false;
+    }
+    tracker.subscribeCount++;
+  } else {
+    if (
+      tracker.unsubscribeCount >= CONNECTION_RATE_LIMITS.UNSUBSCRIBE_PER_MINUTE
+    ) {
+      return false;
+    }
+    tracker.unsubscribeCount++;
+  }
+
+  return true;
 }

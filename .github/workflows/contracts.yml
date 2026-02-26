@@ -56,11 +56,6 @@ jobs:
         working-directory: contracts/contracts/boxmeout
         run: cargo build --release --target wasm32-unknown-unknown
 
-      - name: List WASM artifacts
-        run: |
-          ls -lh contracts/target/wasm32-unknown-unknown/release/*.wasm
-          find contracts/target -name "*.wasm" -type f
-
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin
 

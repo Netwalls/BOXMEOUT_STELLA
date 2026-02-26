@@ -4,6 +4,16 @@
 
 set -e
 
+# Support for --check flag
+CHECK_ONLY=false
+if [ "$1" == "--check" ]; then
+    CHECK_ONLY=true
+    COMMAND="cargo check"
+    echo "🔍 Running check-only mode..."
+else
+    COMMAND="cargo build --target wasm32-unknown-unknown --release"
+fi
+
 echo "🚀 Building BoxMeOut Stella Smart Contracts..."
 echo ""
 
@@ -17,83 +27,87 @@ echo ""
 
 # Build Market Contract
 echo "📦 Building Market Contract..."
-cargo build --target wasm32-unknown-unknown --release --features market
+$COMMAND --features market
 if [ $? -eq 0 ]; then
-    echo "✅ Market contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
+    echo "✅ Market contract check/build successful"
+    if [ "$CHECK_ONLY" == false ] && [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
         cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/market.wasm
         echo "   📄 Saved as market.wasm"
     fi
 else
-    echo "❌ Market contract build failed"
+    echo "❌ Market contract check/build failed"
     exit 1
 fi
 echo ""
 
 # Build Oracle Contract
 echo "📦 Building Oracle Contract..."
-cargo build --target wasm32-unknown-unknown --release --features oracle
+$COMMAND --features oracle
 if [ $? -eq 0 ]; then
-    echo "✅ Oracle contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
+    echo "✅ Oracle contract check/build successful"
+    if [ "$CHECK_ONLY" == false ] && [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
         cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/oracle.wasm
         echo "   📄 Saved as oracle.wasm"
     fi
 else
-    echo "❌ Oracle contract build failed"
+    echo "❌ Oracle contract check/build failed"
     exit 1
 fi
 echo ""
 
 # Build AMM Contract
 echo "📦 Building AMM Contract..."
-cargo build --target wasm32-unknown-unknown --release --features amm
+$COMMAND --features amm
 if [ $? -eq 0 ]; then
-    echo "✅ AMM contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
+    echo "✅ AMM contract check/build successful"
+    if [ "$CHECK_ONLY" == false ] && [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
         cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/amm.wasm
         echo "   📄 Saved as amm.wasm"
     fi
 else
-    echo "❌ AMM contract build failed"
+    echo "❌ AMM contract check/build failed"
     exit 1
 fi
 echo ""
 
 # Build Factory Contract
 echo "📦 Building Factory Contract..."
-cargo build --target wasm32-unknown-unknown --release --features factory
+$COMMAND --features factory
 if [ $? -eq 0 ]; then
-    echo "✅ Factory contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
+    echo "✅ Factory contract check/build successful"
+    if [ "$CHECK_ONLY" == false ] && [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
         cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/factory.wasm
         echo "   📄 Saved as factory.wasm"
     fi
 else
-    echo "❌ Factory contract build failed"
+    echo "❌ Factory contract check/build failed"
     exit 1
 fi
 echo ""
 
 # Build Treasury Contract
 echo "📦 Building Treasury Contract..."
-cargo build --target wasm32-unknown-unknown --release --features treasury
+$COMMAND --features treasury
 if [ $? -eq 0 ]; then
-    echo "✅ Treasury contract built successfully"
-    if [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
+    echo "✅ Treasury contract check/build successful"
+    if [ "$CHECK_ONLY" == false ] && [ -f "target/wasm32-unknown-unknown/release/boxmeout.wasm" ]; then
         cp target/wasm32-unknown-unknown/release/boxmeout.wasm target/wasm32-unknown-unknown/release/treasury.wasm
         echo "   📄 Saved as treasury.wasm"
     fi
 else
-    echo "❌ Treasury contract build failed"
+    echo "❌ Treasury contract check/build failed"
     exit 1
 fi
 echo ""
 
-echo "🎉 All 5 contracts built successfully!"
-echo ""
-echo "📁 Output files:"
-ls -lh target/wasm32-unknown-unknown/release/{market,oracle,amm,factory,treasury}.wasm 2>/dev/null || echo "⚠️  Some WASM files missing"
+if [ "$CHECK_ONLY" == true ]; then
+    echo "🎉 All contract checks passed!"
+else
+    echo "🎉 All 5 contracts built successfully!"
+    echo ""
+    echo "📁 Output files:"
+    ls -lh target/wasm32-unknown-unknown/release/{market,oracle,amm,factory,treasury}.wasm 2>/dev/null || echo "⚠️  Some WASM files missing"
+fi
 echo ""
 echo "Next steps:"
 echo "  1. Optimize: stellar contract optimize --wasm target/wasm32-unknown-unknown/release/market.wasm"

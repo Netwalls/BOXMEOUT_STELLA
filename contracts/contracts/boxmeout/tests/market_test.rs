@@ -913,3 +913,131 @@ fn test_get_market_state_serializable() {
     // If we got here, the struct is properly serializable
     // Verification complete
 }
+
+// ============================================================================
+// CANCEL MARKET & REFUND TESTS
+// ============================================================================
+
+#[test]
+fn test_cancel_market_sets_cancelled_state() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, _usdc_address, _market_contract) =
+        setup_test_market(&env);
+
+    client.cancel_market(&creator, &market_id);
+
+    assert_eq!(client.get_market_state_value().unwrap(), 4); // STATE_CANCELLED
+}
+
+#[test]
+fn test_claim_refund_only_on_cancelled_market() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let user = Address::generate(&env);
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &500);
+    token.approve(
+        &user,
+        &market_contract,
+        &500,
+        &(env.ledger().sequence() + 100),
+    );
+    client.commit_prediction(&user, &BytesN::from_array(&env, &[1u8; 32]), &500);
+
+    // Cancel so refunds are available
+    client.cancel_market(&creator, &market_id);
+
+    client.claim_refund(&user, &market_id);
+
+    // Exact committed USDC refunded
+    assert_eq!(token.balance(&user), 500);
+    assert_eq!(token.balance(&market_contract), 0);
+}
+
+#[test]
+#[should_panic(expected = "Refunds only available for cancelled markets")]
+fn test_claim_refund_fails_when_market_not_cancelled() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, _usdc_address, _market_contract) =
+        setup_test_market(&env);
+
+    let user = Address::generate(&env);
+    // Market still OPEN
+    client.claim_refund(&user, &market_id);
+}
+
+#[test]
+fn test_claim_refund_tracks_status_prevents_double_refund() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let user = Address::generate(&env);
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &300);
+    token.approve(
+        &user,
+        &market_contract,
+        &300,
+        &(env.ledger().sequence() + 100),
+    );
+    client.commit_prediction(&user, &BytesN::from_array(&env, &[2u8; 32]), &300);
+
+    client.cancel_market(&creator, &market_id);
+    client.claim_refund(&user, &market_id);
+    assert_eq!(token.balance(&user), 300);
+    // Double-refund is tested in test_claim_refund_double_panics
+}
+
+#[test]
+#[should_panic(expected = "Already refunded")]
+fn test_claim_refund_double_panics() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let user = Address::generate(&env);
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    token.mint(&user, &100);
+    token.approve(
+        &user,
+        &market_contract,
+        &100,
+        &(env.ledger().sequence() + 100),
+    );
+    client.commit_prediction(&user, &BytesN::from_array(&env, &[3u8; 32]), &100);
+
+    client.cancel_market(&creator, &market_id);
+    client.claim_refund(&user, &market_id);
+    client.claim_refund(&user, &market_id);
+}
+
+#[test]
+#[should_panic(expected = "No commitment or prediction found for user")]
+fn test_claim_refund_fails_for_non_participant() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, _usdc_address, _market_contract) =
+        setup_test_market(&env);
+
+    let user = Address::generate(&env);
+    client.cancel_market(&creator, &market_id);
+    client.claim_refund(&user, &market_id);
+}
+
+#[test]
+fn test_claim_refund_revealed_prediction_exact_amount() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    let user = Address::generate(&env);
+    client.test_set_prediction(&user, &1u32, &750);
+    token.mint(&market_contract, &750);
+
+    client.cancel_market(&creator, &market_id);
+    client.claim_refund(&user, &market_id);
+    assert_eq!(token.balance(&user), 750);
+}

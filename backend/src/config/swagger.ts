@@ -1233,7 +1233,292 @@ Real-time updates available via WebSocket at \`ws://localhost:3000/ws\`
   ],
 };
 
-const swaggerSpec = swaggerJsdoc(options);
+const swaggerSpec = swaggerJsdoc(options) as any;
+
+// Add WebSocket documentation to the spec
+swaggerSpec.components = swaggerSpec.components || {};
+swaggerSpec.components.schemas = swaggerSpec.components.schemas || {};
+
+// WebSocket Event Schemas
+swaggerSpec.components.schemas.WebSocketEvent = {
+  type: 'object',
+  discriminator: {
+    propertyName: 'type',
+  },
+  properties: {
+    type: {
+      type: 'string',
+      enum: [
+        'odds_changed',
+        'market_updated',
+        'trade_executed',
+        'market_resolved',
+      ],
+    },
+    timestamp: {
+      type: 'integer',
+      description: 'Unix timestamp in milliseconds',
+    },
+  },
+  required: ['type', 'timestamp'],
+};
+
+swaggerSpec.components.schemas.OddsChangedEvent = {
+  allOf: [
+    { $ref: '#/components/schemas/WebSocketEvent' },
+    {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['odds_changed'],
+        },
+        marketId: {
+          type: 'string',
+          format: 'uuid',
+          description: 'Market ID',
+        },
+        yesOdds: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'YES outcome probability (0.0 to 1.0)',
+        },
+        noOdds: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'NO outcome probability (0.0 to 1.0)',
+        },
+        direction: {
+          type: 'string',
+          enum: ['YES', 'NO'],
+          description: 'Direction of odds movement',
+        },
+      },
+      required: ['marketId', 'yesOdds', 'noOdds', 'direction'],
+    },
+  ],
+};
+
+swaggerSpec.components.schemas.MarketUpdatedEvent = {
+  allOf: [
+    { $ref: '#/components/schemas/WebSocketEvent' },
+    {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['market_updated'],
+        },
+        marketId: {
+          type: 'string',
+          format: 'uuid',
+        },
+        status: {
+          type: 'string',
+          enum: ['OPEN', 'CLOSED', 'RESOLVED', 'DISPUTED', 'CANCELLED'],
+        },
+        totalVolume: {
+          type: 'number',
+          description: 'Total trading volume in USDC',
+        },
+        participantCount: {
+          type: 'integer',
+        },
+      },
+      required: ['marketId', 'status'],
+    },
+  ],
+};
+
+swaggerSpec.components.schemas.TradeExecutedEvent = {
+  allOf: [
+    { $ref: '#/components/schemas/WebSocketEvent' },
+    {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['trade_executed'],
+        },
+        marketId: {
+          type: 'string',
+          format: 'uuid',
+        },
+        tradeType: {
+          type: 'string',
+          enum: ['BUY', 'SELL'],
+        },
+        outcome: {
+          type: 'integer',
+          enum: [0, 1],
+        },
+        quantity: {
+          type: 'number',
+        },
+        pricePerUnit: {
+          type: 'number',
+        },
+      },
+      required: [
+        'marketId',
+        'tradeType',
+        'outcome',
+        'quantity',
+        'pricePerUnit',
+      ],
+    },
+  ],
+};
+
+swaggerSpec.components.schemas.MarketResolvedEvent = {
+  allOf: [
+    { $ref: '#/components/schemas/WebSocketEvent' },
+    {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['market_resolved'],
+        },
+        marketId: {
+          type: 'string',
+          format: 'uuid',
+        },
+        winningOutcome: {
+          type: 'integer',
+          enum: [0, 1],
+          description: '0 = outcomeA wins, 1 = outcomeB wins',
+        },
+        resolutionSource: {
+          type: 'string',
+        },
+      },
+      required: ['marketId', 'winningOutcome'],
+    },
+  ],
+};
+
+// Add WebSocket documentation section
+swaggerSpec.info.description += `
+
+## WebSocket API
+
+Connect to real-time updates via WebSocket at:
+- Development: \`ws://localhost:3000/ws\`
+- Production: \`wss://api.boxmeout.com/ws\`
+
+### Connection
+
+\`\`\`javascript
+const ws = new WebSocket('ws://localhost:3000/ws');
+
+ws.onopen = () => {
+  console.log('Connected to BoxMeOut WebSocket');
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received:', data);
+};
+\`\`\`
+
+### Subscribing to Market Updates
+
+Subscribe to real-time odds changes for a specific market:
+
+\`\`\`javascript
+ws.send(JSON.stringify({
+  action: 'subscribe',
+  marketId: 'uuid-of-market'
+}));
+\`\`\`
+
+### Unsubscribing
+
+\`\`\`javascript
+ws.send(JSON.stringify({
+  action: 'unsubscribe',
+  marketId: 'uuid-of-market'
+}));
+\`\`\`
+
+### Event Types
+
+#### 1. Odds Changed Event
+Triggered when market odds change significantly (>1% by default).
+
+\`\`\`json
+{
+  "type": "odds_changed",
+  "marketId": "550e8400-e29b-41d4-a716-446655440000",
+  "yesOdds": 0.65,
+  "noOdds": 0.35,
+  "direction": "YES",
+  "timestamp": 1706356800000
+}
+\`\`\`
+
+#### 2. Market Updated Event
+Triggered when market status or metadata changes.
+
+\`\`\`json
+{
+  "type": "market_updated",
+  "marketId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "CLOSED",
+  "totalVolume": 15000.50,
+  "participantCount": 42,
+  "timestamp": 1706356800000
+}
+\`\`\`
+
+#### 3. Trade Executed Event
+Triggered when a trade is executed on a market.
+
+\`\`\`json
+{
+  "type": "trade_executed",
+  "marketId": "550e8400-e29b-41d4-a716-446655440000",
+  "tradeType": "BUY",
+  "outcome": 1,
+  "quantity": 100,
+  "pricePerUnit": 0.65,
+  "timestamp": 1706356800000
+}
+\`\`\`
+
+#### 4. Market Resolved Event
+Triggered when a market is resolved.
+
+\`\`\`json
+{
+  "type": "market_resolved",
+  "marketId": "550e8400-e29b-41d4-a716-446655440000",
+  "winningOutcome": 1,
+  "resolutionSource": "Official announcement",
+  "timestamp": 1706356800000
+}
+\`\`\`
+
+### Polling Configuration
+
+The WebSocket broadcaster polls subscribed markets every 5 seconds by default. Odds changes are only broadcast if they exceed a 1% threshold to reduce noise.
+
+### Error Handling
+
+\`\`\`javascript
+ws.onerror = (error) => {
+  console.error('WebSocket error:', error);
+};
+
+ws.onclose = (event) => {
+  console.log('WebSocket closed:', event.code, event.reason);
+  // Implement reconnection logic here
+};
+\`\`\`
+`;
 
 // Swagger UI options
 const swaggerUiOptions = {
