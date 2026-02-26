@@ -229,6 +229,18 @@ export class MarketRepository extends BaseRepository<Market> {
     });
   }
 
+  async getMarketsPastClosingTime(): Promise<Market[]> {
+    return await this.prisma.market.findMany({
+      where: {
+        status: MarketStatus.OPEN,
+        closingAt: {
+          lte: new Date(),
+        },
+      },
+      orderBy: { closingAt: 'asc' },
+    });
+  }
+
   async getMarketStatistics() {
     const [totalMarkets, activeMarkets, totalVolume, avgParticipants] =
       await Promise.all([
