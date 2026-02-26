@@ -747,6 +747,206 @@ fn test_dispute_market_window_closed() {
 }
 
 // ============================================================================
+// DISPUTE RESOLUTION TESTS
+// ============================================================================
+
+#[test]
+fn test_resolve_dispute_upheld() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    let user = Address::generate(&env);
+
+    // Mint USDC to user for dispute stake
+    token.mint(&user, &2000);
+    token.approve(
+        &user,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Resolve market
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    assert_eq!(client.get_market_state_value().unwrap(), 2); // RESOLVED
+
+    // Dispute
+    client.dispute_market(&user, &market_id, &Symbol::new(&env, "wrong"), &None);
+    assert_eq!(client.get_market_state_value().unwrap(), 3); // DISPUTED
+
+    // Ensure contract has enough to refund stake
+    token.mint(&market_contract, &1000);
+    let user_balance_before = token::TokenClient::new(&env, &usdc_address).balance(&user);
+
+    // Resolve dispute as upheld
+    client.resolve_dispute(&creator, &market_id, &true);
+
+    // Verify state is CANCELLED (4)
+    assert_eq!(client.get_market_state_value().unwrap(), 4);
+
+    // Verify disputer got stake refunded
+    let user_balance_after = token::TokenClient::new(&env, &usdc_address).balance(&user);
+    assert_eq!(user_balance_after, user_balance_before + 1000);
+}
+
+#[test]
+fn test_resolve_dispute_dismissed() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    let user = Address::generate(&env);
+
+    // Mint USDC to user for dispute stake
+    token.mint(&user, &2000);
+    token.approve(
+        &user,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Resolve market
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+
+    // Dispute
+    client.dispute_market(&user, &market_id, &Symbol::new(&env, "wrong"), &None);
+    assert_eq!(client.get_market_state_value().unwrap(), 3); // DISPUTED
+
+    let contract_balance_before =
+        token::TokenClient::new(&env, &usdc_address).balance(&market_contract);
+
+    // Resolve dispute as dismissed
+    client.resolve_dispute(&creator, &market_id, &false);
+
+    // Verify state returned to RESOLVED (2)
+    assert_eq!(client.get_market_state_value().unwrap(), 2);
+
+    // Verify stake stayed in the contract (no refund)
+    let contract_balance_after =
+        token::TokenClient::new(&env, &usdc_address).balance(&market_contract);
+    assert_eq!(contract_balance_after, contract_balance_before);
+}
+
+#[test]
+#[should_panic(expected = "Market has active dispute - payouts frozen")]
+fn test_claim_winnings_frozen_during_dispute() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    let user = Address::generate(&env);
+
+    // Mint USDC for stake and contract pool
+    token.mint(&user, &2000);
+    token.approve(
+        &user,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+    token.mint(&market_contract, &1000);
+
+    // Resolve market and set user as winner
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user, &1u32, &1000);
+
+    // Dispute the market
+    let disputer = Address::generate(&env);
+    token.mint(&disputer, &2000);
+    token.approve(
+        &disputer,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+    client.dispute_market(&disputer, &market_id, &Symbol::new(&env, "wrong"), &None);
+    assert_eq!(client.get_market_state_value().unwrap(), 3); // DISPUTED
+
+    // Attempt to claim winnings — should panic
+    client.claim_winnings(&user, &market_id);
+}
+
+#[test]
+fn test_claim_winnings_after_dispute_dismissed() {
+    let env = create_test_env();
+    let (client, market_id, creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    let user = Address::generate(&env);
+
+    // Mint USDC for stake and contract pool
+    token.mint(&user, &2000);
+    token.approve(
+        &user,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+    token.mint(&market_contract, &2000);
+
+    // Resolve market and set user as winner
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+    client.test_set_prediction(&user, &1u32, &1000);
+
+    // Dispute the market
+    let disputer = Address::generate(&env);
+    token.mint(&disputer, &2000);
+    token.approve(
+        &disputer,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+    client.dispute_market(&disputer, &market_id, &Symbol::new(&env, "wrong"), &None);
+    assert_eq!(client.get_market_state_value().unwrap(), 3); // DISPUTED
+
+    // Dismiss the dispute — market goes back to RESOLVED
+    client.resolve_dispute(&creator, &market_id, &false);
+    assert_eq!(client.get_market_state_value().unwrap(), 2); // RESOLVED
+
+    // Now claim winnings should succeed
+    let payout = client.claim_winnings(&user, &market_id);
+    assert_eq!(payout, 900); // 1000 - 10% fee
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized: only creator can resolve disputes")]
+fn test_resolve_dispute_unauthorized() {
+    let env = create_test_env();
+    let (client, market_id, _creator, _admin, usdc_address, market_contract) =
+        setup_test_market(&env);
+
+    let token = token::StellarAssetClient::new(&env, &usdc_address);
+    let user = Address::generate(&env);
+
+    // Mint USDC to user for dispute stake
+    token.mint(&user, &2000);
+    token.approve(
+        &user,
+        &market_contract,
+        &1000,
+        &(env.ledger().sequence() + 100),
+    );
+
+    // Resolve market
+    client.test_setup_resolution(&market_id, &1u32, &1000, &0);
+
+    // Dispute
+    client.dispute_market(&user, &market_id, &Symbol::new(&env, "wrong"), &None);
+    assert_eq!(client.get_market_state_value().unwrap(), 3); // DISPUTED
+
+    // Non-creator tries to resolve dispute — should panic
+    let non_creator = Address::generate(&env);
+    client.resolve_dispute(&non_creator, &market_id, &true);
+}
+
+// ============================================================================
 // LIQUIDITY QUERY TESTS
 // ============================================================================
 

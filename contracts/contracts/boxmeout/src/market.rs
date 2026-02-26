@@ -61,6 +61,13 @@ pub struct MarketDisputedEvent {
 }
 
 #[contractevent]
+pub struct DisputeResolvedEvent {
+    pub market_id: BytesN<32>,
+    pub upheld: bool,
+    pub timestamp: u64,
+}
+
+#[contractevent]
 pub struct RefundedEvent {
     pub user: Address,
     pub market_id: BytesN<32>,
@@ -865,6 +872,90 @@ impl PredictionMarket {
         .publish(&env);
     }
 
+    /// Resolve a dispute on a market
+    ///
+    /// # Requirements
+    /// - Only the market creator can resolve disputes
+    /// - Market must be in DISPUTED state
+    ///
+    /// # Behavior
+    /// - If upheld (dispute valid): Market goes to CANCELLED state, disputer's stake refunded
+    /// - If dismissed (dispute invalid): Market goes back to RESOLVED state, stake stays in contract
+    ///
+    /// # Events
+    /// - Emits DisputeResolvedEvent(market_id, upheld, timestamp)
+    pub fn resolve_dispute(
+        env: Env,
+        creator: Address,
+        market_id: BytesN<32>,
+        upheld: bool,
+    ) {
+        creator.require_auth();
+
+        // Verify creator authorization
+        let stored_creator: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, CREATOR_KEY))
+            .expect("Market not initialized");
+
+        if creator != stored_creator {
+            panic!("Unauthorized: only creator can resolve disputes");
+        }
+
+        // Validate market is in DISPUTED state
+        let state: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .expect("Market state not found");
+
+        if state != STATE_DISPUTED {
+            panic!("Market is not disputed");
+        }
+
+        if upheld {
+            // Dispute upheld: cancel the market and refund the disputer's stake
+            env.storage()
+                .persistent()
+                .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_CANCELLED);
+
+            // Refund disputer's stake
+            let dispute_key = (Symbol::new(&env, "dispute"), market_id.clone());
+            let dispute: DisputeRecord = env
+                .storage()
+                .persistent()
+                .get(&dispute_key)
+                .expect("Dispute record not found");
+
+            let usdc_token: Address = env
+                .storage()
+                .persistent()
+                .get(&Symbol::new(&env, USDC_KEY))
+                .expect("USDC token not found");
+
+            let token_client = token::TokenClient::new(&env, &usdc_token);
+            let contract_address = env.current_contract_address();
+            let dispute_stake_amount: i128 = 1000;
+
+            token_client.transfer(&contract_address, &dispute.user, &dispute_stake_amount);
+        } else {
+            // Dispute dismissed: return market to RESOLVED state, stake stays in contract
+            env.storage()
+                .persistent()
+                .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_RESOLVED);
+        }
+
+        let timestamp = env.ledger().timestamp();
+
+        DisputeResolvedEvent {
+            market_id,
+            upheld,
+            timestamp,
+        }
+        .publish(&env);
+    }
+
     /// Claim winnings after market resolution
     ///
     /// This function allows users to claim their winnings after a market has been resolved.
@@ -897,6 +988,9 @@ impl PredictionMarket {
             .get(&Symbol::new(&env, MARKET_STATE_KEY))
             .expect("Market not initialized");
 
+        if state == STATE_DISPUTED {
+            panic!("Market has active dispute - payouts frozen");
+        }
         if state != STATE_RESOLVED {
             panic!("Market not resolved");
         }
