@@ -279,6 +279,9 @@ export function initializeSocketIO(
       windowStart: Date.now(),
     });
 
+    // Join user's private room for personal notifications (Issue #116)
+    socket.join(`user:${socketData.userId}`);
+
     // Heartbeat handler
     socket.on('heartbeat', () => {
       socketData.lastHeartbeat = Date.now();
@@ -331,6 +334,40 @@ export function initializeSocketIO(
       });
 
       socket.emit('unsubscribed', { marketId });
+    });
+
+    // Subscribe to global leaderboard updates (Issue #116)
+    socket.on('subscribe_leaderboard', () => {
+      if (!checkRateLimit(socket.id, 'subscribe', rateLimits)) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
+
+      socket.join('leaderboard:global');
+
+      logger.debug('Socket subscribed to leaderboard', {
+        socketId: socket.id,
+        userId: socketData.userId,
+      });
+
+      socket.emit('subscribed_leaderboard', { timestamp: Date.now() });
+    });
+
+    // Unsubscribe from leaderboard updates (Issue #116)
+    socket.on('unsubscribe_leaderboard', () => {
+      if (!checkRateLimit(socket.id, 'unsubscribe', rateLimits)) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
+
+      socket.leave('leaderboard:global');
+
+      logger.debug('Socket unsubscribed from leaderboard', {
+        socketId: socket.id,
+        userId: socketData.userId,
+      });
+
+      socket.emit('unsubscribed_leaderboard', { timestamp: Date.now() });
     });
 
     // Disconnect handler
