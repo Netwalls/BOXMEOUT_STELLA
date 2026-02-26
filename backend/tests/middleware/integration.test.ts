@@ -17,37 +17,41 @@ describe('Validation and Error Handling Integration', () => {
   });
 
   it('should process valid request through complete middleware chain', async () => {
-    app.post('/api/test',
-      validate({ body: challengeBody }),
-      (req, res) => {
-        res.json({
-          success: true,
-          data: {
-            publicKey: req.body.publicKey,
-          }
-        });
-      }
-    );
+    app.post('/api/test', validate({ body: challengeBody }), (req, res) => {
+      res.json({
+        success: true,
+        data: {
+          publicKey: req.body.publicKey,
+        },
+      });
+    });
     app.use(errorHandler);
 
-    const response = await request(app)
-      .post('/api/test')
-      .send({
-        publicKey: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ'
-      });
+    const response = await request(app).post('/api/test').send({
+      publicKey: 'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ',
+    });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(response.body.data.publicKey).toBe('GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ');
+    expect(response.body.data.publicKey).toBe(
+      'GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKXQ'
+    );
   });
 
   it('should handle validation error with custom business logic', async () => {
-    app.post('/api/market',
+    app.post(
+      '/api/market',
       validate({ body: createMarketBody }),
       (req, res, next) => {
         // Business logic after validation
         if (req.body.title.toLowerCase().includes('spam')) {
-          return next(new ApiError(422, 'SPAM_DETECTED', 'Market title contains spam content'));
+          return next(
+            new ApiError(
+              422,
+              'SPAM_DETECTED',
+              'Market title contains spam content'
+            )
+          );
         }
         res.json({ success: true, data: req.body });
       }
@@ -60,32 +64,28 @@ describe('Validation and Error Handling Integration', () => {
     const closingAt = futureDate.toISOString();
 
     // Use a title that passes validation but contains "spam"
-    const spamResponse = await request(app)
-      .post('/api/market')
-      .send({
-        title: 'Is this product considered spam?',
-        description: 'A valid description that passes all validation checks',
-        category: 'CRYPTO',
-        outcomeA: 'Yes',
-        outcomeB: 'No',
-        closingAt,
-      });
+    const spamResponse = await request(app).post('/api/market').send({
+      title: 'Is this product considered spam?',
+      description: 'A valid description that passes all validation checks',
+      category: 'CRYPTO',
+      outcomeA: 'Yes',
+      outcomeB: 'No',
+      closingAt,
+    });
 
     // Should be 422 (business logic rejection) not 400 (validation error)
     expect(spamResponse.status).toBe(422);
     expect(spamResponse.body.error.code).toBe('SPAM_DETECTED');
 
     // Valid request that passes all checks
-    const validResponse = await request(app)
-      .post('/api/market')
-      .send({
-        title: 'Legitimate market question here',
-        description: 'A valid description that passes all validation checks',
-        category: 'CRYPTO',
-        outcomeA: 'Yes',
-        outcomeB: 'No',
-        closingAt,
-      });
+    const validResponse = await request(app).post('/api/market').send({
+      title: 'Legitimate market question here',
+      description: 'A valid description that passes all validation checks',
+      category: 'CRYPTO',
+      outcomeA: 'Yes',
+      outcomeB: 'No',
+      closingAt,
+    });
 
     expect(validResponse.status).toBe(200);
     expect(validResponse.body.success).toBe(true);

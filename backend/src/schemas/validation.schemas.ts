@@ -175,3 +175,35 @@ export const distributeCreatorBody = z.object({
       }
     ),
 });
+
+// --- Dispute schemas ---
+
+export const submitDisputeBody = z.object({
+  marketId: z.string().uuid(),
+  reason: sanitizedString(10, 1000),
+  evidenceUrl: z.string().url().optional().or(z.literal('')),
+});
+
+export const reviewDisputeBody = z.object({
+  adminNotes: sanitizedString(5, 5000),
+});
+
+export const resolveDisputeBody = z
+  .object({
+    action: z.enum(['DISMISS', 'RESOLVE_NEW_OUTCOME']),
+    resolution: sanitizedString(10, 5000),
+    adminNotes: sanitizedString(5, 5000).optional(),
+    newWinningOutcome: z.number().int().min(0).max(1).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.action === 'RESOLVE_NEW_OUTCOME' && data.newWinningOutcome === undefined) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'New winning outcome is required when action is RESOLVE_NEW_OUTCOME',
+      path: ['newWinningOutcome'],
+    }
+  );

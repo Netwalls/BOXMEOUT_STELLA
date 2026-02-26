@@ -127,6 +127,39 @@ export class MarketBlockchainService extends BaseBlockchainService {
       );
     }
   }
+
+  /**
+   * Commit a prediction on the blockchain
+   */
+  async commitPrediction(
+    marketContractAddress: string,
+    commitmentHash: string,
+    amountUsdc: number
+  ): Promise<MarketActionResult> {
+    // TODO: Implement actual Stellar contract call
+    logger.info('Blockchain: commiting prediction', {
+      marketContractAddress,
+      commitmentHash,
+      amountUsdc,
+    });
+    return { txHash: 'mock-commit-tx-' + Date.now() };
+  }
+
+  /**
+   * Reveal a prediction on the blockchain
+   */
+  async revealPrediction(
+    marketContractAddress: string,
+    predictedOutcome: number,
+    salt: string
+  ): Promise<MarketActionResult> {
+    // TODO: Implement actual Stellar contract call
+    logger.info('Blockchain: revealing prediction', {
+      marketContractAddress,
+      predictedOutcome,
+    });
+    return { txHash: 'mock-reveal-tx-' + Date.now() };
+  }
 }
 
 export const marketBlockchainService = new MarketBlockchainService();

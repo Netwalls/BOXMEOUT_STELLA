@@ -39,7 +39,9 @@ describe('CronService.pollOracleConsensus()', () => {
   });
 
   it('should do nothing when no CLOSED markets exist', async () => {
-    mockMarketRepository.getClosedMarketsAwaitingResolution.mockResolvedValue([]);
+    mockMarketRepository.getClosedMarketsAwaitingResolution.mockResolvedValue(
+      []
+    );
 
     await cronService.pollOracleConsensus();
 
@@ -105,18 +107,28 @@ describe('CronService.pollOracleConsensus()', () => {
       closedMarket('market-3'),
     ]);
     vi.mocked(oracleService.checkConsensus)
-      .mockResolvedValueOnce(null)  // market-1: no consensus
-      .mockResolvedValueOnce(1)     // market-2: consensus → outcome 1
-      .mockResolvedValueOnce(0);    // market-3: consensus → outcome 0
+      .mockResolvedValueOnce(null) // market-1: no consensus
+      .mockResolvedValueOnce(1) // market-2: consensus → outcome 1
+      .mockResolvedValueOnce(0); // market-3: consensus → outcome 0
 
-    mockMarketService.resolveMarket.mockResolvedValue({ resolvedAt: new Date() });
+    mockMarketService.resolveMarket.mockResolvedValue({
+      resolvedAt: new Date(),
+    });
 
     await cronService.pollOracleConsensus();
 
     expect(oracleService.checkConsensus).toHaveBeenCalledTimes(3);
     expect(mockMarketService.resolveMarket).toHaveBeenCalledTimes(2);
-    expect(mockMarketService.resolveMarket).toHaveBeenCalledWith('market-2', 1, 'oracle-consensus');
-    expect(mockMarketService.resolveMarket).toHaveBeenCalledWith('market-3', 0, 'oracle-consensus');
+    expect(mockMarketService.resolveMarket).toHaveBeenCalledWith(
+      'market-2',
+      1,
+      'oracle-consensus'
+    );
+    expect(mockMarketService.resolveMarket).toHaveBeenCalledWith(
+      'market-3',
+      0,
+      'oracle-consensus'
+    );
   });
 
   it('should continue processing remaining markets when one fails', async () => {
@@ -128,14 +140,20 @@ describe('CronService.pollOracleConsensus()', () => {
       .mockRejectedValueOnce(new Error('RPC timeout'))
       .mockResolvedValueOnce(1);
 
-    mockMarketService.resolveMarket.mockResolvedValue({ resolvedAt: new Date() });
+    mockMarketService.resolveMarket.mockResolvedValue({
+      resolvedAt: new Date(),
+    });
 
     await cronService.pollOracleConsensus();
 
     // Should not throw; should still resolve the second market
     expect(oracleService.checkConsensus).toHaveBeenCalledTimes(2);
     expect(mockMarketService.resolveMarket).toHaveBeenCalledTimes(1);
-    expect(mockMarketService.resolveMarket).toHaveBeenCalledWith('market-good', 1, 'oracle-consensus');
+    expect(mockMarketService.resolveMarket).toHaveBeenCalledWith(
+      'market-good',
+      1,
+      'oracle-consensus'
+    );
   });
 
   it('should return early and not call oracle if fetching markets fails', async () => {

@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from 'vitest';
 import { Keypair } from '@stellar/stellar-sdk';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
@@ -9,7 +17,14 @@ const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 // Import services
 import { SessionService } from '../src/services/session.service.js';
 import { StellarService } from '../src/services/stellar.service.js';
-import { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken, getAccessTokenTTLSeconds, getRefreshTokenTTLSeconds } from '../src/utils/jwt.js';
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+  getAccessTokenTTLSeconds,
+  getRefreshTokenTTLSeconds,
+} from '../src/utils/jwt.js';
 import { generateNonce } from '../src/utils/crypto.js';
 
 describe('Auth Integration Tests', () => {
@@ -53,7 +68,10 @@ describe('Auth Integration Tests', () => {
       expect(isValid).toBe(true);
 
       // Step 4: Consume nonce (simulating login)
-      const consumed = await sessionService.consumeNonce(publicKey, nonceData.nonce);
+      const consumed = await sessionService.consumeNonce(
+        publicKey,
+        nonceData.nonce
+      );
       expect(consumed).not.toBeNull();
 
       // Step 5: Generate tokens
@@ -109,7 +127,10 @@ describe('Auth Integration Tests', () => {
       await sessionService.consumeNonce(publicKey, nonceData.nonce);
 
       // Try to use same nonce again (replay attack)
-      const consumed = await sessionService.consumeNonce(publicKey, nonceData.nonce);
+      const consumed = await sessionService.consumeNonce(
+        publicKey,
+        nonceData.nonce
+      );
       expect(consumed).toBeNull();
     });
   });
@@ -260,7 +281,10 @@ describe('Auth Integration Tests', () => {
         })
       );
 
-      const consumed = await sessionService.consumeNonce(publicKey, expiredNonce);
+      const consumed = await sessionService.consumeNonce(
+        publicKey,
+        expiredNonce
+      );
       expect(consumed).toBeNull();
     });
 
@@ -302,9 +326,15 @@ describe('Auth Integration Tests', () => {
       const publicKey = keypair.publicKey();
 
       const nonceData = await sessionService.createNonce(publicKey);
-      const signature = keypair.sign(Buffer.from(nonceData.message)).toString('base64');
+      const signature = keypair
+        .sign(Buffer.from(nonceData.message))
+        .toString('base64');
 
-      const isValid = stellarService.verifySignature(publicKey, nonceData.message, signature);
+      const isValid = stellarService.verifySignature(
+        publicKey,
+        nonceData.message,
+        signature
+      );
       expect(isValid).toBe(true);
     });
 
@@ -313,7 +343,9 @@ describe('Auth Integration Tests', () => {
       const keypair2 = Keypair.random();
 
       const nonceData = await sessionService.createNonce(keypair1.publicKey());
-      const signature = keypair2.sign(Buffer.from(nonceData.message)).toString('base64');
+      const signature = keypair2
+        .sign(Buffer.from(nonceData.message))
+        .toString('base64');
 
       const isValid = stellarService.verifySignature(
         keypair1.publicKey(),
@@ -345,10 +377,16 @@ describe('Auth Integration Tests', () => {
       const publicKey = keypair.publicKey();
 
       const nonceData = await sessionService.createNonce(publicKey);
-      const signature = keypair.sign(Buffer.from(nonceData.message)).toString('base64');
+      const signature = keypair
+        .sign(Buffer.from(nonceData.message))
+        .toString('base64');
 
       const tamperedMessage = nonceData.message + ' TAMPERED';
-      const isValid = stellarService.verifySignature(publicKey, tamperedMessage, signature);
+      const isValid = stellarService.verifySignature(
+        publicKey,
+        tamperedMessage,
+        signature
+      );
       expect(isValid).toBe(false);
     });
   });
@@ -416,7 +454,10 @@ describe('Auth Integration Tests', () => {
     });
 
     it('should reject refresh token used as access token', () => {
-      const refreshToken = signRefreshToken({ userId: 'test', tokenId: 'test' });
+      const refreshToken = signRefreshToken({
+        userId: 'test',
+        tokenId: 'test',
+      });
 
       expect(() => verifyAccessToken(refreshToken)).toThrow();
     });

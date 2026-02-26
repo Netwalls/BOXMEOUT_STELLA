@@ -22,7 +22,8 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL ||
   'postgresql://postgres:password@localhost:5432/boxmeout_test';
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-chars!!';
+process.env.ENCRYPTION_KEY =
+  process.env.ENCRYPTION_KEY || 'test-encryption-key-32-chars!!';
 
 // Stellar test configuration
 process.env.ADMIN_WALLET_SECRET =
@@ -36,12 +37,11 @@ process.env.AMM_CONTRACT_ADDRESS =
 
 // Mock console methods to keep test output clean for middleware tests
 beforeEach(() => {
-  vi.spyOn(console, 'log').mockImplementation(() => { });
-  vi.spyOn(console, 'info').mockImplementation(() => { });
-  vi.spyOn(console, 'warn').mockImplementation(() => { });
-  vi.spyOn(console, 'error').mockImplementation(() => { });
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
-
 
 // Database setup (only for integration tests that actually need it)
 let prisma: PrismaClient | null = null;
@@ -57,7 +57,8 @@ beforeAll(async () => {
   }
 
   // Only setup database for integration tests
-  const hasDatabaseUrl = process.env.DATABASE_URL_TEST || process.env.DATABASE_URL;
+  const hasDatabaseUrl =
+    process.env.DATABASE_URL_TEST || process.env.DATABASE_URL;
 
   if (hasDatabaseUrl && !process.env.SKIP_DB_SETUP) {
     logger.info('Setting up test database for integration tests');

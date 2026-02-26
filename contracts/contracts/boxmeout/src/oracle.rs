@@ -246,16 +246,61 @@ impl OracleManager {
 
     /// Deregister an oracle node
     ///
-    /// TODO: Deregister Oracle
-    /// - Require admin authentication
-    /// - Validate oracle is registered
-    /// - Remove oracle from active_oracles list
-    /// - Mark as inactive (don't delete, keep for history)
-    /// - Prevent oracle from submitting new attestations
-    /// - Don't affect existing attestations
-    /// - Emit OracleDeregistered(oracle_address, timestamp)
-    pub fn deregister_oracle(_env: Env, _oracle: Address) {
-        todo!("See deregister oracle TODO above")
+    /// Admin-only function that removes an oracle from the active set.
+    /// Marks the oracle as inactive (keeps history) and recalculates the
+    /// consensus threshold. Existing attestations are not affected.
+    pub fn deregister_oracle(env: Env, oracle: Address) {
+        // 1. Require admin authentication
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, ADMIN_KEY))
+            .expect("Contract not initialized");
+        admin.require_auth();
+
+        // 2. Validate oracle is currently registered and active
+        let oracle_key = (Symbol::new(&env, "oracle"), oracle.clone());
+        let is_active: bool = env.storage().persistent().get(&oracle_key).unwrap_or(false);
+
+        if !is_active {
+            panic!("Oracle not registered or already inactive");
+        }
+
+        // 3. Mark oracle as inactive (don't delete, keep for history)
+        env.storage().persistent().set(&oracle_key, &false);
+
+        // 4. Decrement oracle count
+        let oracle_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, ORACLE_COUNT_KEY))
+            .unwrap_or(0);
+        if oracle_count > 0 {
+            let new_count = oracle_count - 1;
+            env.storage()
+                .persistent()
+                .set(&Symbol::new(&env, ORACLE_COUNT_KEY), &new_count);
+
+            // 5. Recalculate consensus threshold
+            // Threshold should not exceed the number of active oracles
+            let current_threshold: u32 = env
+                .storage()
+                .persistent()
+                .get(&Symbol::new(&env, REQUIRED_CONSENSUS_KEY))
+                .unwrap_or(0);
+            if current_threshold > new_count {
+                env.storage()
+                    .persistent()
+                    .set(&Symbol::new(&env, REQUIRED_CONSENSUS_KEY), &new_count);
+            }
+        }
+
+        // 6. Emit OracleDeregistered event
+        OracleDeregisteredEvent {
+            oracle,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
     }
 
     /// Register a market with its resolution time for attestation validation

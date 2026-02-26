@@ -1,7 +1,15 @@
 // backend/tests/integration/trading.integration.test.ts
 // Integration tests for Trading API endpoints (both direct and user-signed flow)
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from 'vitest';
 import request from 'supertest';
 import app from '../../src/index.js';
 import { MarketStatus, TradeType, TradeStatus } from '@prisma/client';
@@ -52,14 +60,18 @@ vi.mock('../../src/database/prisma.js', () => ({
       update: vi.fn(),
       findFirst: vi.fn(),
     },
-    $transaction: vi.fn((callback) => callback({
-      user: {
-        update: vi.fn().mockResolvedValue({ id: 'test-user-id', usdcBalance: 900 }),
-      },
-      market: {
-        update: vi.fn().mockResolvedValue({ id: 'test-market-id' }),
-      },
-    })),
+    $transaction: vi.fn((callback) =>
+      callback({
+        user: {
+          update: vi
+            .fn()
+            .mockResolvedValue({ id: 'test-user-id', usdcBalance: 900 }),
+        },
+        market: {
+          update: vi.fn().mockResolvedValue({ id: 'test-market-id' }),
+        },
+      })
+    ),
   },
 }));
 
@@ -82,7 +94,9 @@ describe('Trading API - User-Signed Transaction Flow', () => {
       } as any);
 
       // Mock AMM response
-      vi.mocked(ammService.buildBuySharesTx).mockResolvedValue('AAAA-UNSIGNED-XDR');
+      vi.mocked(ammService.buildBuySharesTx).mockResolvedValue(
+        'AAAA-UNSIGNED-XDR'
+      );
 
       const response = await request(app)
         .post('/api/markets/market-1/build-tx/buy')
@@ -431,7 +445,10 @@ describe('Trading API - Odds & Liquidity', () => {
 
     expect(response.body.success).toBe(true);
     expect(response.body.data).toHaveProperty('lpTokensMinted', '500');
-    expect(response.body.data).toHaveProperty('txHash', 'mock-tx-hash-add-liquidity');
+    expect(response.body.data).toHaveProperty(
+      'txHash',
+      'mock-tx-hash-add-liquidity'
+    );
   });
 
   it('should remove liquidity successfully', async () => {

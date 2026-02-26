@@ -42,7 +42,9 @@ describe('UserRepository Integration Tests', () => {
     });
 
     it('should return null for non-existent email', async () => {
-      const found = await userRepo.findByEmail(`nonexistent-${Date.now()}@example.com`);
+      const found = await userRepo.findByEmail(
+        `nonexistent-${Date.now()}@example.com`
+      );
       expect(found).toBeNull();
     });
   });
@@ -101,8 +103,11 @@ describe('UserRepository Integration Tests', () => {
         passwordHash: 'hashed_password',
       });
 
-      const walletAddress = 'GDNX7YG5NRHBKIZITO3FIFYXWLDDAL27IPXLQZSNJBZIIVPDTXJS3YNM';
-      const updated = await userRepo.updateWalletAddress(user.id, walletAddress);
+      const walletAddress = `GTEST${timestamp}ABCDEFGHIJKLMNOPQRSTUVWXYZ`;
+      const updated = await userRepo.updateWalletAddress(
+        user.id,
+        walletAddress
+      );
 
       expect(updated.walletAddress).toBe(walletAddress);
     });

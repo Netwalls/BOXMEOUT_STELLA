@@ -74,9 +74,15 @@ describe('MarketRepository Integration Tests', () => {
       });
 
       // Verify wrestling market is in results and boxing market is not
-      expect(wrestlingMarkets.some(m => m.id === wrestlingMarket.id)).toBe(true);
-      expect(wrestlingMarkets.some(m => m.id === boxingMarket.id)).toBe(false);
-      expect(wrestlingMarkets.every(m => m.category === MarketCategory.WRESTLING)).toBe(true);
+      expect(wrestlingMarkets.some((m) => m.id === wrestlingMarket.id)).toBe(
+        true
+      );
+      expect(wrestlingMarkets.some((m) => m.id === boxingMarket.id)).toBe(
+        false
+      );
+      expect(
+        wrestlingMarkets.every((m) => m.category === MarketCategory.WRESTLING)
+      ).toBe(true);
     });
   });
 
@@ -185,7 +191,7 @@ describe('MarketRepository Integration Tests', () => {
         closingAt: new Date(Date.now() + 86400000),
       });
 
-        // Removed failing test: should return markets sorted by volume
+      // Removed failing test: should return markets sorted by volume
     });
   });
 });

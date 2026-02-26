@@ -35,7 +35,13 @@ class TestBlockchainService extends BaseBlockchainService {
     super('TestService');
   }
 
-  public async publicWaitForTransaction(txHash: string, fn: string, params: any, netRetries?: number, pollRetries?: number) {
+  public async publicWaitForTransaction(
+    txHash: string,
+    fn: string,
+    params: any,
+    netRetries?: number,
+    pollRetries?: number
+  ) {
     return this.waitForTransaction(txHash, fn, params, netRetries, pollRetries);
   }
 }
@@ -77,11 +83,12 @@ describe('BaseBlockchainService', () => {
     mockGetTransaction.mockRejectedValue(new Error('Network error'));
 
     // Max network retries = 2 for faster test
-    await expect(service.publicWaitForTransaction('hash', 'testFn', {}, 2, 10))
-      .rejects.toThrow('Max network retries reached');
+    await expect(
+      service.publicWaitForTransaction('hash', 'testFn', {}, 2, 10)
+    ).rejects.toThrow('Max network retries reached');
 
     expect(mockGetTransaction).toHaveBeenCalledTimes(2);
-    
+
     // Check DLQ call
     const { prisma } = await import('../../../src/database/prisma.js');
     expect(prisma.blockchainDeadLetterQueue.upsert).toHaveBeenCalled();
@@ -90,8 +97,9 @@ describe('BaseBlockchainService', () => {
   it('should stop and fail immediately to DLQ if transaction status is FAILED', async () => {
     mockGetTransaction.mockResolvedValueOnce({ status: 'FAILED' });
 
-    await expect(service.publicWaitForTransaction('hash', 'testFn', {}))
-      .rejects.toThrow('Transaction failed on blockchain');
+    await expect(
+      service.publicWaitForTransaction('hash', 'testFn', {})
+    ).rejects.toThrow('Transaction failed on blockchain');
 
     expect(mockGetTransaction).toHaveBeenCalledTimes(1);
     const { prisma } = await import('../../../src/database/prisma.js');

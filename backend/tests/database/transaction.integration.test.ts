@@ -1,6 +1,9 @@
 // Integration tests for transaction utilities
 import { describe, it, expect, beforeEach } from 'vitest';
-import { executeTransaction, executeTransactionWithRetry } from '../../src/database/transaction.js';
+import {
+  executeTransaction,
+  executeTransactionWithRetry,
+} from '../../src/database/transaction.js';
 import { UserRepository } from '../../src/repositories/user.repository.js';
 import { MarketRepository } from '../../src/repositories/market.repository.js';
 import { MarketCategory } from '@prisma/client';
@@ -13,7 +16,7 @@ describe('Transaction Utilities Integration Tests', () => {
     it('should commit transaction on success', async () => {
       const result = await executeTransaction(async (tx) => {
         const userRepoTx = new UserRepository(tx);
-        
+
         const user = await userRepoTx.createUser({
           email: `tx-success-${Date.now()}@example.com`,
           username: `txsuccess-${Date.now()}`,
@@ -36,7 +39,7 @@ describe('Transaction Utilities Integration Tests', () => {
       try {
         await executeTransaction(async (tx) => {
           const userRepoTx = new UserRepository(tx);
-          
+
           await userRepoTx.createUser({
             email,
             username: `txrollback-${Date.now()}`,
@@ -65,7 +68,7 @@ describe('Transaction Utilities Integration Tests', () => {
       });
 
       const contractAddress = `CONTRACT_PARTIAL_${Date.now()}`;
-      
+
       try {
         await executeTransaction(async (tx) => {
           const userRepoTx = new UserRepository(tx);
@@ -109,7 +112,7 @@ describe('Transaction Utilities Integration Tests', () => {
 
       const result = await executeTransactionWithRetry(async (tx) => {
         attemptCount++;
-        
+
         if (attemptCount < 2) {
           throw new Error('Simulated transient failure');
         }

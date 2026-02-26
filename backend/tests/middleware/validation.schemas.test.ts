@@ -76,9 +76,7 @@ describe('sanitizedString', () => {
   });
 
   it('should strip XSS payloads', () => {
-    const result = schema.parse(
-      'hello<script>alert("xss")</script>world'
-    );
+    const result = schema.parse('hello<script>alert("xss")</script>world');
     expect(result).toBe('helloworld');
   });
 
@@ -118,9 +116,7 @@ describe('Auth schemas', () => {
     });
 
     it('should reject invalid Stellar key - wrong length', () => {
-      expect(() =>
-        challengeBody.parse({ publicKey: 'GABCDEF' })
-      ).toThrow();
+      expect(() => challengeBody.parse({ publicKey: 'GABCDEF' })).toThrow();
     });
 
     it('should reject lowercase Stellar key', () => {
@@ -318,9 +314,7 @@ describe('Market schemas', () => {
 
     it('should accept missing resolutionTime (optional)', () => {
       const { resolutionTime, ...withoutResolution } = validMarket;
-      expect(() =>
-        createMarketBody.parse(withoutResolution)
-      ).not.toThrow();
+      expect(() => createMarketBody.parse(withoutResolution)).not.toThrow();
     });
 
     it('should strip XSS from title', () => {
@@ -334,8 +328,7 @@ describe('Market schemas', () => {
     it('should strip HTML from description', () => {
       const result = createMarketBody.parse({
         ...validMarket,
-        description:
-          'This <b>market</b> resolves YES if boxer A wins.',
+        description: 'This <b>market</b> resolves YES if boxer A wins.',
       });
       expect(result.description).toBe(
         'This market resolves YES if boxer A wins.'
@@ -361,15 +354,11 @@ describe('Market schemas', () => {
     });
 
     it('should reject zero liquidity', () => {
-      expect(() =>
-        createPoolBody.parse({ initialLiquidity: '0' })
-      ).toThrow();
+      expect(() => createPoolBody.parse({ initialLiquidity: '0' })).toThrow();
     });
 
     it('should reject non-numeric string', () => {
-      expect(() =>
-        createPoolBody.parse({ initialLiquidity: 'abc' })
-      ).toThrow();
+      expect(() => createPoolBody.parse({ initialLiquidity: 'abc' })).toThrow();
     });
 
     it('should reject decimal values', () => {
@@ -562,9 +551,7 @@ describe('Treasury schemas', () => {
     it('should accept valid distribution with one recipient', () => {
       expect(() =>
         distributeLeaderboardBody.parse({
-          recipients: [
-            { address: VALID_STELLAR_KEY, amount: '1000' },
-          ],
+          recipients: [{ address: VALID_STELLAR_KEY, amount: '1000' }],
         })
       ).not.toThrow();
     });
@@ -591,9 +578,7 @@ describe('Treasury schemas', () => {
         address: VALID_STELLAR_KEY,
         amount: '100',
       }));
-      expect(() =>
-        distributeLeaderboardBody.parse({ recipients })
-      ).toThrow();
+      expect(() => distributeLeaderboardBody.parse({ recipients })).toThrow();
     });
 
     it('should accept exactly 100 recipients', () => {
@@ -609,9 +594,7 @@ describe('Treasury schemas', () => {
     it('should reject invalid Stellar address in recipients', () => {
       expect(() =>
         distributeLeaderboardBody.parse({
-          recipients: [
-            { address: 'invalid-address', amount: '1000' },
-          ],
+          recipients: [{ address: 'invalid-address', amount: '1000' }],
         })
       ).toThrow();
     });
@@ -619,9 +602,7 @@ describe('Treasury schemas', () => {
     it('should reject zero amount', () => {
       expect(() =>
         distributeLeaderboardBody.parse({
-          recipients: [
-            { address: VALID_STELLAR_KEY, amount: '0' },
-          ],
+          recipients: [{ address: VALID_STELLAR_KEY, amount: '0' }],
         })
       ).toThrow();
     });
@@ -629,9 +610,7 @@ describe('Treasury schemas', () => {
     it('should reject non-numeric amount', () => {
       expect(() =>
         distributeLeaderboardBody.parse({
-          recipients: [
-            { address: VALID_STELLAR_KEY, amount: 'abc' },
-          ],
+          recipients: [{ address: VALID_STELLAR_KEY, amount: 'abc' }],
         })
       ).toThrow();
     });
@@ -723,9 +702,7 @@ describe('Shared primitives', () => {
 
   describe('uuidParam', () => {
     it('should accept valid UUID', () => {
-      expect(() =>
-        uuidParam.parse({ id: VALID_UUID })
-      ).not.toThrow();
+      expect(() => uuidParam.parse({ id: VALID_UUID })).not.toThrow();
     });
 
     it('should reject invalid UUID', () => {
@@ -739,15 +716,11 @@ describe('Shared primitives', () => {
 
   describe('marketIdParam', () => {
     it('should accept valid UUID', () => {
-      expect(() =>
-        marketIdParam.parse({ marketId: VALID_UUID })
-      ).not.toThrow();
+      expect(() => marketIdParam.parse({ marketId: VALID_UUID })).not.toThrow();
     });
 
     it('should reject invalid UUID', () => {
-      expect(() =>
-        marketIdParam.parse({ marketId: 'not-valid' })
-      ).toThrow();
+      expect(() => marketIdParam.parse({ marketId: 'not-valid' })).toThrow();
     });
   });
 });

@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Keypair } from '@stellar/stellar-sdk';
 import { StellarService } from '../../src/services/stellar.service.js';
-import { signAccessToken, verifyAccessToken, signRefreshToken, verifyRefreshToken } from '../../src/utils/jwt.js';
-import { generateNonce, buildSignatureMessage } from '../../src/utils/crypto.js';
+import {
+  signAccessToken,
+  verifyAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from '../../src/utils/jwt.js';
+import {
+  generateNonce,
+  buildSignatureMessage,
+} from '../../src/utils/crypto.js';
 import { AuthError } from '../../src/types/auth.types.js';
 
 describe('StellarService', () => {
@@ -101,7 +109,10 @@ describe('JWT Utils', () => {
     });
 
     it('should reject refresh token as access token', () => {
-      const refreshToken = signRefreshToken({ userId: 'user-123', tokenId: 'token-123' });
+      const refreshToken = signRefreshToken({
+        userId: 'user-123',
+        tokenId: 'token-123',
+      });
       expect(() => verifyAccessToken(refreshToken)).toThrow(AuthError);
     });
   });
