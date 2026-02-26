@@ -1079,8 +1079,7 @@ mod tests {
         let (amm, _usdc, initial_lp, _admin, market_id) = setup_amm_pool(&env);
 
         // Creator has 100% of pool: 1_000_000 LP, 1_000_000 total liquidity
-        let (lp_balance, share_bps, unrealized_pnl) =
-            amm.get_lp_position(&market_id, &initial_lp);
+        let (lp_balance, share_bps, unrealized_pnl) = amm.get_lp_position(&market_id, &initial_lp);
         assert_eq!(lp_balance, 1_000_000);
         assert_eq!(share_bps, 10000); // 100%
         assert_eq!(unrealized_pnl, 1_000_000);
