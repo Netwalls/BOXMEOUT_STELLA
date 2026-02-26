@@ -70,7 +70,7 @@ fn test_trade_history_buy_shares() {
     assert_eq!(trade.outcome, 1);
     assert_eq!(trade.amount, 5000);
     assert_eq!(trade.shares, shares_bought);
-    assert_eq!(trade.is_buy, true);
+    assert!(trade.is_buy);
     assert_eq!(trade.timestamp, env.ledger().timestamp());
 
     // Price should be the odds BEFORE the trade (or after? Usually after for historical price points, but record_trade uses get_odds which returns CURRENT odds)
@@ -102,7 +102,7 @@ fn test_trade_history_sell_shares() {
     assert_eq!(sell_trade.outcome, 1);
     assert_eq!(sell_trade.amount, payout);
     assert_eq!(sell_trade.shares, shares_bought);
-    assert_eq!(sell_trade.is_buy, false);
+    assert!(!sell_trade.is_buy);
 }
 
 #[test]

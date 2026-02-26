@@ -563,12 +563,12 @@ impl AMM {
             is_buy,
         };
 
-        let history_key = (Symbol::new(&env, "trade_history"), market_id.clone());
+        let history_key = (Symbol::new(env, "trade_history"), market_id.clone());
         let mut history: Vec<Trade> = env
             .storage()
             .persistent()
             .get(&history_key)
-            .unwrap_or(Vec::new(&env));
+            .unwrap_or(Vec::new(env));
 
         history.push_front(trade);
 
