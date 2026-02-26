@@ -195,24 +195,31 @@ describe('Market Lifecycle E2E', () => {
       }
     });
 
-    // Calculate winnings (90% return)
-    const winnings = Number(prediction.amountUsdc) * 1.9;
+    // Calculate winnings based on actual trade data
+    // User bought 100 shares at 0.55 USDC/share (cost: 55 USDC)
+    // Winner gets 1 USDC per share minus 2% fee
+    const sharesOwned = Number(trade.quantity);
+    const feePercentage = 0.02; // 2% platform fee
+    const grossPayout = sharesOwned; // 1 USDC per share for winners
+    const netPayout = grossPayout * (1 - feePercentage); // 100 * 0.98 = 98
+    const costBasis = Number(trade.totalAmount); // 55
+    const pnlUsd = netPayout - costBasis; // 98 - 55 = 43
     
     await prisma.prediction.update({
       where: { id: prediction.id },
       data: {
         status: 'SETTLED',
         isWinner: true,
-        pnlUsd: winnings - Number(prediction.amountUsdc),
+        pnlUsd: pnlUsd,
         settledAt: new Date()
       }
     });
 
-    // Update user balance with winnings
+    // Update user balance with net payout
     await prisma.user.update({
       where: { id: testUser.id },
       data: {
-        usdcBalance: { increment: winnings }
+        usdcBalance: { increment: netPayout }
       }
     });
 
