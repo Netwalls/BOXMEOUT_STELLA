@@ -1,7 +1,9 @@
 // contracts/amm.rs - Automated Market Maker for Outcome Shares
 // Enables trading YES/NO outcome shares with dynamic odds pricing (Polymarket model)
 
-use soroban_sdk::{contract, contractevent, contractimpl, token, Address, BytesN, Env, Symbol};
+use soroban_sdk::{
+    contract, contractevent, contractimpl, token, Address, BytesN, Env, Symbol, Vec,
+};
 
 #[contractevent]
 pub struct AmmInitializedEvent {
@@ -48,22 +50,6 @@ pub struct LiquidityRemovedEvent {
 }
 
 // Storage keys
-const ADMIN_KEY: &str = "admin";
-const FACTORY_KEY: &str = "factory";
-const USDC_KEY: &str = "usdc";
-const MAX_LIQUIDITY_CAP_KEY: &str = "max_liquidity_cap";
-const SLIPPAGE_PROTECTION_KEY: &str = "slippage_protection";
-const TRADING_FEE_KEY: &str = "trading_fee";
-const PRICING_MODEL_KEY: &str = "pricing_model";
-
-// Pool storage keys
-const POOL_YES_RESERVE_KEY: &str = "pool_yes_reserve";
-const POOL_NO_RESERVE_KEY: &str = "pool_no_reserve";
-const POOL_EXISTS_KEY: &str = "pool_exists";
-const POOL_K_KEY: &str = "pool_k";
-const POOL_LP_SUPPLY_KEY: &str = "pool_lp_supply";
-const POOL_LP_TOKENS_KEY: &str = "pool_lp_tokens";
-const USER_SHARES_KEY: &str = "user_shares";
 
 // Pool data structure
 #[derive(Clone)]
@@ -72,6 +58,18 @@ pub struct Pool {
     pub no_reserve: u128,
     pub total_liquidity: u128,
     pub created_at: u64,
+}
+
+#[soroban_sdk::contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Trade {
+    pub trader: Address,
+    pub outcome: u32,
+    pub amount: u128,
+    pub shares: u128,
+    pub price: u32,
+    pub timestamp: u64,
+    pub is_buy: bool,
 }
 
 #[contractevent]
@@ -126,37 +124,36 @@ impl AMM {
         // Store admin address
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, ADMIN_KEY), &admin);
+            .set(&Symbol::new(&env, "admin"), &admin);
 
         // Store factory address
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, FACTORY_KEY), &factory);
+            .set(&Symbol::new(&env, "factory"), &factory);
 
         // Store USDC token contract address
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, USDC_KEY), &usdc_token);
+            .set(&Symbol::new(&env, "usdc"), &usdc_token);
 
         // Set max_liquidity_cap per market
-        env.storage().persistent().set(
-            &Symbol::new(&env, MAX_LIQUIDITY_CAP_KEY),
-            &max_liquidity_cap,
-        );
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, "max_liquidity_cap"), &max_liquidity_cap);
 
         // Set slippage_protection default (2% = 200 basis points)
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, SLIPPAGE_PROTECTION_KEY), &200u32);
+            .set(&Symbol::new(&env, "slippage_protection"), &200u32);
 
         // Set trading fee (0.2% = 20 basis points)
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, TRADING_FEE_KEY), &20u32);
+            .set(&Symbol::new(&env, "trading_fee"), &20u32);
 
         // Set pricing_model (CPMM - Constant Product Market Maker)
         env.storage().persistent().set(
-            &Symbol::new(&env, PRICING_MODEL_KEY),
+            &Symbol::new(&env, "pricing_model"),
             &Symbol::new(&env, "CPMM"),
         );
 
@@ -175,7 +172,7 @@ impl AMM {
         creator.require_auth();
 
         // Check if pool already exists
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if env.storage().persistent().has(&pool_exists_key) {
             panic!("pool already exists");
         }
@@ -193,12 +190,12 @@ impl AMM {
         let k = yes_reserve * no_reserve;
 
         // Create storage keys for this pool using tuples
-        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
-        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id.clone());
-        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let yes_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
+        let k_key = (Symbol::new(&env, "pool_k"), market_id.clone());
+        let lp_supply_key = (Symbol::new(&env, "pool_lp_supply"), market_id.clone());
         let lp_balance_key = (
-            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            Symbol::new(&env, "pool_lp_tokens"),
             market_id.clone(),
             creator.clone(),
         );
@@ -218,7 +215,7 @@ impl AMM {
         let usdc_token: Address = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
+            .get(&Symbol::new(&env, "usdc"))
             .expect("usdc token not set");
 
         let token_client = token::Client::new(&env, &usdc_token);
@@ -261,14 +258,14 @@ impl AMM {
         }
 
         // Check if pool exists
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             panic!("pool does not exist");
         }
 
         // Get current reserves
-        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let yes_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
 
         let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
         let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
@@ -278,13 +275,13 @@ impl AMM {
         }
 
         // Calculate trading fee (20 basis points = 0.2%)
-        let trading_fee_bps: u128 = env
+        let trading_fee_bps: u32 = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, TRADING_FEE_KEY))
+            .get(&Symbol::new(&env, "trading_fee"))
             .unwrap_or(20);
 
-        let fee_amount = (amount * trading_fee_bps) / 10000;
+        let fee_amount = (amount * trading_fee_bps as u128) / 10000;
         let amount_after_fee = amount - fee_amount;
 
         // CPMM calculation: shares_out = (amount_in * reserve_out) / (reserve_in + amount_in)
@@ -350,7 +347,7 @@ impl AMM {
         let usdc_token: Address = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
+            .get(&Symbol::new(&env, "usdc"))
             .expect("usdc token not set");
 
         let token_client = token::Client::new(&env, &usdc_token);
@@ -358,7 +355,7 @@ impl AMM {
 
         // Update User Shares Balance
         let user_share_key = (
-            Symbol::new(&env, USER_SHARES_KEY),
+            Symbol::new(&env, "user_shares"),
             market_id.clone(),
             buyer.clone(),
             outcome,
@@ -370,14 +367,19 @@ impl AMM {
 
         // Record trade (Optional: Simplified to event only for this resolution)
         BuySharesEvent {
-            buyer,
-            market_id,
+            buyer: buyer.clone(),
+            market_id: market_id.clone(),
             outcome,
             shares_out,
             amount,
             fee_amount,
         }
         .publish(&env);
+
+        // Record trade in history
+        Self::record_trade(
+            &env, &market_id, buyer, outcome, amount, shares_out, true, // is_buy
+        );
 
         shares_out
     }
@@ -402,14 +404,14 @@ impl AMM {
         }
 
         // Check if pool exists
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             panic!("pool does not exist");
         }
 
         // Check user share balance
         let user_share_key = (
-            Symbol::new(&env, USER_SHARES_KEY),
+            Symbol::new(&env, "user_shares"),
             market_id.clone(),
             seller.clone(),
             outcome,
@@ -420,8 +422,8 @@ impl AMM {
         }
 
         // Get current reserves
-        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let yes_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
 
         let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
         let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
@@ -442,13 +444,13 @@ impl AMM {
         };
 
         // Calculate trading fee (20 basis points = 0.2%)
-        let trading_fee_bps: u128 = env
+        let trading_fee_bps: u32 = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, TRADING_FEE_KEY))
+            .get(&Symbol::new(&env, "trading_fee"))
             .unwrap_or(20);
 
-        let fee_amount = (payout * trading_fee_bps) / 10000;
+        let fee_amount = (payout * trading_fee_bps as u128) / 10000;
         let payout_after_fee = payout - fee_amount;
 
         // Slippage protection
@@ -495,7 +497,7 @@ impl AMM {
         let usdc_address: Address = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
+            .get(&Symbol::new(&env, "usdc"))
             .expect("USDC token not configured");
         let usdc_client = soroban_sdk::token::Client::new(&env, &usdc_address);
 
@@ -507,8 +509,8 @@ impl AMM {
 
         // Emit SellShares event
         SellSharesEvent {
-            seller,
-            market_id,
+            seller: seller.clone(),
+            market_id: market_id.clone(),
             outcome,
             shares,
             payout_after_fee,
@@ -516,7 +518,65 @@ impl AMM {
         }
         .publish(&env);
 
+        // Record trade in history
+        Self::record_trade(
+            &env,
+            &market_id,
+            seller,
+            outcome,
+            payout_after_fee,
+            shares,
+            false, // is_buy
+        );
+
         payout_after_fee
+    }
+
+    /// Retrieve recent trade history for a market
+    pub fn get_trade_history(env: Env, market_id: BytesN<32>) -> Vec<Trade> {
+        let history_key = (Symbol::new(&env, "trade_history"), market_id);
+        env.storage()
+            .persistent()
+            .get(&history_key)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    fn record_trade(
+        env: &Env,
+        market_id: &BytesN<32>,
+        trader: Address,
+        outcome: u32,
+        amount: u128,
+        shares: u128,
+        is_buy: bool,
+    ) {
+        let (yes_odds, no_odds) = Self::get_odds(env.clone(), market_id.clone());
+        let price = if outcome == 1 { yes_odds } else { no_odds };
+
+        let trade = Trade {
+            trader,
+            outcome,
+            amount,
+            shares,
+            price,
+            timestamp: env.ledger().timestamp(),
+            is_buy,
+        };
+
+        let history_key = (Symbol::new(env, "trade_history"), market_id.clone());
+        let mut history: Vec<Trade> = env
+            .storage()
+            .persistent()
+            .get(&history_key)
+            .unwrap_or(Vec::new(env));
+
+        history.push_front(trade);
+
+        if history.len() > 100 {
+            history.pop_back();
+        }
+
+        env.storage().persistent().set(&history_key, &history);
     }
 
     /// Calculate current odds for an outcome
@@ -525,15 +585,15 @@ impl AMM {
     /// Read-only function with no state changes
     pub fn get_odds(env: Env, market_id: BytesN<32>) -> (u32, u32) {
         // Check if pool exists
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             // No pool exists - return 50/50 odds
             return (5000, 5000);
         }
 
         // Get pool reserves
-        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let yes_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
 
         let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
         let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
@@ -589,17 +649,17 @@ impl AMM {
             panic!("usdc amount must be greater than 0");
         }
 
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             panic!("pool does not exist");
         }
 
-        let yes_reserve_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_reserve_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
-        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id.clone());
-        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let yes_reserve_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_reserve_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
+        let k_key = (Symbol::new(&env, "pool_k"), market_id.clone());
+        let lp_supply_key = (Symbol::new(&env, "pool_lp_supply"), market_id.clone());
         let lp_balance_key = (
-            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            Symbol::new(&env, "pool_lp_tokens"),
             market_id.clone(),
             lp_provider.clone(),
         );
@@ -678,7 +738,7 @@ impl AMM {
         let usdc_token: Address = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
+            .get(&Symbol::new(&env, "usdc"))
             .expect("usdc token not set");
         let token_client = token::Client::new(&env, &usdc_token);
         token_client.transfer(
@@ -718,18 +778,18 @@ impl AMM {
         }
 
         // Check if pool exists for this market
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             panic!("pool does not exist");
         }
 
         // Create storage keys for this pool
-        let yes_reserve_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_reserve_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
-        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id.clone());
-        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let yes_reserve_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_reserve_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
+        let k_key = (Symbol::new(&env, "pool_k"), market_id.clone());
+        let lp_supply_key = (Symbol::new(&env, "pool_lp_supply"), market_id.clone());
         let lp_balance_key = (
-            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            Symbol::new(&env, "pool_lp_tokens"),
             market_id.clone(),
             lp_provider.clone(),
         );
@@ -812,7 +872,7 @@ impl AMM {
         let usdc_token: Address = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, USDC_KEY))
+            .get(&Symbol::new(&env, "usdc"))
             .expect("usdc token not set");
 
         let token_client = token::Client::new(&env, &usdc_token);
@@ -840,14 +900,14 @@ impl AMM {
     /// Returns pool information for frontend display
     pub fn get_pool_state(env: Env, market_id: BytesN<32>) -> (u128, u128, u128, u32, u32) {
         // Check if pool exists
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             return (0, 0, 0, 5000, 5000); // No pool: zero reserves, 50/50 odds
         }
 
         // Get pool reserves
-        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let yes_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
 
         let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
         let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
@@ -862,12 +922,12 @@ impl AMM {
 
     /// Get current pool constant product value.
     pub fn get_pool_k(env: Env, market_id: BytesN<32>) -> u128 {
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             return 0;
         }
 
-        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id);
+        let k_key = (Symbol::new(&env, "pool_k"), market_id);
         env.storage().persistent().get(&k_key).unwrap_or(0)
     }
 
@@ -882,14 +942,14 @@ impl AMM {
     /// Returns (0, 0) for invalid inputs (zero reserves)
     pub fn get_current_prices(env: Env, market_id: BytesN<32>) -> (u32, u32) {
         // Check if pool exists
-        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        let pool_exists_key = (Symbol::new(&env, "pool_exists"), market_id.clone());
         if !env.storage().persistent().has(&pool_exists_key) {
             return (0, 0); // No pool exists
         }
 
         // Get pool reserves
-        let yes_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
-        let no_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let yes_key = (Symbol::new(&env, "pool_yes_reserve"), market_id.clone());
+        let no_key = (Symbol::new(&env, "pool_no_reserve"), market_id.clone());
 
         let yes_reserve: u128 = env.storage().persistent().get(&yes_key).unwrap_or(0);
         let no_reserve: u128 = env.storage().persistent().get(&no_key).unwrap_or(0);
@@ -900,10 +960,10 @@ impl AMM {
         }
 
         // Get trading fee (default 20 basis points = 0.2%)
-        let trading_fee_bps: u128 = env
+        let trading_fee_bps: u32 = env
             .storage()
             .persistent()
-            .get(&Symbol::new(&env, TRADING_FEE_KEY))
+            .get(&Symbol::new(&env, "trading_fee"))
             .unwrap_or(20);
 
         let total_liquidity = yes_reserve + no_reserve;
@@ -920,8 +980,8 @@ impl AMM {
         // Effective price = base_price * (1 + fee_rate)
         // Since fee is in basis points: effective = base * (10000 + fee) / 10000
 
-        let yes_price = ((yes_base_price * (10000 + trading_fee_bps)) / 10000) as u32;
-        let no_price = ((no_base_price * (10000 + trading_fee_bps)) / 10000) as u32;
+        let yes_price = ((yes_base_price * (10000 + trading_fee_bps as u128)) / 10000) as u32;
+        let no_price = ((no_base_price * (10000 + trading_fee_bps as u128)) / 10000) as u32;
 
         (yes_price, no_price)
     }
