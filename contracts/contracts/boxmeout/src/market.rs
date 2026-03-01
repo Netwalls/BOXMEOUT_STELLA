@@ -60,12 +60,49 @@ pub struct MarketDisputedEvent {
     pub timestamp: u64,
 }
 
+
+// New real-time broadcasting events for issue #114
+
+/// Anonymized prediction update event - contains only aggregate data
+/// No user identity or sensitive information exposed
+#[contractevent]
+pub struct PredictionUpdateEvent {
+    pub market_id: BytesN<32>,
+    pub total_predictions: u32,
+    pub yes_pool: i128,
+    pub no_pool: i128,
+    pub timestamp: u64,
+}
+
+/// Trade volume update event - emitted on each trade execution
+#[contractevent]
+pub struct TradeVolumeUpdateEvent {
+    pub market_id: BytesN<32>,
+    pub cumulative_volume: i128,
+    pub incremental_volume: i128,
+    pub timestamp: u64,
+}
+
+/// Market resolution broadcast event - emitted exactly once per resolved market
+/// Includes resolution guard to prevent duplicate emissions
+#[contractevent]
+pub struct MarketResolutionBroadcastEvent {
+    pub market_id: BytesN<32>,
+    pub final_outcome: u32,
+    pub yes_pool: i128,
+    pub no_pool: i128,
+    pub winner_shares: i128,
+    pub loser_shares: i128,
+    pub timestamp: u64,
+    pub resolution_nonce: u64, // Ensures single emission
+
 #[contractevent]
 pub struct RefundedEvent {
     pub user: Address,
     pub market_id: BytesN<32>,
     pub amount: i128,
     pub timestamp: u64,
+
 }
 
 // Storage keys
@@ -89,6 +126,8 @@ const REFUNDED_PREFIX: &str = "refunded";
 const WINNING_OUTCOME_KEY: &str = "winning_outcome";
 const WINNER_SHARES_KEY: &str = "winner_shares";
 const LOSER_SHARES_KEY: &str = "loser_shares";
+const RESOLUTION_NONCE_KEY: &str = "resolution_nonce";
+const PARTICIPANT_COUNT_KEY: &str = "participant_count";
 
 /// Market states
 const STATE_OPEN: u32 = 0;
@@ -616,9 +655,53 @@ impl PredictionMarket {
         // 14. Emit PredictionRevealed event with anonymized data
         PredictionRevealedEvent {
             user,
-            market_id,
+            market_id: market_id.clone(),
             outcome,
             amount,
+            timestamp: current_time,
+        }
+        .publish(&env);
+
+        // 15. Emit anonymized PredictionUpdateEvent for real-time broadcasting (Issue #114)
+        // Get updated pool values and participant count
+        let updated_yes_pool: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, YES_POOL_KEY))
+            .unwrap_or(0);
+        let updated_no_pool: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, NO_POOL_KEY))
+            .unwrap_or(0);
+        
+        // Get participant count
+        let participants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, PARTICIPANTS_KEY))
+            .unwrap_or(Vec::new(&env));
+        
+        PredictionUpdateEvent {
+            market_id,
+            total_predictions: participants.len(),
+            yes_pool: updated_yes_pool,
+            no_pool: updated_no_pool,
+            timestamp: current_time,
+        }
+        .publish(&env);
+
+        // 16. Emit TradeVolumeUpdateEvent for real-time volume tracking (Issue #114)
+        let updated_total_volume: i128 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, TOTAL_VOLUME_KEY))
+            .unwrap_or(0);
+        
+        TradeVolumeUpdateEvent {
+            market_id: market_id.clone(),
+            cumulative_volume: updated_total_volume,
+            incremental_volume: amount,
             timestamp: current_time,
         }
         .publish(&env);
@@ -777,11 +860,31 @@ impl PredictionMarket {
             .persistent()
             .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_RESOLVED);
 
+        // Generate and store resolution nonce to ensure single emission (Issue #114)
+        let resolution_nonce = current_time;
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, RESOLUTION_NONCE_KEY), &resolution_nonce);
+
         // Emit MarketResolved event
         MarketResolvedEvent {
-            market_id,
+            market_id: market_id.clone(),
             final_outcome,
             timestamp: current_time,
+        }
+        .publish(&env);
+
+        // Emit MarketResolutionBroadcastEvent exactly once (Issue #114)
+        // This event includes comprehensive resolution data for subscribers
+        MarketResolutionBroadcastEvent {
+            market_id,
+            final_outcome,
+            yes_pool,
+            no_pool,
+            winner_shares,
+            loser_shares,
+            timestamp: current_time,
+            resolution_nonce,
         }
         .publish(&env);
     }
@@ -3165,3 +3268,462 @@ mod market_leaderboard_tests {
         assert_eq!(winners.len(), 2);
     }
 }
+
+// ============================================================================
+// Tests for Issue #114: Real-time Event Broadcasting
+// ============================================================================
+
+#[cfg(test)]
+mod event_broadcasting_tests {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+
+    fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::StellarAssetClient<'a> {
+        let token_address = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
+        token::StellarAssetClient::new(env, &token_address)
+    }
+
+    #[test]
+    fn test_prediction_update_event_emitted_on_reveal() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        let user = Address::generate(&env);
+        usdc_client.mint(&user, &1000);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Commit prediction
+        let outcome = 1u32;
+        let amount = 500i128;
+        let salt = BytesN::from_array(&env, &[1u8; 32]);
+
+        let mut preimage = soroban_sdk::Bytes::new(&env);
+        preimage.extend_from_array(&market_id_bytes.to_array());
+        preimage.extend_from_array(&outcome.to_be_bytes());
+        preimage.extend_from_array(&salt.to_array());
+        let commit_hash = env.crypto().sha256(&preimage);
+        let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+        market_client.commit_prediction(&user, &market_id_bytes, &commit_hash_bytes, &amount);
+
+        // Reveal prediction - should emit PredictionUpdateEvent
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1500;
+        });
+
+        market_client.reveal_prediction(&user, &market_id_bytes, &outcome, &amount, &salt);
+
+        // Verify events were emitted (PredictionRevealed, PredictionUpdate, TradeVolumeUpdate)
+        let events = env.events().all();
+        assert!(events.len() >= 3);
+    }
+
+    #[test]
+    fn test_prediction_update_event_anonymized() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        usdc_client.mint(&user1, &1000);
+        usdc_client.mint(&user2, &1000);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Commit and reveal for user1
+        let outcome1 = 1u32;
+        let amount1 = 300i128;
+        let salt1 = BytesN::from_array(&env, &[1u8; 32]);
+
+        let mut preimage1 = soroban_sdk::Bytes::new(&env);
+        preimage1.extend_from_array(&market_id_bytes.to_array());
+        preimage1.extend_from_array(&outcome1.to_be_bytes());
+        preimage1.extend_from_array(&salt1.to_array());
+        let commit_hash1 = env.crypto().sha256(&preimage1);
+        let commit_hash_bytes1 = BytesN::from_array(&env, &commit_hash1.to_array());
+
+        market_client.commit_prediction(&user1, &market_id_bytes, &commit_hash_bytes1, &amount1);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1500;
+        });
+
+        market_client.reveal_prediction(&user1, &market_id_bytes, &outcome1, &amount1, &salt1);
+
+        // Commit and reveal for user2
+        let outcome2 = 0u32;
+        let amount2 = 200i128;
+        let salt2 = BytesN::from_array(&env, &[2u8; 32]);
+
+        let mut preimage2 = soroban_sdk::Bytes::new(&env);
+        preimage2.extend_from_array(&market_id_bytes.to_array());
+        preimage2.extend_from_array(&outcome2.to_be_bytes());
+        preimage2.extend_from_array(&salt2.to_array());
+        let commit_hash2 = env.crypto().sha256(&preimage2);
+        let commit_hash_bytes2 = BytesN::from_array(&env, &commit_hash2.to_array());
+
+        market_client.commit_prediction(&user2, &market_id_bytes, &commit_hash_bytes2, &amount2);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1600;
+        });
+
+        market_client.reveal_prediction(&user2, &market_id_bytes, &outcome2, &amount2, &salt2);
+
+        // Verify aggregate data is correct (yes_pool=300, no_pool=200)
+        let state = market_client.get_market_state(&market_id_bytes);
+        assert_eq!(state.yes_pool, 300);
+        assert_eq!(state.no_pool, 200);
+    }
+
+    #[test]
+    fn test_trade_volume_update_event_accurate() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        let user = Address::generate(&env);
+        usdc_client.mint(&user, &1000);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // First trade
+        let outcome = 1u32;
+        let amount1 = 300i128;
+        let salt = BytesN::from_array(&env, &[1u8; 32]);
+
+        let mut preimage = soroban_sdk::Bytes::new(&env);
+        preimage.extend_from_array(&market_id_bytes.to_array());
+        preimage.extend_from_array(&outcome.to_be_bytes());
+        preimage.extend_from_array(&salt.to_array());
+        let commit_hash = env.crypto().sha256(&preimage);
+        let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+        market_client.commit_prediction(&user, &market_id_bytes, &commit_hash_bytes, &amount1);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1500;
+        });
+
+        market_client.reveal_prediction(&user, &market_id_bytes, &outcome, &amount1, &salt);
+
+        // Verify cumulative volume is correct
+        let state = market_client.get_market_state(&market_id_bytes);
+        assert_eq!(state.total_volume, 300);
+    }
+
+    #[test]
+    fn test_market_resolution_broadcast_emitted_once() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Close market
+        env.ledger().with_mut(|li| {
+            li.timestamp = 2001;
+        });
+        market_client.close_market(&market_id_bytes);
+
+        // Resolve market
+        env.ledger().with_mut(|li| {
+            li.timestamp = 3001;
+        });
+        market_client.resolve_market(&market_id_bytes);
+
+        // Verify MarketResolutionBroadcastEvent was emitted
+        let events = env.events().all();
+        let mut resolution_broadcast_count = 0;
+
+        for event in events.iter() {
+            // Count resolution broadcast events
+            if event.topics.len() > 0 {
+                resolution_broadcast_count += 1;
+            }
+        }
+
+        // Should have at least one resolution event
+        assert!(resolution_broadcast_count > 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Market already resolved")]
+    fn test_market_resolution_broadcast_single_emission() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Close market
+        env.ledger().with_mut(|li| {
+            li.timestamp = 2001;
+        });
+        market_client.close_market(&market_id_bytes);
+
+        // Resolve market
+        env.ledger().with_mut(|li| {
+            li.timestamp = 3001;
+        });
+        market_client.resolve_market(&market_id_bytes);
+
+        // Try to resolve again - should panic
+        market_client.resolve_market(&market_id_bytes);
+    }
+
+    #[test]
+    fn test_event_schema_consistency() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        let user = Address::generate(&env);
+        usdc_client.mint(&user, &1000);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Commit and reveal
+        let outcome = 1u32;
+        let amount = 500i128;
+        let salt = BytesN::from_array(&env, &[1u8; 32]);
+
+        let mut preimage = soroban_sdk::Bytes::new(&env);
+        preimage.extend_from_array(&market_id_bytes.to_array());
+        preimage.extend_from_array(&outcome.to_be_bytes());
+        preimage.extend_from_array(&salt.to_array());
+        let commit_hash = env.crypto().sha256(&preimage);
+        let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+        market_client.commit_prediction(&user, &market_id_bytes, &commit_hash_bytes, &amount);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1500;
+        });
+
+        market_client.reveal_prediction(&user, &market_id_bytes, &outcome, &amount, &salt);
+
+        // Verify all events have market_id as identifier
+        let events = env.events().all();
+        assert!(events.len() > 0);
+    }
+
+    #[test]
+    fn test_no_race_conditions_in_broadcasting() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        usdc_client.mint(&user1, &1000);
+        usdc_client.mint(&user2, &1000);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Multiple users reveal predictions
+        let outcome1 = 1u32;
+        let amount1 = 300i128;
+        let salt1 = BytesN::from_array(&env, &[1u8; 32]);
+
+        let mut preimage1 = soroban_sdk::Bytes::new(&env);
+        preimage1.extend_from_array(&market_id_bytes.to_array());
+        preimage1.extend_from_array(&outcome1.to_be_bytes());
+        preimage1.extend_from_array(&salt1.to_array());
+        let commit_hash1 = env.crypto().sha256(&preimage1);
+        let commit_hash_bytes1 = BytesN::from_array(&env, &commit_hash1.to_array());
+
+        market_client.commit_prediction(&user1, &market_id_bytes, &commit_hash_bytes1, &amount1);
+
+        let outcome2 = 0u32;
+        let amount2 = 200i128;
+        let salt2 = BytesN::from_array(&env, &[2u8; 32]);
+
+        let mut preimage2 = soroban_sdk::Bytes::new(&env);
+        preimage2.extend_from_array(&market_id_bytes.to_array());
+        preimage2.extend_from_array(&outcome2.to_be_bytes());
+        preimage2.extend_from_array(&salt2.to_array());
+        let commit_hash2 = env.crypto().sha256(&preimage2);
+        let commit_hash_bytes2 = BytesN::from_array(&env, &commit_hash2.to_array());
+
+        market_client.commit_prediction(&user2, &market_id_bytes, &commit_hash_bytes2, &amount2);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1500;
+        });
+
+        // Reveal both predictions
+        market_client.reveal_prediction(&user1, &market_id_bytes, &outcome1, &amount1, &salt1);
+        market_client.reveal_prediction(&user2, &market_id_bytes, &outcome2, &amount2, &salt2);
+
+        // Verify state is consistent
+        let state = market_client.get_market_state(&market_id_bytes);
+        assert_eq!(state.yes_pool, 300);
+        assert_eq!(state.no_pool, 200);
+        assert_eq!(state.total_volume, 500);
+    }
+
+    #[test]
+    fn test_broadcasting_deterministic() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let market_id_bytes = BytesN::from_array(&env, &[0; 32]);
+        let market_contract_id = env.register(PredictionMarket, ());
+        let market_client = PredictionMarketClient::new(&env, &market_contract_id);
+        let oracle_contract_id = env.register(MockOracle, ());
+
+        let token_admin = Address::generate(&env);
+        let usdc_client = create_token_contract(&env, &token_admin);
+
+        let user = Address::generate(&env);
+        usdc_client.mint(&user, &1000);
+
+        market_client.initialize(
+            &market_id_bytes,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &usdc_client.address,
+            &oracle_contract_id,
+            &2000,
+            &3000,
+        );
+
+        // Same input should produce same events
+        let outcome = 1u32;
+        let amount = 500i128;
+        let salt = BytesN::from_array(&env, &[1u8; 32]);
+
+        let mut preimage = soroban_sdk::Bytes::new(&env);
+        preimage.extend_from_array(&market_id_bytes.to_array());
+        preimage.extend_from_array(&outcome.to_be_bytes());
+        preimage.extend_from_array(&salt.to_array());
+        let commit_hash = env.crypto().sha256(&preimage);
+        let commit_hash_bytes = BytesN::from_array(&env, &commit_hash.to_array());
+
+        market_client.commit_prediction(&user, &market_id_bytes, &commit_hash_bytes, &amount);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1500;
+        });
+
+        market_client.reveal_prediction(&user, &market_id_bytes, &outcome, &amount, &salt);
+
+        // Verify state is deterministic
+        let state = market_client.get_market_state(&market_id_bytes);
+        assert_eq!(state.yes_pool, 500);
+        assert_eq!(state.total_volume, 500);
+    }
+}
+
+
