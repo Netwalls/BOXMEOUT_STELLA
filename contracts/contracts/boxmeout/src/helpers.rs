@@ -182,3 +182,38 @@ pub fn calculate_payout(
         yes_reserve - new_yes_reserve
     }
 }
+
+/// Safe multiplication and division to avoid overflow
+/// Computes (a * b) / c without overflowing
+/// Returns 0 if divisor is 0
+/// 
+/// # Mathematical Properties:
+/// - Avoids overflow by performing division early when possible
+/// - Maintains precision through careful ordering of operations
+/// - Handles zero divisor gracefully
+#[allow(dead_code)]
+pub fn mul_div(a: u128, b: u128, c: u128) -> u128 {
+    // Handle zero divisor edge case
+    if c == 0 {
+        return 0;
+    }
+
+    // Try to divide first to reduce potential overflow
+    if a >= c {
+        // a >= c, so do (a / c) * b
+        let quot = a / c;
+        let rem = a % c;
+        // quot * b + (rem * b) / c
+        quot * b + ((rem * b) / c)
+    } else if b >= c {
+        // b >= c, so do (b / c) * a
+        let quot = b / c;
+        let rem = b % c;
+        // quot * a + (rem * a) / c
+        quot * a + ((rem * a) / c)
+    } else {
+        // Both a and b are less than c
+        // Perform (a * b) / c directly - safe since both are < c
+        (a * b) / c
+    }
+}

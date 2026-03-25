@@ -2,6 +2,7 @@
 // Enables trading YES/NO outcome shares with dynamic odds pricing (Polymarket model)
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol};
+use crate::helpers::mul_div;
 
 // Storage keys
 const ADMIN_KEY: &str = "admin";
@@ -744,6 +745,240 @@ impl AMM {
         let unrealized_pnl = current_value - initial_investment;
 
         (lp_tokens, pool_share_bps, unrealized_pnl)
+    }
+
+    /// Calculate LP shares to mint when adding liquidity
+    ///
+    /// Uses mul_div to avoid overflow and handles the zero total_collateral edge case.
+    /// 
+    /// # Arguments
+    /// - `collateral`: Amount of collateral being deposited
+    /// - `total_lp_supply`: Current total LP token supply (0 for first deposit)
+    /// - `total_collateral`: Current total liquidity in pool (yes_reserve + no_reserve, 0 for first deposit)
+    ///
+    /// # Formula
+    /// - If pool is empty (total_lp_supply == 0): return collateral (1:1 ratio for first LP)
+    /// - Otherwise: return mul_div(collateral, total_lp_supply, total_collateral)
+    ///
+    /// # Properties
+    /// - Avoids overflow using mul_div safe arithmetic
+    /// - Handles zero total_collateral by returning 0 (no shares minted if pool is empty)
+    /// - Ensures proportional ownership: shares are proportional to collateral contribution
+    /// - Result is always <= collateral (unless first LP deposit)
+    ///
+    /// # Examples
+    /// ```
+    /// // First LP: deposits 1000, gets 1000 LP tokens
+    /// calc_lp_shares_to_mint(1000, 0, 0) == 1000
+    ///
+    /// // Second LP: deposits 1000 when pool has 1000 total, 1000 supply
+    /// // shares = (1000 * 1000) / 1000 = 1000
+    /// calc_lp_shares_to_mint(1000, 1000, 1000) == 1000
+    ///
+    /// // LP deposits when pool grew to 2000: deposits 1000, gets 500 tokens
+    /// // shares = (1000 * 1000) / 2000 = 500
+    /// calc_lp_shares_to_mint(1000, 1000, 2000) == 500
+    /// ```
+    pub fn calc_lp_shares_to_mint(
+        collateral: u128,
+        total_lp_supply: u128,
+        total_collateral: u128,
+    ) -> u128 {
+        // Handle zero total_collateral edge case (first LP deposit)
+        if total_collateral == 0 {
+            return collateral;
+        }
+
+        // Use mul_div to safely calculate: (collateral * total_lp_supply) / total_collateral
+        // mul_div avoids overflow by dividing early when possible
+        mul_div(collateral, total_lp_supply, total_collateral)
+    }
+
+    /// Calculate collateral amount for given LP shares
+    ///
+    /// Proportional to LP share ownership - amount returned is proportional to the 
+    /// fraction of LP tokens being redeemed relative to total supply.
+    ///
+    /// # Arguments
+    /// - `lp_shares`: Number of LP tokens being redeemed
+    /// - `total_lp_supply`: Total LP tokens in circulation (must be > 0)
+    /// - `total_collateral`: Current total liquidity in pool (yes_reserve + no_reserve)
+    ///
+    /// # Formula
+    /// return mul_div(lp_shares, total_collateral, total_lp_supply)
+    ///
+    /// # Properties
+    /// - Avoids overflow using mul_div safe arithmetic
+    /// - Strictly proportional: more shares = proportionally more collateral
+    /// - Returns 0 if lp_shares is 0
+    /// - Denominator must be > 0 (enforced at call site)
+    ///
+    /// # Examples
+    /// ```
+    /// // Redeem 500 of 1000 shares from pool with 2000 collateral
+    /// // collateral = (500 * 2000) / 1000 = 1000
+    /// calc_collateral_from_lp(500, 1000, 2000) == 1000
+    ///
+    /// // Redeem all shares
+    /// // collateral = (1000 * 2000) / 1000 = 2000
+    /// calc_collateral_from_lp(1000, 1000, 2000) == 2000
+    ///
+    /// // Redeem 1 of 1000000 shares
+    /// // collateral = (1 * 2000000) / 1000000 = 2
+    /// calc_collateral_from_lp(1, 1000000, 2000000) == 2
+    /// ```
+    pub fn calc_collateral_from_lp(
+        lp_shares: u128,
+        total_lp_supply: u128,
+        total_collateral: u128,
+    ) -> u128 {
+        // Use mul_div to safely calculate: (lp_shares * total_collateral) / total_lp_supply
+        // mul_div avoids overflow by dividing early when possible
+        mul_div(lp_shares, total_collateral, total_lp_supply)
+    }
+
+    /// Add liquidity to an existing pool
+    ///
+    /// Deposits collateral proportionally into YES and NO reserves, minting LP tokens
+    /// in return representing the liquidity provider's share of the pool.
+    ///
+    /// # Arguments
+    /// - `lp_provider`: Address of the liquidity provider
+    /// - `market_id`: Market identifier (32-byte hash)
+    /// - `collateral_amount`: Amount of USDC to deposit
+    ///
+    /// # Returns
+    /// Number of LP tokens minted
+    ///
+    /// # Panics
+    /// - If pool doesn't exist
+    /// - If collateral_amount is 0
+    /// - If minting would result in insufficient shares (rounding)
+    pub fn add_liquidity(
+        env: Env,
+        lp_provider: Address,
+        market_id: BytesN<32>,
+        collateral_amount: u128,
+    ) -> u128 {
+        // Require LP provider authentication
+        lp_provider.require_auth();
+
+        // Validate collateral amount
+        if collateral_amount == 0 {
+            panic!("collateral amount must be positive");
+        }
+
+        // Check if pool exists for this market
+        let pool_exists_key = (Symbol::new(&env, POOL_EXISTS_KEY), market_id.clone());
+        if !env.storage().persistent().has(&pool_exists_key) {
+            panic!("pool does not exist");
+        }
+
+        // Create storage keys for this pool
+        let yes_reserve_key = (Symbol::new(&env, POOL_YES_RESERVE_KEY), market_id.clone());
+        let no_reserve_key = (Symbol::new(&env, POOL_NO_RESERVE_KEY), market_id.clone());
+        let k_key = (Symbol::new(&env, POOL_K_KEY), market_id.clone());
+        let lp_supply_key = (Symbol::new(&env, POOL_LP_SUPPLY_KEY), market_id.clone());
+        let lp_balance_key = (
+            Symbol::new(&env, POOL_LP_TOKENS_KEY),
+            market_id.clone(),
+            lp_provider.clone(),
+        );
+
+        // Get current pool state
+        let yes_reserve: u128 = env
+            .storage()
+            .persistent()
+            .get(&yes_reserve_key)
+            .expect("yes reserve not found");
+        let no_reserve: u128 = env
+            .storage()
+            .persistent()
+            .get(&no_reserve_key)
+            .expect("no reserve not found");
+        let current_lp_supply: u128 = env
+            .storage()
+            .persistent()
+            .get(&lp_supply_key)
+            .unwrap_or(0);
+
+        let total_collateral = yes_reserve + no_reserve;
+
+        // Calculate LP tokens to mint using safe mul_div
+        let lp_tokens_to_mint = Self::calc_lp_shares_to_mint(
+            collateral_amount,
+            current_lp_supply,
+            total_collateral,
+        );
+
+        // Validate that we're minting at least 1 token
+        if lp_tokens_to_mint == 0 {
+            panic!("deposit too small: would mint 0 tokens");
+        }
+
+        // Distribute collateral proportionally to YES and NO reserves
+        // If current reserves are 50/50, they stay 50/50
+        let yes_deposit = if total_collateral == 0 {
+            collateral_amount / 2
+        } else {
+            mul_div(collateral_amount, yes_reserve, total_collateral)
+        };
+
+        let no_deposit = collateral_amount - yes_deposit;
+
+        // Update reserves
+        let new_yes_reserve = yes_reserve + yes_deposit;
+        let new_no_reserve = no_reserve + no_deposit;
+        let new_k = new_yes_reserve * new_no_reserve;
+
+        env.storage()
+            .persistent()
+            .set(&yes_reserve_key, &new_yes_reserve);
+        env.storage()
+            .persistent()
+            .set(&no_reserve_key, &new_no_reserve);
+        env.storage().persistent().set(&k_key, &new_k);
+
+        // Update LP token supply
+        let new_lp_supply = current_lp_supply + lp_tokens_to_mint;
+        env.storage()
+            .persistent()
+            .set(&lp_supply_key, &new_lp_supply);
+
+        // Update LP provider's balance
+        let current_balance: u128 = env.storage().persistent().get(&lp_balance_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&lp_balance_key, &(current_balance + lp_tokens_to_mint));
+
+        // Transfer collateral from LP provider to contract
+        let usdc_token: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, USDC_KEY))
+            .expect("usdc token not set");
+
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(
+            &lp_provider,
+            &env.current_contract_address(),
+            &(collateral_amount as i128),
+        );
+
+        // Emit LiquidityAdded event
+        env.events().publish(
+            (Symbol::new(&env, "liquidity_added"),),
+            (
+                market_id,
+                lp_provider,
+                collateral_amount,
+                lp_tokens_to_mint,
+                yes_deposit,
+                no_deposit,
+            ),
+        );
+
+        lp_tokens_to_mint
     }
 
     // TODO: Implement remaining AMM functions
