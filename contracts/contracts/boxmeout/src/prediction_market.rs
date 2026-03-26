@@ -288,6 +288,49 @@ impl PredictionMarketContract {
             .get(&DataKey::AmmPool(market_id))
             .ok_or(PredictionMarketError::PoolNotInitialized)
     }
+
+    /// Returns the CPMM implied probability for `outcome_id` in basis points (0–10 000).
+    ///
+    /// price_j = (product of all reserves except j) / (sum of such products) * 10_000
+    ///
+    /// Errors with `PoolNotInitialized` if the pool is absent.
+    pub fn get_outcome_price(
+        env: Env,
+        market_id: u64,
+        outcome_id: u32,
+    ) -> Result<u32, PredictionMarketError> {
+        let pool: AmmPool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AmmPool(market_id))
+            .ok_or(PredictionMarketError::PoolNotInitialized)?;
+
+        let reserves = &pool.reserves;
+        let n = reserves.len() as u32;
+        let idx = outcome_id as u32;
+
+        // product of all reserves except outcome_id
+        let complement_product: i128 = (0..n)
+            .filter(|&i| i != idx)
+            .map(|i| reserves.get(i).unwrap_or(1))
+            .fold(1i128, |acc, r| acc.saturating_mul(r));
+
+        // sum of complement products for every outcome
+        let total: i128 = (0..n)
+            .map(|j| {
+                (0..n)
+                    .filter(|&i| i != j)
+                    .map(|i| reserves.get(i).unwrap_or(1))
+                    .fold(1i128, |acc, r| acc.saturating_mul(r))
+            })
+            .fold(0i128, |acc, p| acc.saturating_add(p));
+
+        if total == 0 {
+            return Ok(0);
+        }
+
+        Ok((complement_product.saturating_mul(10_000) / total) as u32)
+    }
 }
 
 // ---------------------------------------------------------------------------
