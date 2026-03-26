@@ -24,7 +24,7 @@ use soroban_sdk::{Address, Env, Symbol};
 /// - Topics: [symbol!("initialized")]
 /// - Data:   (admin: Address)
 pub fn initialized(env: &Env, admin: Address) {
-    todo!("Emit initialized event")
+    env.events().publish((Symbol::new(env, "initialized"),), (admin,));
 }
 
 /// Emitted when the superadmin is transferred.
@@ -71,7 +71,10 @@ pub fn treasury_updated(env: &Env, new_treasury: Address) {
 /// - Topics: [symbol!("emrg_pause")]
 /// - Data:   (triggered_by: Address, timestamp: u64)
 pub fn emergency_paused(env: &Env, triggered_by: Address) {
-    todo!("Emit emergency_paused event")
+    env.events().publish(
+        (Symbol::new(env, "emrg_pause"),),
+        (triggered_by, env.ledger().timestamp()),
+    );
 }
 
 /// Emitted when the global emergency pause is lifted.
@@ -80,7 +83,10 @@ pub fn emergency_paused(env: &Env, triggered_by: Address) {
 /// - Topics: [symbol!("emrg_unpause")]
 /// - Data:   (triggered_by: Address, timestamp: u64)
 pub fn emergency_unpaused(env: &Env, triggered_by: Address) {
-    todo!("Emit emergency_unpaused event")
+    env.events().publish(
+        (Symbol::new(env, "emrg_unpause"),),
+        (triggered_by, env.ledger().timestamp()),
+    );
 }
 
 // =============================================================================
@@ -93,7 +99,7 @@ pub fn emergency_unpaused(env: &Env, triggered_by: Address) {
 /// - Topics: [symbol!("op_granted"), address]
 /// - Data:   (address: Address)
 pub fn operator_granted(env: &Env, address: Address) {
-    todo!("Emit operator_granted event")
+    env.events().publish((Symbol::new(env, "op_granted"), address.clone()), (address,));
 }
 
 /// Emitted when an address has its Operator role revoked.
@@ -102,7 +108,7 @@ pub fn operator_granted(env: &Env, address: Address) {
 /// - Topics: [symbol!("op_revoked"), address]
 /// - Data:   (address: Address)
 pub fn operator_revoked(env: &Env, address: Address) {
-    todo!("Emit operator_revoked event")
+    env.events().publish((Symbol::new(env, "op_revoked"), address.clone()), (address,));
 }
 
 // =============================================================================
@@ -154,7 +160,7 @@ pub fn market_metadata_updated(env: &Env, market_id: u64, updated_by: Address) {
 /// - Topics: [symbol!("mkt_oracle"), market_id as Symbol]
 /// - Data:   (market_id: u64, oracle: Address)
 pub fn market_oracle_set(env: &Env, market_id: u64, oracle: Address) {
-    todo!("Emit market_oracle_set event")
+    env.events().publish((Symbol::new(env, "mkt_oracle"), market_id), (market_id, oracle));
 }
 
 /// Emitted when the initial AMM liquidity is seeded and the market opens.
@@ -169,7 +175,10 @@ pub fn market_seeded(
     collateral: i128,
     lp_shares_minted: i128,
 ) {
-    todo!("Emit market_seeded event")
+    env.events().publish(
+        (Symbol::new(env, "mkt_seeded"), market_id),
+        (market_id, provider, collateral, lp_shares_minted),
+    );
 }
 
 /// Emitted when an open market is paused.
@@ -198,7 +207,10 @@ pub fn market_resumed(env: &Env, market_id: u64, resumed_by: Address) {
 /// - Topics: [symbol!("mkt_closed"), market_id as Symbol]
 /// - Data:   (market_id: u64, closed_by: Address, timestamp: u64)
 pub fn market_closed(env: &Env, market_id: u64, closed_by: Address) {
-    todo!("Emit market_closed event")
+    env.events().publish(
+        (Symbol::new(env, "mkt_closed"), market_id),
+        (market_id, closed_by, env.ledger().timestamp()),
+    );
 }
 
 /// Emitted when a market is cancelled.
@@ -207,7 +219,10 @@ pub fn market_closed(env: &Env, market_id: u64, closed_by: Address) {
 /// - Topics: [symbol!("mkt_cancelled"), market_id as Symbol]
 /// - Data:   (market_id: u64, cancelled_by: Address)
 pub fn market_cancelled(env: &Env, market_id: u64, cancelled_by: Address) {
-    todo!("Emit market_cancelled event")
+    env.events().publish(
+        (Symbol::new(env, "mkt_canceld"), market_id),
+        (market_id, cancelled_by),
+    );
 }
 
 /// Emitted when a market is fully finalised and positions become redeemable.
@@ -216,7 +231,10 @@ pub fn market_cancelled(env: &Env, market_id: u64, cancelled_by: Address) {
 /// - Topics: [symbol!("mkt_final"), market_id as Symbol]
 /// - Data:   (market_id: u64, winning_outcome_id: u32, finalized_at: u64)
 pub fn market_finalized(env: &Env, market_id: u64, winning_outcome_id: u32) {
-    todo!("Emit market_finalized event")
+    env.events().publish(
+        (Symbol::new(env, "mkt_final"), market_id),
+        (market_id, winning_outcome_id, env.ledger().timestamp()),
+    );
 }
 
 /// Emitted when admin uses the emergency resolve bypass.
@@ -230,7 +248,10 @@ pub fn market_emergency_resolved(
     winning_outcome_id: u32,
     admin: Address,
 ) {
-    todo!("Emit market_emergency_resolved event")
+    env.events().publish(
+        (Symbol::new(env, "emrg_reslv"), market_id),
+        (market_id, winning_outcome_id, admin),
+    );
 }
 
 // =============================================================================
@@ -243,7 +264,10 @@ pub fn market_emergency_resolved(
 /// - Topics: [symbol!("reported"), market_id as Symbol]
 /// - Data:   (market_id: u64, proposed_outcome_id: u32, oracle: Address, reported_at: u64)
 pub fn outcome_reported(env: &Env, market_id: u64, proposed_outcome_id: u32, oracle: Address) {
-    todo!("Emit outcome_reported event")
+    env.events().publish(
+        (Symbol::new(env, "reported"), market_id),
+        (market_id, proposed_outcome_id, oracle, env.ledger().timestamp()),
+    );
 }
 
 /// Emitted when a user files a dispute against the oracle report.
@@ -258,7 +282,10 @@ pub fn outcome_disputed(
     proposed_outcome_id: u32,
     bond: i128,
 ) {
-    todo!("Emit outcome_disputed event")
+    env.events().publish(
+        (Symbol::new(env, "disputed"), market_id),
+        (market_id, disputer, proposed_outcome_id, bond),
+    );
 }
 
 /// Emitted when admin rules on a dispute.
@@ -272,7 +299,10 @@ pub fn dispute_resolved(
     upheld: bool,
     final_outcome_id: Option<u32>,
 ) {
-    todo!("Emit dispute_resolved event")
+    env.events().publish(
+        (Symbol::new(env, "disp_reslvd"), market_id),
+        (market_id, upheld, final_outcome_id),
+    );
 }
 
 // =============================================================================
@@ -295,7 +325,10 @@ pub fn shares_bought(
     avg_price_bps: u32,
     total_fees: i128,
 ) {
-    todo!("Emit shares_bought event")
+    env.events().publish(
+        (Symbol::new(env, "bought"), market_id),
+        (market_id, buyer, outcome_id, collateral_in, shares_out, avg_price_bps, total_fees),
+    );
 }
 
 /// Emitted on every successful `sell_shares` call.
@@ -314,7 +347,10 @@ pub fn shares_sold(
     avg_price_bps: u32,
     total_fees: i128,
 ) {
-    todo!("Emit shares_sold event")
+    env.events().publish(
+        (Symbol::new(env, "sold"), market_id),
+        (market_id, seller, outcome_id, shares_in, collateral_out, avg_price_bps, total_fees),
+    );
 }
 
 /// Emitted when a user splits collateral into a complete set of outcome shares.
@@ -323,7 +359,10 @@ pub fn shares_sold(
 /// - Topics: [symbol!("pos_split"), market_id as Symbol]
 /// - Data:   (market_id: u64, caller: Address, collateral: i128, n_outcomes: u32)
 pub fn position_split(env: &Env, market_id: u64, caller: Address, collateral: i128) {
-    todo!("Emit position_split event")
+    env.events().publish(
+        (Symbol::new(env, "pos_split"), market_id),
+        (market_id, caller, collateral),
+    );
 }
 
 /// Emitted when a user merges a complete set of outcome shares back to collateral.
@@ -338,7 +377,10 @@ pub fn position_merged(
     shares: i128,
     collateral_returned: i128,
 ) {
-    todo!("Emit position_merged event")
+    env.events().publish(
+        (Symbol::new(env, "pos_merged"), market_id),
+        (market_id, caller, shares, collateral_returned),
+    );
 }
 
 // =============================================================================
@@ -357,7 +399,10 @@ pub fn position_redeemed(
     outcome_id: u32,
     collateral_out: i128,
 ) {
-    todo!("Emit position_redeemed event")
+    env.events().publish(
+        (Symbol::new(env, "redeemed"), market_id),
+        (market_id, holder, outcome_id, collateral_out),
+    );
 }
 
 /// Emitted when a user is refunded after market cancellation.
@@ -366,7 +411,10 @@ pub fn position_redeemed(
 /// - Topics: [symbol!("refunded"), market_id as Symbol]
 /// - Data:   (market_id: u64, holder: Address, total_refund: i128)
 pub fn position_refunded(env: &Env, market_id: u64, holder: Address, total_refund: i128) {
-    todo!("Emit position_refunded event")
+    env.events().publish(
+        (Symbol::new(env, "refunded"), market_id),
+        (market_id, holder, total_refund),
+    );
 }
 
 /// Emitted once per market successfully redeemed inside a `batch_redeem` call.
@@ -375,7 +423,10 @@ pub fn position_refunded(env: &Env, market_id: u64, holder: Address, total_refun
 /// - Topics: [symbol!("batch_redeem"), market_id as Symbol]
 /// - Data:   (market_id: u64, holder: Address, collateral_out: i128)
 pub fn batch_redeemed(env: &Env, market_id: u64, holder: Address, collateral_out: i128) {
-    todo!("Emit batch_redeemed event")
+    env.events().publish(
+        (Symbol::new(env, "batch_redm"), market_id),
+        (market_id, holder, collateral_out),
+    );
 }
 
 // =============================================================================
@@ -394,7 +445,10 @@ pub fn liquidity_added(
     collateral: i128,
     lp_shares_minted: i128,
 ) {
-    todo!("Emit liquidity_added event")
+    env.events().publish(
+        (Symbol::new(env, "liq_added"), market_id),
+        (market_id, provider, collateral, lp_shares_minted),
+    );
 }
 
 /// Emitted when LP shares are burned and collateral is returned.
@@ -422,7 +476,10 @@ pub fn liquidity_removed(
 /// - Topics: [symbol!("lp_fees"), market_id as Symbol]
 /// - Data:   (market_id: u64, provider: Address, fees_claimed: i128)
 pub fn lp_fees_claimed(env: &Env, market_id: u64, provider: Address, fees_claimed: i128) {
-    todo!("Emit lp_fees_claimed event")
+    env.events().publish(
+        (Symbol::new(env, "lp_fees"), market_id),
+        (market_id, provider, fees_claimed),
+    );
 }
 
 /// Emitted when the protocol treasury collects its fees from a resolved market.
@@ -431,7 +488,10 @@ pub fn lp_fees_claimed(env: &Env, market_id: u64, provider: Address, fees_claime
 /// - Topics: [symbol!("proto_fees"), market_id as Symbol]
 /// - Data:   (market_id: u64, treasury: Address, amount: i128)
 pub fn protocol_fees_collected(env: &Env, market_id: u64, treasury: Address, amount: i128) {
-    todo!("Emit protocol_fees_collected event")
+    env.events().publish(
+        (Symbol::new(env, "proto_fees"), market_id),
+        (market_id, treasury, amount),
+    );
 }
 
 /// Emitted when the market creator collects their fees.
@@ -440,5 +500,8 @@ pub fn protocol_fees_collected(env: &Env, market_id: u64, treasury: Address, amo
 /// - Topics: [symbol!("creator_fees"), market_id as Symbol]
 /// - Data:   (market_id: u64, creator: Address, amount: i128)
 pub fn creator_fees_collected(env: &Env, market_id: u64, creator: Address, amount: i128) {
-    todo!("Emit creator_fees_collected event")
+    env.events().publish(
+        (Symbol::new(env, "cretr_fees"), market_id),
+        (market_id, creator, amount),
+    );
 }

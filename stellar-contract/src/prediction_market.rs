@@ -2500,4 +2500,170 @@ mod tests {
         assert_eq!(collateral_out, 100);
         assert!(read_lp_position(&env, &contract_id, market_id, &provider).is_none());
     }
+
+    // =========================================================================
+    // Issue #50 — Events integration tests
+    // =========================================================================
+
+    #[test]
+    fn event_initialized_emits_correct_topic_and_data() {
+        let env = Env::default();
+        let contract_id = env.register(PredictionMarketContract, ());
+        let client = PredictionMarketContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let config = sample_config(&env, &admin);
+
+        env.mock_all_auths();
+        client.initialize(&config);
+
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+        let (_, topics, data) = events.get_unchecked(0);
+        assert_eq!(topics, vec![&env, Symbol::new(&env, "initialized").into_val(&env)]);
+        assert_eq!(data, (admin,).into_val(&env));
+    }
+
+    #[test]
+    fn event_emergency_paused_and_unpaused_emit_correct_topics() {
+        let env = Env::default();
+        env.ledger().set_timestamp(1_000);
+        let contract_id = env.register(PredictionMarketContract, ());
+        let client = PredictionMarketContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let config = sample_config(&env, &admin);
+
+        seed_config(&env, &contract_id, &config);
+
+        env.mock_all_auths();
+        client.emergency_pause();
+        client.emergency_unpause();
+
+        let events = env.events().all();
+        assert_eq!(events.len(), 2);
+
+        let (_, pause_topics, _) = events.get_unchecked(0);
+        assert_eq!(pause_topics, vec![&env, Symbol::new(&env, "emrg_pause").into_val(&env)]);
+
+        let (_, unpause_topics, _) = events.get_unchecked(1);
+        assert_eq!(unpause_topics, vec![&env, Symbol::new(&env, "emrg_unpause").into_val(&env)]);
+    }
+
+    #[test]
+    fn event_market_lifecycle_emits_correct_topics() {
+        let env = Env::default();
+        env.ledger().set_timestamp(500);
+        let contract_id = env.register(PredictionMarketContract, ());
+        let client = PredictionMarketContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let config = sample_config(&env, &admin);
+        let market_id = 1_u64;
+
+        seed_config(&env, &contract_id, &config);
+        seed_next_market_id(&env, &contract_id, market_id);
+        seed_emergency_pause(&env, &contract_id, false);
+
+        env.mock_all_auths();
+
+        // create_market → mkt_created
+        client.create_market(
+            &admin,
+            &SorobanString::from_str(&env, "Who wins?"),
+            &1_000_u64,
+            &2_000_u64,
+            &3_600_u64,
+            &sample_outcomes(&env),
+            &sample_metadata(&env),
+        );
+
+        let events = env.events().all();
+        let (_, topics, _) = events.get_unchecked(0);
+        assert_eq!(
+            topics,
+            vec![
+                &env,
+                Symbol::new(&env, "mkt_created").into_val(&env),
+                market_id.into_val(&env)
+            ]
+        );
+
+        // pause → mkt_paused
+        env.ledger().set_timestamp(600);
+        seed_market(&env, &contract_id, &Market {
+            market_id,
+            creator: admin.clone(),
+            question: SorobanString::from_str(&env, "Who wins?"),
+            betting_close_time: 1_000,
+            resolution_deadline: 2_000,
+            dispute_window_secs: 3_600,
+            outcomes: build_outcomes(&env, &sample_outcomes(&env)),
+            status: MarketStatus::Open,
+            winning_outcome_id: None,
+            protocol_fee_pool: 0, lp_fee_pool: 0, creator_fee_pool: 0,
+            total_collateral: 0, total_lp_shares: 0,
+            metadata: sample_metadata(&env),
+        });
+        client.pause_market(&admin, &market_id);
+        let events = env.events().all();
+        let (_, pause_topics, _) = events.last_unchecked();
+        assert_eq!(
+            pause_topics,
+            vec![&env, Symbol::new(&env, "mkt_paused").into_val(&env), market_id.into_val(&env)]
+        );
+    }
+
+    #[test]
+    fn event_liq_removed_emits_market_id_in_topic() {
+        let env = Env::default();
+        env.ledger().set_timestamp(2_000);
+        let contract_id = env.register(PredictionMarketContract, ());
+        let client = PredictionMarketContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let config = sample_config(&env, &admin);
+        let market_id = 5_u64;
+
+        seed_config(&env, &contract_id, &config);
+        seed_market(&env, &contract_id, &Market {
+            market_id,
+            creator: provider.clone(),
+            question: SorobanString::from_str(&env, "LP event test"),
+            betting_close_time: 1_500,
+            resolution_deadline: 2_500,
+            dispute_window_secs: 3_600,
+            outcomes: build_outcomes(&env, &sample_outcomes(&env)),
+            status: MarketStatus::Open,
+            winning_outcome_id: None,
+            protocol_fee_pool: 0, lp_fee_pool: 0, creator_fee_pool: 0,
+            total_collateral: 1_000, total_lp_shares: 100,
+            metadata: sample_metadata(&env),
+        });
+        seed_pool(&env, &contract_id, &AmmPool {
+            market_id,
+            reserves: vec![&env, 500_i128, 500_i128],
+            invariant_k: 250_000,
+            total_collateral: 1_000,
+        });
+        seed_lp_position(&env, &contract_id, &LpPosition {
+            market_id,
+            provider: provider.clone(),
+            lp_shares: 40,
+            collateral_contributed: 400,
+            fees_claimed: 0,
+        });
+
+        env.mock_all_auths();
+        client.remove_liquidity(&provider, &market_id, &20_i128);
+
+        let events = env.events().all();
+        let (_, topics, data) = events.get_unchecked(0);
+        assert_eq!(
+            topics,
+            vec![
+                &env,
+                Symbol::new(&env, "liq_removed").into_val(&env),
+                market_id.into_val(&env)
+            ]
+        );
+        assert_eq!(data, (market_id, provider, 200_i128, 20_i128).into_val(&env));
+    }
 }
