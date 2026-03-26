@@ -168,6 +168,8 @@ pub struct UserPosition {
     pub holder: Address,
     /// Number of shares held (SCALE = 10^7, same as Stellar stroops)
     pub shares: i128,
+    /// Collateral spent buying these shares (used for refunds on cancellation)
+    pub collateral_spent: i128,
     /// Whether this position has been redeemed after resolution
     pub redeemed: bool,
 }

@@ -309,11 +309,22 @@ fn create_user_position(env: &Env, client_address: &Address, market_id: u64, out
         outcome_id,
         holder: holder.clone(),
         shares,
+        collateral_spent: shares,
         redeemed: false,
     };
 
     env.as_contract(client_address, || {
         env.storage().persistent().set(&DataKey::UserPosition(market_id, outcome_id, holder.clone()), &position);
+        // maintain the UserMarketPositions index
+        let mut ids: soroban_sdk::Vec<u32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserMarketPositions(market_id, holder.clone()))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(env));
+        if !ids.contains(outcome_id) {
+            ids.push_back(outcome_id);
+        }
+        env.storage().persistent().set(&DataKey::UserMarketPositions(market_id, holder.clone()), &ids);
     });
 }
 
@@ -412,4 +423,71 @@ fn test_redeem_position_market_not_resolved() {
     create_user_position(&env, &client.address, market_id, outcome_id, &holder, shares);
 
     client.redeem_position(&holder, &market_id, &outcome_id);
+}
+
+fn create_cancelled_market(env: &Env, client_address: &Address, market_id: u64, creator: &Address) -> Market {
+    let mut market = create_test_market(env, client_address, market_id, creator);
+    market.status = crate::types::MarketStatus::Cancelled;
+    env.as_contract(client_address, || {
+        env.storage().persistent().set(&DataKey::Market(market_id), &market);
+    });
+    market
+}
+
+#[test]
+fn test_refund_position_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let holder = Address::generate(&env);
+    let market_id = 1u64;
+    let shares = 1000i128;
+
+    create_cancelled_market(&env, &client.address, market_id, &holder);
+    create_user_position(&env, &client.address, market_id, 0u32, &holder, shares);
+
+    let token_addr = get_token_address(&env, &client);
+    soroban_sdk::token::StellarAssetClient::new(&env, &token_addr).mint(&client.address, &shares);
+
+    let result = client.refund_position(&holder, &market_id);
+    assert_eq!(result, shares);
+}
+
+#[test]
+#[should_panic]
+fn test_refund_position_double_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let holder = Address::generate(&env);
+    let market_id = 1u64;
+    let shares = 1000i128;
+
+    create_cancelled_market(&env, &client.address, market_id, &holder);
+    create_user_position(&env, &client.address, market_id, 0u32, &holder, shares);
+
+    let token_addr = get_token_address(&env, &client);
+    soroban_sdk::token::StellarAssetClient::new(&env, &token_addr).mint(&client.address, &shares);
+
+    client.refund_position(&holder, &market_id);
+    // second call — all positions already redeemed, total == 0 → PositionNotFound
+    client.refund_position(&holder, &market_id);
+}
+
+#[test]
+#[should_panic]
+fn test_refund_position_market_not_cancelled() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let holder = Address::generate(&env);
+    let market_id = 1u64;
+
+    create_test_market(&env, &client.address, market_id, &holder);
+    create_user_position(&env, &client.address, market_id, 0u32, &holder, 1000);
+
+    client.refund_position(&holder, &market_id);
 }

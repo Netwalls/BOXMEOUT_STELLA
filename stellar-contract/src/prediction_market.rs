@@ -1326,7 +1326,55 @@ impl PredictionMarketContract {
         holder: Address,
         market_id: u64,
     ) -> Result<i128, PredictionMarketError> {
-        todo!("Implement full refund of all positions in a cancelled market")
+        let config = load_config(&env)?;
+        if is_emergency_paused(&env, &config) {
+            return Err(PredictionMarketError::EmergencyPaused);
+        }
+
+        holder.require_auth();
+
+        let market: Market = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Market(market_id))
+            .ok_or(PredictionMarketError::MarketNotFound)?;
+
+        if market.status != MarketStatus::Cancelled {
+            return Err(PredictionMarketError::InvalidMarketStatus);
+        }
+
+        let outcome_ids: Vec<u32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserMarketPositions(market_id, holder.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut total_refund: i128 = 0;
+        for outcome_id in outcome_ids.iter() {
+            let position_key = DataKey::UserPosition(market_id, outcome_id, holder.clone());
+            if let Some(mut position) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, UserPosition>(&position_key)
+            {
+                if !position.redeemed {
+                    total_refund += position.collateral_spent;
+                    position.redeemed = true;
+                    env.storage().persistent().set(&position_key, &position);
+                }
+            }
+        }
+
+        if total_refund == 0 {
+            return Err(PredictionMarketError::PositionNotFound);
+        }
+
+        let token = soroban_sdk::token::Client::new(&env, &config.token);
+        token.transfer(&env.current_contract_address(), &holder, &total_refund);
+
+        events::position_refunded(&env, market_id, holder, total_refund);
+
+        Ok(total_refund)
     }
 
     /// Batch-redeem positions across multiple markets in a single transaction.
