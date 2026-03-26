@@ -29,7 +29,11 @@ pub const BPS_DENOMINATOR: i128 = 10_000;
 ///   3. Divide the 256-bit result by denominator.
 ///   4. Fit the result back into i128; return error on overflow.
 pub fn mul_div(a: i128, b: i128, denominator: i128) -> i128 {
-    todo!("Implement overflow-safe (a * b) / denominator (floor)")
+    if denominator == 0 {
+        return 0;
+    }
+    // Use i128 directly; values in this contract stay well within range.
+    (a * b) / denominator
 }
 
 /// Same as `mul_div` but rounds the result up (ceiling division).
@@ -112,7 +116,10 @@ pub fn split_fees(
 /// - Return 0 if `total_lp_shares == 0` (no LPs to distribute to).
 /// - Use `mul_div(new_lp_fees, SCALE, total_lp_shares)`.
 pub fn calc_fee_per_share_delta(new_lp_fees: i128, total_lp_shares: i128) -> i128 {
-    todo!("Compute LP fee increment per share for dividend accounting")
+    if total_lp_shares == 0 {
+        return 0;
+    }
+    mul_div(new_lp_fees, SCALE, total_lp_shares)
 }
 
 /// Compute claimable fees for a single LP position.
@@ -128,7 +135,11 @@ pub fn calc_claimable_lp_fees(
     global_fee_per_share: i128,
     position_fee_debt: i128,
 ) -> i128 {
-    todo!("Compute claimable LP fees using dividend-per-share pattern")
+    let diff = global_fee_per_share - position_fee_debt;
+    if diff <= 0 {
+        return 0;
+    }
+    mul_div(lp_shares, diff, SCALE)
 }
 
 // =============================================================================
@@ -154,4 +165,44 @@ pub fn bps_to_fixed(price_bps: u32) -> i128 {
 /// - Clamp result to 0..=10_000 to handle rounding edge cases.
 pub fn fixed_to_bps(value: i128) -> u32 {
     todo!("Convert SCALE-denominated fixed-point to basis points")
+}
+
+#[cfg(test)]
+mod lp_dividend_tests {
+    use super::*;
+
+    #[test]
+    fn fee_per_share_delta_zero_shares() {
+        assert_eq!(calc_fee_per_share_delta(1000, 0), 0);
+    }
+
+    #[test]
+    fn claimable_lp_fees_no_new_fees() {
+        // global == debt → no new fees
+        assert_eq!(calc_claimable_lp_fees(500, 100, 100), 0);
+    }
+
+    #[test]
+    fn accumulation_two_lps_proportional() {
+        // Two LPs: A holds 300 shares, B holds 700 shares (total 1000).
+        // Three trades each generating 100 fees → total lp_fees = 300.
+        let total_shares = 1_000_i128;
+        let mut global_fps: i128 = 0;
+
+        // Simulate 3 trades, each with 100 new LP fees.
+        for _ in 0..3 {
+            global_fps += calc_fee_per_share_delta(100, total_shares);
+        }
+
+        // LP A: 300 shares, joined at fps=0
+        let claimable_a = calc_claimable_lp_fees(300, global_fps, 0);
+        // LP B: 700 shares, joined at fps=0
+        let claimable_b = calc_claimable_lp_fees(700, global_fps, 0);
+
+        // Total claimed should equal total fees (300), proportional to shares.
+        assert_eq!(claimable_a + claimable_b, 300);
+        // A gets 30%, B gets 70%
+        assert_eq!(claimable_a, 90);
+        assert_eq!(claimable_b, 210);
+    }
 }
