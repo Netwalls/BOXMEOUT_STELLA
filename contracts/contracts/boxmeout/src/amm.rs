@@ -288,28 +288,28 @@ impl AMM {
         let amount_after_fee = amount - fee_amount;
 
         // CPMM calculation: shares_out = (amount_in * reserve_out) / (reserve_in + amount_in)
+        // Determine which reserve is "in" (grows) and which is "out" (shrinks).
         let (reserve_in, reserve_out, new_reserve_in, new_reserve_out) = if outcome == 1 {
-            // Buying YES shares: pay with USDC, get YES shares
-            // Input reserve is NO (what we're paying with conceptually in CPMM mapping)
-            // Output reserve is YES (what we're getting)
-            let shares_out = (amount_after_fee * yes_reserve) / (no_reserve + amount_after_fee);
+            // Buying YES: USDC flows into NO side, YES shares come out.
+            let out = (amount_after_fee * yes_reserve) / (no_reserve + amount_after_fee);
             (
                 no_reserve,
                 yes_reserve,
                 no_reserve + amount_after_fee,
-                yes_reserve - shares_out,
+                yes_reserve - out,
             )
         } else {
-            // Buying NO shares: pay with USDC, get NO shares
-            let shares_out = (amount_after_fee * no_reserve) / (yes_reserve + amount_after_fee);
+            // Buying NO: USDC flows into YES side, NO shares come out.
+            let out = (amount_after_fee * no_reserve) / (yes_reserve + amount_after_fee);
             (
                 yes_reserve,
                 no_reserve,
                 yes_reserve + amount_after_fee,
-                no_reserve - shares_out,
+                no_reserve - out,
             )
         };
 
+        // Recalculate shares_out from the canonical reserves extracted above.
         let shares_out = (amount_after_fee * reserve_out) / (reserve_in + amount_after_fee);
 
         // Slippage protection

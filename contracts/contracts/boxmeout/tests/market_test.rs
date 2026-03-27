@@ -2,7 +2,7 @@
 
 use boxmeout::market::{MarketError, PredictionMarketClient};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo},
+    testutils::{Address as _, LedgerInfo},
     token, Address, BytesN, Env, Symbol,
 };
 

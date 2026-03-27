@@ -52,4 +52,8 @@ pub enum DataKey {
     LpFeePerShare(u64),
     /// i128 — snapshot of LpFeePerShare at the time a provider last claimed
     LpFeeDebt(u64, Address),
+
+    // ── Trading stats ────────────────────────────────────────────────────────
+    /// bool — whether an address has ever traded in a specific market
+    HasTraded(u64, Address),
 }

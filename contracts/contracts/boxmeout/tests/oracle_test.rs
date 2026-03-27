@@ -17,7 +17,6 @@ use soroban_sdk::{
     Address, BytesN, Env, Symbol,
 };
 
-use boxmeout::market::PredictionMarket;
 use boxmeout::oracle::{OracleManager, OracleManagerClient};
 
 fn create_test_env() -> Env {

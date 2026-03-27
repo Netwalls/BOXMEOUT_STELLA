@@ -278,6 +278,12 @@ async function startServer(): Promise<void> {
     // Initialize Cron Service
     await cronService.initialize();
 
+    // Start Blockchain Indexer Service (if enabled)
+    if (process.env.ENABLE_INDEXER !== 'false') {
+      logger.info('Starting blockchain indexer service');
+      await indexerService.start();
+    }
+
     // Start HTTP server
     httpServer.listen(PORT, () => {
       logger.info('BoxMeOut Stella Backend API started', {
@@ -303,6 +309,12 @@ async function gracefulShutdown(signal: string): Promise<void> {
   logger.info(`${signal} received. Shutting down gracefully`);
 
   try {
+    // Stop Blockchain Indexer
+    if (process.env.ENABLE_INDEXER !== 'false') {
+      logger.info('Stopping blockchain indexer');
+      await indexerService.stop();
+    }
+
     // Close Redis connection
     await closeRedisConnection();
 

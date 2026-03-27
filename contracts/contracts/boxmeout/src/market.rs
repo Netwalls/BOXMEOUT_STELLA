@@ -142,6 +142,15 @@ pub struct Commitment {
     pub timestamp: u64,
 }
 
+/// Oracle report record
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OracleReport {
+    pub oracle: Address,
+    pub outcome: u32,
+    pub timestamp: u64,
+}
+
 /// Dispute record
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1318,6 +1327,20 @@ impl PredictionMarket {
         })
     }
 
+    /// Returns the oracle report for this market, or None if not yet reported.
+    /// Read-only: no state mutation.
+    pub fn get_oracle_report(env: Env, market_id: BytesN<32>) -> Option<OracleReport> {
+        let key = (Symbol::new(&env, "oracle_report"), market_id);
+        env.storage().persistent().get(&key)
+    }
+
+    /// Returns the dispute record for this market, or None if no dispute exists.
+    /// Read-only: no state mutation.
+    pub fn get_dispute(env: Env, market_id: BytesN<32>) -> Option<DisputeRecord> {
+        let key = (Symbol::new(&env, "dispute"), market_id);
+        env.storage().persistent().get(&key)
+    }
+
     /// Get market leaderboard (top predictors by winnings)
     ///
     /// This function returns the top N winners from a resolved market,
@@ -1705,6 +1728,17 @@ impl PredictionMarket {
     pub fn test_get_prediction(env: Env, user: Address) -> Option<UserPrediction> {
         let key = (Symbol::new(&env, PREDICTION_PREFIX), user);
         env.storage().persistent().get(&key)
+    }
+
+    /// Test helper: Store an oracle report directly (for testing get_oracle_report)
+    pub fn test_set_oracle_report(env: Env, market_id: BytesN<32>, oracle: Address, outcome: u32) {
+        let report = OracleReport {
+            oracle,
+            outcome,
+            timestamp: env.ledger().timestamp(),
+        };
+        let key = (Symbol::new(&env, "oracle_report"), market_id);
+        env.storage().persistent().set(&key, &report);
     }
 
     /// Test helper: Get winning outcome

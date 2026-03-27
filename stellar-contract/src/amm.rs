@@ -14,7 +14,7 @@
 /// All values use i128 and a fixed SCALE = 10_000_000 (7 decimal places, matching Stellar stroops).
 
 use crate::types::AmmPool;
-use soroban_sdk::Vec;
+use soroban_sdk::{Env, Vec};
 
 /// Fixed-point scale used throughout AMM math to avoid floating-point.
 pub const SCALE: i128 = 10_000_000;
@@ -33,7 +33,7 @@ pub const SCALE: i128 = 10_000_000;
 /// - Return a Vec<i128> of length `n_outcomes` where every element equals
 ///   `collateral / n_outcomes` (integer division; any remainder goes into reserve_0).
 /// - The equal-reserve start sets each outcome price to exactly `1/n`.
-pub fn calc_initial_reserves(collateral: i128, n_outcomes: u32) -> alloc::vec::Vec<i128> {
+pub fn calc_initial_reserves(_env: &Env, collateral: i128, n_outcomes: u32) -> Vec<i128> {
     todo!("Compute equal initial reserves from seeding collateral")
 }
 
@@ -414,7 +414,84 @@ pub fn update_reserves_sell(
 /// - Return `u32` in the range [0, 10_000].
 /// - Validate `outcome_id < reserves.len()`.
 pub fn calc_price_bps(pool: &AmmPool, outcome_id: usize) -> u32 {
-    todo!("Compute CPMM implied probability in basis points")
+    let n = pool.reserves.len() as usize;
+    if n < 2 || outcome_id >= n {
+        return 0;
+    }
+
+    // For binary markets: price_YES = no_reserve / (yes_reserve + no_reserve)
+    // For n outcomes: price_i = (product of all reserves except i) / (sum of such products)
+    
+    if n == 2 {
+        // Binary market optimization
+        let reserve_0 = pool.reserves.get(0).unwrap_or(0);
+        let reserve_1 = pool.reserves.get(1).unwrap_or(0);
+        
+        if reserve_0 <= 0 || reserve_1 <= 0 {
+            return 0;
+        }
+        
+        let total = reserve_0.checked_add(reserve_1).unwrap_or(i128::MAX);
+        if total == 0 {
+            return 0;
+        }
+        
+        let other_reserve = if outcome_id == 0 { reserve_1 } else { reserve_0 };
+        
+        let price_bps = other_reserve
+            .checked_mul(10_000)
+            .and_then(|x| x.checked_div(total))
+            .unwrap_or(0);
+        
+        price_bps.clamp(0, 10_000) as u32
+    } else {
+        // General n-outcome case
+        // price_i = (product of all reserves except i) / (sum of all such products)
+        let mut sum_of_products = 0i128;
+        
+        for i in 0..n {
+            let mut product = 1i128;
+            for j in 0..n {
+                if i != j {
+                    let reserve_j = pool.reserves.get(j as u32).unwrap_or(0);
+                    if reserve_j <= 0 {
+                        return 0;
+                    }
+                    product = product.checked_mul(reserve_j).unwrap_or(0);
+                    if product == 0 {
+                        break;
+                    }
+                }
+            }
+            sum_of_products = sum_of_products.checked_add(product).unwrap_or(i128::MAX);
+        }
+        
+        if sum_of_products == 0 {
+            return 0;
+        }
+        
+        // Calculate product for target outcome
+        let mut target_product = 1i128;
+        for j in 0..n {
+            if j != outcome_id {
+                let reserve_j = pool.reserves.get(j as u32).unwrap_or(0);
+                if reserve_j <= 0 {
+                    return 0;
+                }
+                target_product = target_product.checked_mul(reserve_j).unwrap_or(0);
+                if target_product == 0 {
+                    return 0;
+                }
+            }
+        }
+        
+        let price_bps = target_product
+            .checked_mul(10_000)
+            .and_then(|x| x.checked_div(sum_of_products))
+            .unwrap_or(0);
+        
+        price_bps.clamp(0, 10_000) as u32
+    }
 }
 
 /// Estimate the price impact of a trade before it is executed.

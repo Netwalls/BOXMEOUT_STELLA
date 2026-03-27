@@ -2,7 +2,8 @@
 // Handles market creation and lifecycle management
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec,
+    contract, contractevent, contractimpl, contracttype, Address, Bytes, BytesN, Env, IntoVal,
+    Symbol, Vec,
 };
 
 #[contractevent]
@@ -19,11 +20,68 @@ pub struct MarketCreatedEvent {
     pub closing_time: u64,
 }
 
-// Storage keys
+#[contractevent]
+pub struct OperatorGrantedEvent {
+    pub operator: Address,
+    pub granted_by: Address,
+}
+
+#[contractevent]
+pub struct OperatorRevokedEvent {
+    pub operator: Address,
+    pub revoked_by: Address,
+}
+
+/// Typed storage keys — avoids string collision and enables Address-scoped keys
+#[contracttype]
+#[derive(Clone)]
+pub enum DataKey {
+    Admin,
+    Usdc,
+    Treasury,
+    MarketCount,
+    IsOperator(Address),
+}
+
+// Legacy string keys kept for backward-compat reads during migration
 const ADMIN_KEY: &str = "admin";
 const USDC_KEY: &str = "usdc";
 const TREASURY_KEY: &str = "treasury";
 const MARKET_COUNT_KEY: &str = "market_count";
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/// Retrieve the stored admin address. Panics if factory is not initialized.
+fn get_admin(env: &Env) -> Address {
+    env.storage()
+        .persistent()
+        .get(&Symbol::new(env, ADMIN_KEY))
+        .expect("not initialized")
+}
+
+/// Assert that `caller` is either the admin or a granted operator.
+/// Requires the caller to have already signed (require_auth must be called
+/// by the public function before invoking this helper).
+fn assert_admin_or_operator(env: &Env, caller: &Address) {
+    let admin = get_admin(env);
+    if *caller == admin {
+        return;
+    }
+    let is_op: bool = env
+        .storage()
+        .persistent()
+        .get(&DataKey::IsOperator(caller.clone()))
+        .unwrap_or(false);
+    if !is_op {
+        panic!("unauthorized: caller is not admin or operator");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Contract
+// ---------------------------------------------------------------------------
 
 /// MARKET FACTORY - Handles market creation, fee collection, and market registry
 #[contract]
@@ -90,7 +148,58 @@ impl MarketFactory {
             .expect("Treasury not set")
     }
 
-    /// Create a new market instance
+    // -----------------------------------------------------------------------
+    // Operator role management
+    // -----------------------------------------------------------------------
+
+    /// Grant operator role to `operator`. Requires admin authentication.
+    pub fn grant_operator(env: Env, admin: Address, operator: Address) {
+        admin.require_auth();
+        let stored_admin = get_admin(&env);
+        if admin != stored_admin {
+            panic!("unauthorized: only admin can grant operator");
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::IsOperator(operator.clone()), &true);
+        OperatorGrantedEvent {
+            operator,
+            granted_by: admin,
+        }
+        .publish(&env);
+    }
+
+    /// Revoke operator role from `operator`. Requires admin authentication.
+    pub fn revoke_operator(env: Env, admin: Address, operator: Address) {
+        admin.require_auth();
+        let stored_admin = get_admin(&env);
+        if admin != stored_admin {
+            panic!("unauthorized: only admin can revoke operator");
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::IsOperator(operator.clone()), &false);
+        OperatorRevokedEvent {
+            operator,
+            revoked_by: admin,
+        }
+        .publish(&env);
+    }
+
+    /// Returns true if `address` currently holds the operator role.
+    pub fn is_operator(env: Env, address: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::IsOperator(address))
+            .unwrap_or(false)
+    }
+
+    // -----------------------------------------------------------------------
+    // Market creation
+    // -----------------------------------------------------------------------
+
+    /// Create a new market instance.
+    /// Caller must be admin or a granted operator.
     pub fn create_market(
         env: Env,
         creator: Address,
@@ -102,6 +211,9 @@ impl MarketFactory {
     ) -> BytesN<32> {
         // Require creator authentication
         creator.require_auth();
+
+        // Enforce admin-or-operator access control
+        assert_admin_or_operator(&env, &creator);
 
         // Validate closing_time > now and < resolution_time
         let current_time = env.ledger().timestamp();

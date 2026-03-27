@@ -42,65 +42,67 @@ pub enum PredictionMarketError {
     DisputeWindowActive = 39,
     /// Market is in an unexpected status for the requested operation
     InvalidMarketStatus = 103,
+    /// Market status is invalid for this operation
+    InvalidMarketStatus = 40,
 
     // ── Outcomes ─────────────────────────────────────────────────────────────
-    InvalidOutcome = 40,
-    TooFewOutcomes = 41,
-    TooManyOutcomes = 42,
-    DuplicateOutcomeLabel = 43,
+    InvalidOutcome = 50,
+    TooFewOutcomes = 51,
+    TooManyOutcomes = 52,
+    DuplicateOutcomeLabel = 53,
 
     // ── AMM / Trading ────────────────────────────────────────────────────────
     /// Collateral amount is below Config.min_trade
-    TradeTooSmall = 50,
+    TradeTooSmall = 60,
     /// AMM pool has not been seeded with initial liquidity
-    PoolNotInitialized = 51,
+    PoolNotInitialized = 61,
     /// Slippage guard: actual output is below caller's min_amount_out
-    SlippageExceeded = 52,
+    SlippageExceeded = 62,
     /// Reserve would drop to zero; trade size is too large for the pool
-    InsufficientReserve = 53,
+    InsufficientReserve = 63,
     /// Price impact exceeds the market's allowed circuit-breaker threshold
-    CircuitBreakerTripped = 54,
+    CircuitBreakerTripped = 64,
 
     // ── Positions ────────────────────────────────────────────────────────────
-    PositionNotFound = 60,
+    PositionNotFound = 70,
     /// User has fewer shares than requested for sell/merge
-    InsufficientShares = 61,
+    InsufficientShares = 71,
     /// Position has already been redeemed
-    AlreadyRedeemed = 62,
+    AlreadyRedeemed = 72,
     /// Outcome is not the winning outcome; cannot redeem
-    NotWinningOutcome = 63,
+    NotWinningOutcome = 73,
 
     // ── Liquidity ────────────────────────────────────────────────────────────
-    LpPositionNotFound = 70,
-    ZeroLiquidity = 71,
-    InsufficientLpShares = 72,
+    LpPositionNotFound = 80,
+    ZeroLiquidity = 81,
+    InsufficientLpShares = 82,
     /// LP fees for this position have already been collected
-    LpFeesAlreadyClaimed = 73,
+    LpFeesAlreadyClaimed = 83,
     /// Initial liquidity must meet Config.min_liquidity
-    BelowMinLiquidity = 74,
+    BelowMinLiquidity = 84,
 
     // ── Oracle / Dispute ─────────────────────────────────────────────────────
     /// A dispute already exists for this market
-    DisputeAlreadyExists = 80,
-    DisputeNotFound = 81,
+    DisputeAlreadyExists = 90,
+    DisputeNotFound = 91,
     /// Dispute window has already expired; cannot dispute
-    DisputeWindowExpired = 82,
+    DisputeWindowExpired = 92,
     /// Dispute bond payment failed or is insufficient
-    InsufficientBond = 83,
+    InsufficientBond = 93,
     /// Dispute has already been resolved
-    DisputeAlreadyResolved = 84,
+    DisputeAlreadyResolved = 94,
 
     // ── Fees ─────────────────────────────────────────────────────────────────
     /// fee_bps values sum to more than 10 000 (100 %)
-    FeesTooHigh = 90,
+    FeesTooHigh = 100,
     /// Nothing to collect; fee pool is zero
-    NoFeesToCollect = 91,
+    NoFeesToCollect = 101,
 
     // ── Metadata ─────────────────────────────────────────────────────────────
-    MetadataTooLong = 95,
+    MetadataTooLong = 105,
 
     // ── General ──────────────────────────────────────────────────────────────
-    ArithmeticError = 100,
-    TransferFailed = 101,
-    InvalidTimestamp = 102,
+    ArithmeticError = 110,
+    TransferFailed = 111,
+    InvalidTimestamp = 112,
 }
