@@ -393,7 +393,8 @@ pub fn position_refunded(env: &Env, market_id: u64, holder: Address, total_refun
 /// - Topics: [symbol!("batch_redeem"), market_id as Symbol]
 /// - Data:   (market_id: u64, holder: Address, collateral_out: i128)
 pub fn batch_redeemed(env: &Env, market_id: u64, holder: Address, collateral_out: i128) {
-    todo!("Emit batch_redeemed event")
+    let topics = (Symbol::new(env, "batch_redeem"), market_id);
+    env.events().publish(topics, (market_id, holder, collateral_out));
 }
 
 // =============================================================================

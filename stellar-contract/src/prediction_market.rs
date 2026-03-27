@@ -1820,7 +1820,57 @@ impl PredictionMarketContract {
         market_ids: Vec<u64>,
         outcome_ids: Vec<u32>,
     ) -> Result<Vec<i128>, PredictionMarketError> {
-        todo!("Implement batch position redemption across multiple markets")
+        let config = load_config(&env)?;
+        if is_emergency_paused(&env, &config) {
+            return Err(PredictionMarketError::EmergencyPaused);
+        }
+
+        holder.require_auth();
+
+        if market_ids.len() != outcome_ids.len() || market_ids.len() > 10 {
+            return Err(PredictionMarketError::InvalidOutcome);
+        }
+
+        let token = soroban_sdk::token::Client::new(&env, &config.token);
+        let mut results: Vec<i128> = Vec::new(&env);
+
+        for i in 0..market_ids.len() {
+            let market_id = market_ids.get(i).unwrap();
+            let outcome_id = outcome_ids.get(i).unwrap();
+
+            // skip if market missing, wrong status, wrong outcome, or already redeemed
+            let market: Market = match env.storage().persistent().get(&DataKey::Market(market_id)) {
+                Some(m) => m,
+                None => { results.push_back(0); continue; }
+            };
+            if market.status != MarketStatus::Resolved
+                || market.winning_outcome_id != Some(outcome_id)
+            {
+                results.push_back(0);
+                continue;
+            }
+
+            let position_key = DataKey::UserPosition(market_id, outcome_id, holder.clone());
+            let mut position: UserPosition = match env.storage().persistent().get(&position_key) {
+                Some(p) => p,
+                None => { results.push_back(0); continue; }
+            };
+            if position.redeemed {
+                results.push_back(0);
+                continue;
+            }
+
+            let collateral_out = position.shares;
+            token.transfer(&env.current_contract_address(), &holder, &collateral_out);
+
+            position.redeemed = true;
+            env.storage().persistent().set(&position_key, &position);
+
+            events::batch_redeemed(&env, market_id, holder.clone(), collateral_out);
+            results.push_back(collateral_out);
+        }
+
+        Ok(results)
     }
 
     // =========================================================================
@@ -1835,7 +1885,10 @@ impl PredictionMarketContract {
         env: Env,
         market_id: u64,
     ) -> Result<Market, PredictionMarketError> {
-        todo!("Implement get_market")
+        env.storage()
+            .persistent()
+            .get(&DataKey::Market(market_id))
+            .ok_or(PredictionMarketError::MarketNotFound)
     }
 
     /// Return a user's position in a specific outcome of a specific market.

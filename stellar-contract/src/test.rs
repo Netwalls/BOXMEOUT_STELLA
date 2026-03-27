@@ -491,3 +491,89 @@ fn test_refund_position_market_not_cancelled() {
 
     client.refund_position(&holder, &market_id);
 }
+
+#[test]
+fn test_batch_redeem_success_and_skip() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let holder = Address::generate(&env);
+    let shares = 500i128;
+
+    // market 1: resolved, winning outcome 0 — should redeem
+    create_resolved_market(&env, &client.address, 1, &holder, 0);
+    create_user_position(&env, &client.address, 1, 0u32, &holder, shares);
+
+    // market 2: resolved but wrong outcome supplied — should skip
+    create_resolved_market(&env, &client.address, 2, &holder, 0);
+    create_user_position(&env, &client.address, 2, 1u32, &holder, shares);
+
+    let token_addr = get_token_address(&env, &client);
+    soroban_sdk::token::StellarAssetClient::new(&env, &token_addr).mint(&client.address, &shares);
+
+    let results = client.batch_redeem(
+        &holder,
+        &soroban_sdk::vec![&env, 1u64, 2u64],
+        &soroban_sdk::vec![&env, 0u32, 1u32],
+    );
+
+    assert_eq!(results.get(0).unwrap(), shares); // redeemed
+    assert_eq!(results.get(1).unwrap(), 0);      // skipped (losing outcome)
+}
+
+#[test]
+#[should_panic]
+fn test_batch_redeem_mismatched_lengths() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let holder = Address::generate(&env);
+
+    client.batch_redeem(
+        &holder,
+        &soroban_sdk::vec![&env, 1u64, 2u64],
+        &soroban_sdk::vec![&env, 0u32],
+    );
+}
+
+#[test]
+#[should_panic]
+fn test_batch_redeem_exceeds_max() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let holder = Address::generate(&env);
+
+    client.batch_redeem(
+        &holder,
+        &soroban_sdk::vec![&env, 1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        &soroban_sdk::vec![&env, 0u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    );
+}
+
+#[test]
+fn test_get_market_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let creator = Address::generate(&env);
+    create_test_market(&env, &client.address, 1, &creator);
+
+    let market = client.get_market(&1u64);
+    assert_eq!(market.market_id, 1);
+    assert_eq!(market.creator, creator);
+}
+
+#[test]
+#[should_panic]
+fn test_get_market_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    client.get_market(&99u64);
+}
