@@ -5,9 +5,9 @@ import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/admin.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
-    submitDisputeBody,
-    reviewDisputeBody,
-    resolveDisputeBody,
+  submitDisputeBody,
+  reviewDisputeBody,
+  resolveDisputeBody,
 } from '../schemas/validation.schemas.js';
 
 const router: Router = Router();
@@ -52,10 +52,10 @@ const router: Router = Router();
  *         description: Unauthorized
  */
 router.post(
-    '/',
-    requireAuth,
-    validate({ body: submitDisputeBody }),
-    (req, res) => disputesController.submitDispute(req, res)
+  '/',
+  requireAuth,
+  validate({ body: submitDisputeBody }),
+  (req, res) => disputesController.submitDispute(req, res)
 );
 
 /**
@@ -74,10 +74,7 @@ router.post(
  *       200:
  *         description: List of disputes
  */
-router.get(
-    '/',
-    (req, res) => disputesController.listDisputes(req, res)
-);
+router.get('/', (req, res) => disputesController.listDisputes(req, res));
 
 /**
  * @swagger
@@ -97,9 +94,8 @@ router.get(
  *       404:
  *         description: Dispute not found
  */
-router.get(
-    '/:disputeId',
-    (req, res) => disputesController.getDispute(req, res)
+router.get('/:disputeId', (req, res) =>
+  disputesController.getDispute(req, res)
 );
 
 /**
@@ -134,11 +130,11 @@ router.get(
  *         description: Forbidden
  */
 router.patch(
-    '/:disputeId/review',
-    requireAuth,
-    requireAdmin,
-    validate({ body: reviewDisputeBody }),
-    (req, res) => disputesController.reviewDispute(req, res)
+  '/:disputeId/review',
+  requireAuth,
+  requireAdmin,
+  validate({ body: reviewDisputeBody }),
+  (req, res) => disputesController.reviewDispute(req, res)
 );
 
 /**
@@ -181,11 +177,11 @@ router.patch(
  *         description: Forbidden
  */
 router.patch(
-    '/:disputeId/resolve',
-    requireAuth,
-    requireAdmin,
-    validate({ body: resolveDisputeBody }),
-    (req, res) => disputesController.resolveDispute(req, res)
+  '/:disputeId/resolve',
+  requireAuth,
+  requireAdmin,
+  validate({ body: resolveDisputeBody }),
+  (req, res) => disputesController.resolveDispute(req, res)
 );
 
 export default router;

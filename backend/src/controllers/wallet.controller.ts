@@ -13,7 +13,10 @@ export class WalletController {
    *
    * Response: { success: true, data: { depositAddress, memo, expiresAt } }
    */
-  async initiateDeposit(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async initiateDeposit(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
     const userId = req.user?.userId;
     if (!userId) {
       throw new ApiError(401, 'UNAUTHORIZED', 'Authentication required');
@@ -29,7 +32,10 @@ export class WalletController {
    * Body: { txHash: string }
    * Response: { success: true, data: { txHash, amountDeposited, newBalance } }
    */
-  async confirmDeposit(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async confirmDeposit(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
     const userId = req.user?.userId;
     if (!userId) {
       throw new ApiError(401, 'UNAUTHORIZED', 'Authentication required');
@@ -93,4 +99,3 @@ export class WalletController {
 }
 
 export const walletController = new WalletController();
-

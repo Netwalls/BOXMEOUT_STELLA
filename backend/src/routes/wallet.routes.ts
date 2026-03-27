@@ -4,7 +4,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { walletController } from '../controllers/wallet.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { withdrawalRateLimiter, createRateLimiter } from '../middleware/rateLimit.middleware.js';
+import {
+  withdrawalRateLimiter,
+  createRateLimiter,
+} from '../middleware/rateLimit.middleware.js';
 import { AuthenticatedRequest } from '../types/auth.types.js';
 
 const router: Router = Router();
@@ -68,7 +71,9 @@ router.post(
   requireAuth,
   depositInitiateRateLimiter,
   (req: Request, res: Response, next: NextFunction) => {
-    walletController.initiateDeposit(req as AuthenticatedRequest, res).catch(next);
+    walletController
+      .initiateDeposit(req as AuthenticatedRequest, res)
+      .catch(next);
   }
 );
 
@@ -128,7 +133,9 @@ router.post(
   requireAuth,
   depositConfirmRateLimiter,
   (req: Request, res: Response, next: NextFunction) => {
-    walletController.confirmDeposit(req as AuthenticatedRequest, res).catch(next);
+    walletController
+      .confirmDeposit(req as AuthenticatedRequest, res)
+      .catch(next);
   }
 );
 

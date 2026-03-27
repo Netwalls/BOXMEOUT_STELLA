@@ -8,9 +8,9 @@ export class MarketRepository extends BaseRepository<Market> {
   }
 
   async findByContractAddress(contractAddress: string): Promise<Market | null> {
-    return await this.prisma.market.findUnique({
-      where: { contractAddress },
-    });
+    return this.timedQuery('findByContractAddress', () =>
+      this.prisma.market.findUnique({ where: { contractAddress } })
+    );
   }
 
   async addAttestation(
@@ -19,37 +19,27 @@ export class MarketRepository extends BaseRepository<Market> {
     outcome: number,
     txHash: string
   ) {
-    return await this.prisma.$transaction(async (tx) => {
-      const attestation = await tx.attestation.create({
-        data: {
-          marketId,
-          oracleId,
-          outcome,
-          txHash,
-        },
-      });
-
-      const market = await tx.market.update({
-        where: { id: marketId },
-        data: {
-          attestationCount: { increment: 1 },
-        },
-      });
-
-      return { attestation, market };
-    });
+    return this.timedQuery('addAttestation', () =>
+      this.prisma.$transaction(async (tx) => {
+        const attestation = await tx.attestation.create({
+          data: { marketId, oracleId, outcome, txHash },
+        });
+        const market = await tx.market.update({
+          where: { id: marketId },
+          data: { attestationCount: { increment: 1 } },
+        });
+        return { attestation, market };
+      })
+    );
   }
 
   async hasAttested(marketId: string, oracleId: string): Promise<boolean> {
-    const record = await this.prisma.attestation.findUnique({
-      where: {
-        marketId_oracleId: {
-          marketId,
-          oracleId,
-        },
-      },
+    return this.timedQuery('hasAttested', async () => {
+      const record = await this.prisma.attestation.findUnique({
+        where: { marketId_oracleId: { marketId, oracleId } },
+      });
+      return !!record;
     });
-    return !!record;
   }
 
   async createMarket(data: {
@@ -62,19 +52,21 @@ export class MarketRepository extends BaseRepository<Market> {
     outcomeB: string;
     closingAt: Date;
   }): Promise<Market> {
-    return await this.prisma.market.create({
-      data,
-      include: {
-        creator: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            avatarUrl: true,
+    return this.timedQuery('createMarket', () =>
+      this.prisma.market.create({
+        data,
+        include: {
+          creator: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+            },
           },
         },
-      },
-    });
+      })
+    );
   }
 
   async findActiveMarkets(options?: {
@@ -82,32 +74,30 @@ export class MarketRepository extends BaseRepository<Market> {
     skip?: number;
     take?: number;
   }): Promise<Market[]> {
-    return await this.prisma.market.findMany({
-      where: {
-        status: MarketStatus.OPEN,
-        closingAt: { gt: new Date() },
-        ...(options?.category && { category: options.category }),
-      },
-      orderBy: { closingAt: 'asc' },
-      skip: options?.skip,
-      take: options?.take || 20,
-      include: {
-        creator: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-          },
+    return this.timedQuery('findActiveMarkets', () =>
+      this.prisma.market.findMany({
+        where: {
+          status: MarketStatus.OPEN,
+          closingAt: { gt: new Date() },
+          ...(options?.category && { category: options.category }),
         },
-      },
-    });
+        orderBy: { closingAt: 'asc' },
+        skip: options?.skip,
+        take: options?.take || 20,
+        include: {
+          creator: { select: { id: true, username: true, displayName: true } },
+        },
+      })
+    );
   }
 
   async findMarketsByCreator(creatorId: string): Promise<Market[]> {
-    return await this.prisma.market.findMany({
-      where: { creatorId },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.timedQuery('findMarketsByCreator', () =>
+      this.prisma.market.findMany({
+        where: { creatorId },
+        orderBy: { createdAt: 'desc' },
+      })
+    );
   }
 
   async updateMarketStatus(
@@ -120,13 +110,12 @@ export class MarketRepository extends BaseRepository<Market> {
       resolutionSource?: string;
     }
   ): Promise<Market> {
-    return await this.prisma.market.update({
-      where: { id: marketId },
-      data: {
-        status,
-        ...additionalData,
-      },
-    });
+    return this.timedQuery('updateMarketStatus', () =>
+      this.prisma.market.update({
+        where: { id: marketId },
+        data: { status, ...additionalData },
+      })
+    );
   }
 
   async updateMarketVolume(
@@ -134,13 +123,15 @@ export class MarketRepository extends BaseRepository<Market> {
     volumeChange: number,
     incrementParticipants: boolean = false
   ): Promise<Market> {
-    return await this.prisma.market.update({
-      where: { id: marketId },
-      data: {
-        totalVolume: { increment: volumeChange },
-        ...(incrementParticipants && { participantCount: { increment: 1 } }),
-      },
-    });
+    return this.timedQuery('updateMarketVolume', () =>
+      this.prisma.market.update({
+        where: { id: marketId },
+        data: {
+          totalVolume: { increment: volumeChange },
+          ...(incrementParticipants && { participantCount: { increment: 1 } }),
+        },
+      })
+    );
   }
 
   async updateLiquidity(
@@ -148,46 +139,43 @@ export class MarketRepository extends BaseRepository<Market> {
     yesLiquidity: number,
     noLiquidity: number
   ): Promise<Market> {
-    return await this.prisma.market.update({
-      where: { id: marketId },
-      data: { yesLiquidity, noLiquidity },
-    });
+    return this.timedQuery('updateLiquidity', () =>
+      this.prisma.market.update({
+        where: { id: marketId },
+        data: { yesLiquidity, noLiquidity },
+      })
+    );
   }
 
   async setPoolTxHash(marketId: string, txHash: string): Promise<Market> {
-    return await this.prisma.market.update({
-      where: { id: marketId },
-      data: { poolTxHash: txHash },
-    });
+    return this.timedQuery('setPoolTxHash', () =>
+      this.prisma.market.update({
+        where: { id: marketId },
+        data: { poolTxHash: txHash },
+      })
+    );
   }
 
   async addFeesCollected(marketId: string, feeAmount: number): Promise<Market> {
-    return await this.prisma.market.update({
-      where: { id: marketId },
-      data: {
-        feesCollected: { increment: feeAmount },
-      },
-    });
+    return this.timedQuery('addFeesCollected', () =>
+      this.prisma.market.update({
+        where: { id: marketId },
+        data: { feesCollected: { increment: feeAmount } },
+      })
+    );
   }
 
   async getTrendingMarkets(limit: number = 10): Promise<Market[]> {
-    return await this.prisma.market.findMany({
-      where: {
-        status: MarketStatus.OPEN,
-        closingAt: { gt: new Date() },
-      },
-      orderBy: [{ totalVolume: 'desc' }, { participantCount: 'desc' }],
-      take: limit,
-      include: {
-        creator: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-          },
+    return this.timedQuery('getTrendingMarkets', () =>
+      this.prisma.market.findMany({
+        where: { status: MarketStatus.OPEN, closingAt: { gt: new Date() } },
+        orderBy: [{ totalVolume: 'desc' }, { participantCount: 'desc' }],
+        take: limit,
+        include: {
+          creator: { select: { id: true, username: true, displayName: true } },
         },
-      },
-    });
+      })
+    );
   }
 
   async getMarketsByCategory(
@@ -195,58 +183,54 @@ export class MarketRepository extends BaseRepository<Market> {
     skip?: number,
     take?: number
   ): Promise<Market[]> {
-    return await this.prisma.market.findMany({
-      where: {
-        category,
-        status: MarketStatus.OPEN,
-      },
-      orderBy: { closingAt: 'asc' },
-      skip,
-      take: take || 20,
-    });
+    return this.timedQuery('getMarketsByCategory', () =>
+      this.prisma.market.findMany({
+        where: { category, status: MarketStatus.OPEN },
+        orderBy: { closingAt: 'asc' },
+        skip,
+        take: take || 20,
+      })
+    );
   }
 
   async getClosedMarketsAwaitingResolution(): Promise<Market[]> {
-    return await this.prisma.market.findMany({
-      where: { status: MarketStatus.CLOSED },
-      orderBy: { closedAt: 'asc' },
-    });
+    return this.timedQuery('getClosedMarketsAwaitingResolution', () =>
+      this.prisma.market.findMany({
+        where: { status: MarketStatus.CLOSED },
+        orderBy: { closedAt: 'asc' },
+      })
+    );
   }
 
   async getClosingMarkets(withinHours: number = 24): Promise<Market[]> {
-    const closingTime = new Date();
-    closingTime.setHours(closingTime.getHours() + withinHours);
-
-    return await this.prisma.market.findMany({
-      where: {
-        status: MarketStatus.OPEN,
-        closingAt: {
-          gte: new Date(),
-          lte: closingTime,
+    return this.timedQuery('getClosingMarkets', () => {
+      const closingTime = new Date();
+      closingTime.setHours(closingTime.getHours() + withinHours);
+      return this.prisma.market.findMany({
+        where: {
+          status: MarketStatus.OPEN,
+          closingAt: { gte: new Date(), lte: closingTime },
         },
-      },
-      orderBy: { closingAt: 'asc' },
+        orderBy: { closingAt: 'asc' },
+      });
     });
   }
 
   async getMarketStatistics() {
-    const [totalMarkets, activeMarkets, totalVolume, avgParticipants] =
-      await Promise.all([
-        this.prisma.market.count(),
-        this.prisma.market.count({ where: { status: MarketStatus.OPEN } }),
-        this.prisma.market.aggregate({
-          _sum: { totalVolume: true },
-        }),
-        this.prisma.market.aggregate({
-          _avg: { participantCount: true },
-        }),
-      ]);
-
-    return {
-      totalMarkets,
-      activeMarkets,
-      totalVolume: totalVolume._sum.totalVolume || 0,
-      avgParticipants: avgParticipants._avg.participantCount || 0,
-    };
+    return this.timedQuery('getMarketStatistics', async () => {
+      const [totalMarkets, activeMarkets, totalVolume, avgParticipants] =
+        await Promise.all([
+          this.prisma.market.count(),
+          this.prisma.market.count({ where: { status: MarketStatus.OPEN } }),
+          this.prisma.market.aggregate({ _sum: { totalVolume: true } }),
+          this.prisma.market.aggregate({ _avg: { participantCount: true } }),
+        ]);
+      return {
+        totalMarkets,
+        activeMarkets,
+        totalVolume: totalVolume._sum.totalVolume || 0,
+        avgParticipants: avgParticipants._avg.participantCount || 0,
+      };
+    });
   }
 }

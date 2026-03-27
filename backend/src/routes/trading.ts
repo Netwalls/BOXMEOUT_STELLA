@@ -263,16 +263,22 @@ router.post(
  * POST /api/markets/:marketId/build-tx/buy
  * Build an unsigned transaction for buying shares
  */
-router.post('/markets/:marketId/build-tx/buy', requireAuth, tradeRateLimiter, (req, res) =>
-  tradingController.buildBuySharesTx(req, res)
+router.post(
+  '/markets/:marketId/build-tx/buy',
+  requireAuth,
+  tradeRateLimiter,
+  (req, res) => tradingController.buildBuySharesTx(req, res)
 );
 
 /**
  * POST /api/markets/:marketId/build-tx/sell
  * Build an unsigned transaction for selling shares
  */
-router.post('/markets/:marketId/build-tx/sell', requireAuth, tradeRateLimiter, (req, res) =>
-  tradingController.buildSellSharesTx(req, res)
+router.post(
+  '/markets/:marketId/build-tx/sell',
+  requireAuth,
+  tradeRateLimiter,
+  (req, res) => tradingController.buildSellSharesTx(req, res)
 );
 
 /**

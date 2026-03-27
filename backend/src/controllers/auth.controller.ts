@@ -27,7 +27,10 @@ export class AuthController {
       if (!publicKey) {
         res.status(400).json({
           success: false,
-          error: { code: 'MISSING_PUBLIC_KEY', message: 'publicKey query parameter is required' },
+          error: {
+            code: 'MISSING_PUBLIC_KEY',
+            message: 'publicKey query parameter is required',
+          },
         });
         return;
       }

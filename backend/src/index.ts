@@ -55,6 +55,10 @@ import { setupSwagger } from './config/swagger.js';
 // Import Cron initialization
 import { cronService } from './services/cron.service.js';
 
+// Import Blockchain Event Service
+import { blockchainEventService } from './services/blockchain.service.js';
+import { indexerService } from './services/blockchain/indexer.js';
+
 // Import WebSocket initialization
 import { initializeSocketIO, setSocketIORef } from './websocket/realtime.js';
 import { notificationService } from './services/notification.service.js';
@@ -286,6 +290,7 @@ async function startServer(): Promise<void> {
     if (process.env.ENABLE_INDEXER !== 'false') {
       logger.info('Starting blockchain indexer service');
       await indexerService.start();
+      await blockchainEventService.start();
     }
 
     // Start HTTP server
@@ -317,6 +322,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
     if (process.env.ENABLE_INDEXER !== 'false') {
       logger.info('Stopping blockchain indexer');
       await indexerService.stop();
+      await blockchainEventService.stop();
     }
 
     // Close Redis connection

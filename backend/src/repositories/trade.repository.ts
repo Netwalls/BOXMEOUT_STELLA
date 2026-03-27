@@ -18,37 +18,35 @@ export class TradeRepository extends BaseRepository<Trade> {
     feeAmount: number;
     txHash: string;
   }): Promise<Trade> {
-    return await this.prisma.trade.create({
-      data: {
-        ...data,
-        status: TradeStatus.PENDING,
-      },
-    });
+    return this.timedQuery('createTrade', () =>
+      this.prisma.trade.create({
+        data: { ...data, status: TradeStatus.PENDING },
+      })
+    );
   }
 
   async confirmTrade(tradeId: string): Promise<Trade> {
-    return await this.prisma.trade.update({
-      where: { id: tradeId },
-      data: {
-        status: TradeStatus.CONFIRMED,
-        confirmedAt: new Date(),
-      },
-    });
+    return this.timedQuery('confirmTrade', () =>
+      this.prisma.trade.update({
+        where: { id: tradeId },
+        data: { status: TradeStatus.CONFIRMED, confirmedAt: new Date() },
+      })
+    );
   }
 
   async failTrade(tradeId: string): Promise<Trade> {
-    return await this.prisma.trade.update({
-      where: { id: tradeId },
-      data: {
-        status: TradeStatus.FAILED,
-      },
-    });
+    return this.timedQuery('failTrade', () =>
+      this.prisma.trade.update({
+        where: { id: tradeId },
+        data: { status: TradeStatus.FAILED },
+      })
+    );
   }
 
   async findByTxHash(txHash: string): Promise<Trade | null> {
-    return await this.prisma.trade.findFirst({
-      where: { txHash },
-    });
+    return this.timedQuery('findByTxHash', () =>
+      this.prisma.trade.findFirst({ where: { txHash } })
+    );
   }
 
   async findUserTrades(
@@ -60,99 +58,87 @@ export class TradeRepository extends BaseRepository<Trade> {
       take?: number;
     }
   ): Promise<Trade[]> {
-    return await this.prisma.trade.findMany({
-      where: {
-        userId,
-        ...(options?.tradeType && { tradeType: options.tradeType }),
-        ...(options?.status && { status: options.status }),
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: options?.skip,
-      take: options?.take || 50,
-      include: {
-        market: {
-          select: {
-            id: true,
-            title: true,
-            category: true,
-          },
+    return this.timedQuery('findUserTrades', () =>
+      this.prisma.trade.findMany({
+        where: {
+          userId,
+          ...(options?.tradeType && { tradeType: options.tradeType }),
+          ...(options?.status && { status: options.status }),
         },
-      },
-    });
+        orderBy: { createdAt: 'desc' },
+        skip: options?.skip,
+        take: options?.take || 50,
+        include: {
+          market: { select: { id: true, title: true, category: true } },
+        },
+      })
+    );
   }
 
   async findMarketTrades(
     marketId: string,
-    options?: {
-      skip?: number;
-      take?: number;
-    }
+    options?: { skip?: number; take?: number }
   ): Promise<Trade[]> {
-    return await this.prisma.trade.findMany({
-      where: { marketId, status: TradeStatus.CONFIRMED },
-      orderBy: { createdAt: 'desc' },
-      skip: options?.skip,
-      take: options?.take || 100,
-    });
+    return this.timedQuery('findMarketTrades', () =>
+      this.prisma.trade.findMany({
+        where: { marketId, status: TradeStatus.CONFIRMED },
+        orderBy: { createdAt: 'desc' },
+        skip: options?.skip,
+        take: options?.take || 100,
+      })
+    );
   }
 
   async getUserTradeVolume(userId: string): Promise<number> {
-    const result = await this.prisma.trade.aggregate({
-      where: {
-        userId,
-        status: TradeStatus.CONFIRMED,
-        tradeType: { in: [TradeType.BUY, TradeType.SELL] },
-      },
-      _sum: { totalAmount: true },
+    return this.timedQuery('getUserTradeVolume', async () => {
+      const result = await this.prisma.trade.aggregate({
+        where: {
+          userId,
+          status: TradeStatus.CONFIRMED,
+          tradeType: { in: [TradeType.BUY, TradeType.SELL] },
+        },
+        _sum: { totalAmount: true },
+      });
+      return Number(result._sum.totalAmount || 0);
     });
-
-    return Number(result._sum.totalAmount || 0);
   }
 
   async getMarketTradeVolume(marketId: string): Promise<number> {
-    const result = await this.prisma.trade.aggregate({
-      where: {
-        marketId,
-        status: TradeStatus.CONFIRMED,
-        tradeType: { in: [TradeType.BUY, TradeType.SELL] },
-      },
-      _sum: { totalAmount: true },
+    return this.timedQuery('getMarketTradeVolume', async () => {
+      const result = await this.prisma.trade.aggregate({
+        where: {
+          marketId,
+          status: TradeStatus.CONFIRMED,
+          tradeType: { in: [TradeType.BUY, TradeType.SELL] },
+        },
+        _sum: { totalAmount: true },
+      });
+      return Number(result._sum.totalAmount || 0);
     });
-
-    return Number(result._sum.totalAmount || 0);
   }
 
   async getTotalFeesCollected(): Promise<number> {
-    const result = await this.prisma.trade.aggregate({
-      where: { status: TradeStatus.CONFIRMED },
-      _sum: { feeAmount: true },
+    return this.timedQuery('getTotalFeesCollected', async () => {
+      const result = await this.prisma.trade.aggregate({
+        where: { status: TradeStatus.CONFIRMED },
+        _sum: { feeAmount: true },
+      });
+      return Number(result._sum.feeAmount || 0);
     });
-
-    return Number(result._sum.feeAmount || 0);
   }
 
   async getRecentTrades(limit: number = 20): Promise<Trade[]> {
-    return await this.prisma.trade.findMany({
-      where: { status: TradeStatus.CONFIRMED },
-      orderBy: { confirmedAt: 'desc' },
-      take: limit,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-          },
+    return this.timedQuery('getRecentTrades', () =>
+      this.prisma.trade.findMany({
+        where: { status: TradeStatus.CONFIRMED },
+        orderBy: { confirmedAt: 'desc' },
+        take: limit,
+        include: {
+          user: { select: { id: true, username: true, displayName: true } },
+          market: { select: { id: true, title: true, category: true } },
         },
-        market: {
-          select: {
-            id: true,
-            title: true,
-            category: true,
-          },
-        },
-      },
-    });
+      })
+    );
   }
 
   async createBuyTrade(data: {
@@ -165,10 +151,7 @@ export class TradeRepository extends BaseRepository<Trade> {
     feeAmount: number;
     txHash: string;
   }): Promise<Trade> {
-    return this.createTrade({
-      ...data,
-      tradeType: TradeType.BUY,
-    });
+    return this.createTrade({ ...data, tradeType: TradeType.BUY });
   }
 
   async createSellTrade(data: {
@@ -181,22 +164,18 @@ export class TradeRepository extends BaseRepository<Trade> {
     feeAmount: number;
     txHash: string;
   }): Promise<Trade> {
-    return this.createTrade({
-      ...data,
-      tradeType: TradeType.SELL,
-    });
+    return this.createTrade({ ...data, tradeType: TradeType.SELL });
   }
 
   async findByUserAndMarket(
     userId: string,
     marketId: string
   ): Promise<Trade[]> {
-    return await this.prisma.trade.findMany({
-      where: {
-        userId,
-        marketId,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.timedQuery('findByUserAndMarket', () =>
+      this.prisma.trade.findMany({
+        where: { userId, marketId },
+        orderBy: { createdAt: 'desc' },
+      })
+    );
   }
 }

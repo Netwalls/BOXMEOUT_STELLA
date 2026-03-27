@@ -10,8 +10,7 @@ import { TransactionStatus, TransactionType } from '@prisma/client';
 import { notifyBalanceUpdated } from '../websocket/realtime.js';
 
 // ─── Platform deposit address ─────────────────────────────────────────────────
-const PLATFORM_DEPOSIT_ADDRESS =
-  process.env.PLATFORM_DEPOSIT_ADDRESS || '';
+const PLATFORM_DEPOSIT_ADDRESS = process.env.PLATFORM_DEPOSIT_ADDRESS || '';
 
 export interface WithdrawParams {
   userId: string;
@@ -79,7 +78,11 @@ export class WalletService {
     // 24h window to send the payment
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    logger.info('Deposit initiated', { userId, memo, depositAddress: PLATFORM_DEPOSIT_ADDRESS });
+    logger.info('Deposit initiated', {
+      userId,
+      memo,
+      depositAddress: PLATFORM_DEPOSIT_ADDRESS,
+    });
 
     return {
       depositAddress: PLATFORM_DEPOSIT_ADDRESS,
@@ -100,7 +103,9 @@ export class WalletService {
    *   - Records a CONFIRMED Transaction entity
    *   - Emits portfolio balance_updated WebSocket event
    */
-  async confirmDeposit(params: ConfirmDepositParams): Promise<ConfirmDepositResult> {
+  async confirmDeposit(
+    params: ConfirmDepositParams
+  ): Promise<ConfirmDepositResult> {
     const { userId, txHash } = params;
 
     if (!txHash || typeof txHash !== 'string' || txHash.trim().length === 0) {
@@ -191,9 +196,16 @@ export class WalletService {
       });
     });
 
-    const newBalance = new Decimal(updatedUser.usdcBalance.toString()).toNumber();
+    const newBalance = new Decimal(
+      updatedUser.usdcBalance.toString()
+    ).toNumber();
 
-    logger.info('USDC deposit confirmed', { userId, txHash, amountDeposited, newBalance });
+    logger.info('USDC deposit confirmed', {
+      userId,
+      txHash,
+      amountDeposited,
+      newBalance,
+    });
 
     // Portfolio real-time update
     notifyBalanceUpdated(userId, {
@@ -217,14 +229,18 @@ export class WalletService {
     const { txHash, expectedSender, expectedMemo } = params;
 
     if (!PLATFORM_DEPOSIT_ADDRESS) {
-      return { valid: false, reason: 'Platform deposit address not configured' };
+      return {
+        valid: false,
+        reason: 'Platform deposit address not configured',
+      };
     }
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Horizon, Asset } = await import('@stellar/stellar-sdk');
       const STELLAR_HORIZON_URL =
-        process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+        process.env.STELLAR_HORIZON_URL ||
+        'https://horizon-testnet.stellar.org';
       const USDC_ISSUER =
         process.env.USDC_ISSUER ||
         'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
@@ -275,7 +291,10 @@ export class WalletService {
 
       return { valid: true, amount: depositAmount };
     } catch (error: any) {
-      logger.warn('Stellar Horizon verification failed', { txHash, error: error.message });
+      logger.warn('Stellar Horizon verification failed', {
+        txHash,
+        error: error.message,
+      });
 
       // In development/test without a live Horizon, allow mock hashes
       if (
@@ -317,7 +336,10 @@ export class WalletService {
           fromAddress: params.fromAddress,
           toAddress: params.toAddress,
           failedReason: params.failedReason,
-          confirmedAt: params.status === TransactionStatus.CONFIRMED ? new Date() : undefined,
+          confirmedAt:
+            params.status === TransactionStatus.CONFIRMED
+              ? new Date()
+              : undefined,
         },
       });
     } catch (err) {
@@ -437,4 +459,3 @@ export class WalletService {
 }
 
 export const walletService = new WalletService();
-

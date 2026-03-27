@@ -27,8 +27,11 @@ const router: Router = Router();
  *   }
  * }
  */
-router.get('/status', requireAuth, requireAdmin, (req: Request, res: Response) =>
-  indexerController.getStatus(req, res)
+router.get(
+  '/status',
+  requireAuth,
+  requireAdmin,
+  (req: Request, res: Response) => indexerController.getStatus(req, res)
 );
 
 /**
@@ -41,8 +44,11 @@ router.get('/status', requireAuth, requireAdmin, (req: Request, res: Response) =
  *   message: "Indexer started successfully"
  * }
  */
-router.post('/start', requireAuth, requireAdmin, (req: Request, res: Response) =>
-  indexerController.start(req, res)
+router.post(
+  '/start',
+  requireAuth,
+  requireAdmin,
+  (req: Request, res: Response) => indexerController.start(req, res)
 );
 
 /**
@@ -74,8 +80,11 @@ router.post('/stop', requireAuth, requireAdmin, (req: Request, res: Response) =>
  *   message: "Reprocessing from ledger {startLedger}"
  * }
  */
-router.post('/reprocess', requireAuth, requireAdmin, (req: Request, res: Response) =>
-  indexerController.reprocess(req, res)
+router.post(
+  '/reprocess',
+  requireAuth,
+  requireAdmin,
+  (req: Request, res: Response) => indexerController.reprocess(req, res)
 );
 
 export default router;

@@ -33,7 +33,7 @@ export class BlockchainIndexerService extends BaseBlockchainService {
 
   constructor() {
     super('BlockchainIndexerService');
-    
+
     this.state = {
       lastProcessedLedger: 0,
       isRunning: false,
@@ -177,7 +177,8 @@ export class BlockchainIndexerService extends BaseBlockchainService {
         await this.processNewLedgers();
       } catch (error) {
         logger.error('Error in polling loop', { error });
-        this.state.lastError = error instanceof Error ? error.message : 'Unknown error';
+        this.state.lastError =
+          error instanceof Error ? error.message : 'Unknown error';
       }
 
       // Schedule next poll
@@ -309,11 +310,14 @@ export class BlockchainIndexerService extends BaseBlockchainService {
   ): BlockchainEvent | null {
     try {
       const event = rawEvent as rpc.Api.EventResponse;
-      
-      // Parse topics and value
-      const topics = event.topic.map((topic: string) => {
+
+      // Parse topics — SDK v14 exposes topic as xdr.ScVal[], not string[]
+      const topics = (event.topic as any[]).map((topic: any) => {
         try {
-          const scVal = xdr.ScVal.fromXDR(topic, 'base64');
+          const scVal: xdr.ScVal =
+            typeof topic === 'string'
+              ? xdr.ScVal.fromXDR(topic as string, 'base64')
+              : (topic as xdr.ScVal);
           return scValToNative(scVal);
         } catch {
           return topic;
@@ -322,7 +326,11 @@ export class BlockchainIndexerService extends BaseBlockchainService {
 
       let value: any;
       try {
-        const scVal = xdr.ScVal.fromXDR(event.value, 'base64');
+        const rawValue = event.value as any;
+        const scVal: xdr.ScVal =
+          typeof rawValue === 'string'
+            ? xdr.ScVal.fromXDR(rawValue as string, 'base64')
+            : (rawValue as xdr.ScVal);
         value = scValToNative(scVal);
       } catch {
         value = event.value;
@@ -333,7 +341,7 @@ export class BlockchainIndexerService extends BaseBlockchainService {
 
       return {
         type: eventType,
-        contractId: event.contractId,
+        contractId: String(event.contractId ?? ''),
         topics,
         value,
         ledger: event.ledger,
@@ -398,7 +406,7 @@ export class BlockchainIndexerService extends BaseBlockchainService {
    */
   private async handleMarketCreated(event: BlockchainEvent): Promise<void> {
     const { value } = event;
-    
+
     // Update market with blockchain confirmation
     await prisma.market.updateMany({
       where: {
@@ -634,7 +642,11 @@ export class BlockchainIndexerService extends BaseBlockchainService {
           serviceName: 'BlockchainIndexerService',
           functionName: `processEvent:${event.type}`,
           params: {
-            event,
+            type: event.type,
+            contractId: event.contractId,
+            ledger: event.ledger,
+            txHash: event.txHash,
+            timestamp: event.timestamp.toISOString(),
           },
           error: error instanceof Error ? error.message : String(error),
           status: 'PENDING',
@@ -650,14 +662,14 @@ export class BlockchainIndexerService extends BaseBlockchainService {
    */
   async reprocessFromLedger(startLedger: number): Promise<void> {
     logger.info('Manually reprocessing from ledger', { startLedger });
-    
+
     const wasRunning = this.state.isRunning;
     if (wasRunning) {
       await this.stop();
     }
 
     this.state.lastProcessedLedger = startLedger - 1;
-    
+
     if (wasRunning) {
       await this.start();
     }
@@ -672,7 +684,7 @@ export class BlockchainIndexerService extends BaseBlockchainService {
     ledgersBehind: number;
   }> {
     const latestLedger = await this.rpcServer.getLatestLedger();
-    
+
     return {
       state: this.getState(),
       latestLedger: latestLedger.sequence,

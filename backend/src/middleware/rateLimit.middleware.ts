@@ -51,7 +51,7 @@ function buildHandler(message: string) {
     const retryAfter = res.getHeader('RateLimit-Reset');
     if (retryAfter) {
       const secondsUntilReset = Math.ceil(
-        (Number(retryAfter) - Date.now() / 1000)
+        Number(retryAfter) - Date.now() / 1000
       );
       res.set('Retry-After', String(Math.max(0, secondsUntilReset)));
     }
@@ -122,9 +122,7 @@ export const challengeRateLimiter: RateLimiterMiddleware = rateLimit({
     const pubKey = req.body?.publicKey as string | undefined;
     return pubKey ? `wallet:${pubKey}` : `ip:${getIpKey(req)}`;
   },
-  handler: buildHandler(
-    'Too many challenge requests. Please wait a moment.'
-  ),
+  handler: buildHandler('Too many challenge requests. Please wait a moment.'),
   skip: () => process.env.NODE_ENV === 'test',
 });
 

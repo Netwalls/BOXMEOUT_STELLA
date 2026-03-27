@@ -86,10 +86,8 @@ router.post(
  *       429:
  *         $ref: '#/components/responses/TooManyRequests'
  */
-router.get(
-  '/challenge',
-  challengeRateLimiter,
-  (req, res) => authController.challengeGet(req, res)
+router.get('/challenge', challengeRateLimiter, (req, res) =>
+  authController.challengeGet(req, res)
 );
 
 /**
