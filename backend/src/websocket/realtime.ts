@@ -200,6 +200,62 @@ interface RateLimitTracker {
   windowStart: number;
 }
 
+// ============================================================================
+// USER-SOCKET MAP
+// Tracks authenticated userId → socketId so notification.service.ts can push
+// directly to a specific socket rather than relying solely on room broadcasts.
+// ============================================================================
+
+/**
+ * userId → Set<socketId>  (one user may have multiple tabs open)
+ */
+const userSocketMap = new Map<string, Set<string>>();
+
+/** Register a socket for a user. Called on successful auth. */
+function registerUserSocket(userId: string, socketId: string): void {
+  const sockets = userSocketMap.get(userId) ?? new Set<string>();
+  sockets.add(socketId);
+  userSocketMap.set(userId, sockets);
+}
+
+/** Remove a socket from the map. Called on disconnect. */
+function unregisterUserSocket(userId: string, socketId: string): void {
+  const sockets = userSocketMap.get(userId);
+  if (!sockets) return;
+  sockets.delete(socketId);
+  if (sockets.size === 0) userSocketMap.delete(userId);
+}
+
+/** Retrieve all socket IDs for a user (may be empty). */
+export function getSocketIdsForUser(userId: string): string[] {
+  return [...(userSocketMap.get(userId) ?? [])];
+}
+
+/**
+ * Push a notification payload directly to every socket owned by userId.
+ * Falls back gracefully when the user has no active connections.
+ */
+export function pushNotificationToUser(
+  io: SocketIOServer,
+  userId: string,
+  payload: Record<string, unknown>
+): void {
+  const socketIds = getSocketIdsForUser(userId);
+  if (socketIds.length === 0) {
+    logger.debug('pushNotificationToUser: no active sockets for user', {
+      userId,
+    });
+    return;
+  }
+  for (const socketId of socketIds) {
+    io.to(socketId).emit('notification', payload);
+  }
+  logger.debug('pushNotificationToUser: pushed to sockets', {
+    userId,
+    socketCount: socketIds.length,
+  });
+}
+
 /**
  * Initialize Socket.io server with authentication and room management
  */
@@ -220,7 +276,7 @@ export function initializeSocketIO(
   // Rate limit tracking per socket
   const rateLimits = new Map<string, RateLimitTracker>();
 
-  // JWT authentication middleware
+  // JWT authentication middleware — validates handshake token
   io.use(async (socket: Socket, next: (err?: Error) => void) => {
     try {
       const token = socket.handshake.auth.token;
@@ -263,6 +319,9 @@ export function initializeSocketIO(
       userId: socketData.userId,
     });
 
+    // Register in user-socket map so notification.service.ts can push directly
+    registerUserSocket(socketData.userId, socket.id);
+
     // Join user's personal room for notifications
     const userRoom = `user:${socketData.userId}`;
     socket.join(userRoom);
@@ -293,6 +352,57 @@ export function initializeSocketIO(
       subscribeCount: 0,
       unsubscribeCount: 0,
       windowStart: Date.now(),
+    });
+
+    // -------------------------------------------------------------------------
+    // Message-based auth: { type: 'auth', token }
+    // Supports clients that cannot set handshake headers (e.g. raw WebSocket).
+    // The handshake middleware already authenticated the connection; this handler
+    // allows a client to re-authenticate or confirm identity post-connect.
+    // -------------------------------------------------------------------------
+    socket.on('auth', (data: { token?: string }) => {
+      if (!data?.token) {
+        socket.emit('auth_error', { message: 'Token required' });
+        return;
+      }
+
+      try {
+        const payload = verifyAccessToken(data.token);
+
+        // If the userId differs from the handshake auth (e.g. token refresh),
+        // update the socket data and re-register in the map.
+        if (payload.userId !== socketData.userId) {
+          unregisterUserSocket(socketData.userId, socket.id);
+          socketData.userId = payload.userId;
+          socketData.publicKey = payload.publicKey;
+          registerUserSocket(payload.userId, socket.id);
+
+          // Re-join the correct user rooms
+          socket.leave(userRoom);
+          socket.leave(portfolioRoom);
+          socket.join(`user:${payload.userId}`);
+          socket.join(`portfolio:${payload.userId}`);
+        }
+
+        socket.emit('auth_success', {
+          userId: payload.userId,
+          timestamp: Date.now(),
+        });
+
+        logger.info('WebSocket re-authenticated via message', {
+          socketId: socket.id,
+          userId: payload.userId,
+        });
+      } catch (error) {
+        socket.emit('auth_error', {
+          message:
+            error instanceof Error ? error.message : 'Authentication failed',
+        });
+        logger.warn('WebSocket message-based auth failed', {
+          socketId: socket.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     });
 
     // Heartbeat handler
@@ -356,6 +466,9 @@ export function initializeSocketIO(
         userId: socketData.userId,
         reason,
       });
+
+      // Remove from user-socket map
+      unregisterUserSocket(socketData.userId, socket.id);
 
       // Cleanup rate limit tracker
       rateLimits.delete(socket.id);

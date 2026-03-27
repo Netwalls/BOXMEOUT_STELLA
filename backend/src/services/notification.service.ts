@@ -4,6 +4,7 @@ import { UserRepository } from '../repositories/user.repository.js';
 import { NotificationType, UserTier } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 import { Server as SocketIOServer } from 'socket.io';
+import { pushNotificationToUser } from '../websocket/realtime.js';
 
 export interface NotificationPayload {
   userId: string;
@@ -111,7 +112,9 @@ export class NotificationService {
   }
 
   /**
-   * Send real-time notification via WebSocket
+   * Send real-time notification via WebSocket.
+   * Pushes directly to every socket owned by the user (via user-socket map),
+   * then also emits to the user room so any room-subscribed listeners receive it.
    */
   private async sendRealtimeNotification(
     userId: string,
@@ -124,17 +127,19 @@ export class NotificationService {
       return;
     }
 
+    const payload = {
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      metadata: notification.metadata,
+      isRead: notification.isRead,
+      createdAt: notification.createdAt,
+    };
+
     try {
-      // Emit to user's personal room
-      this.io.to(`user:${userId}`).emit('notification', {
-        id: notification.id,
-        type: notification.type,
-        title: notification.title,
-        message: notification.message,
-        metadata: notification.metadata,
-        isRead: notification.isRead,
-        createdAt: notification.createdAt,
-      });
+      // Direct push via user-socket map (primary path)
+      pushNotificationToUser(this.io, userId, payload);
 
       logger.debug('Real-time notification sent', {
         userId,
