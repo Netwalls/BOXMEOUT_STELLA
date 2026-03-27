@@ -95,6 +95,32 @@ pub struct LiquidityAdded {
     pub k: u128,
 }
 
+/// Emitted when a market pool is seeded for the first time.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketSeeded {
+    pub market_id: BytesN<32>,
+    pub provider: Address,
+    pub collateral: u128,
+    pub lp_shares: u128,
+    pub reserve_per_outcome: u128,
+    pub k: u128,
+}
+
+/// Snapshot of an initialised AMM pool — stored once at seed time.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AmmPool {
+    /// Collateral held per outcome reserve (equal at seed time).
+    pub reserve_per_outcome: u128,
+    /// Number of outcome buckets (always 2 for YES/NO markets).
+    pub num_outcomes: u32,
+    /// CPMM invariant k = yes_reserve * no_reserve.
+    pub invariant_k: u128,
+    /// Total LP shares outstanding.
+    pub lp_supply: u128,
+}
+
 fn calculate_lp_tokens_to_mint(
     current_lp_supply: u128,
     current_total_liquidity: u128,
@@ -124,13 +150,16 @@ pub type AMMContract = AMM;
 
 #[contractimpl]
 impl AMM {
-    /// Initialize AMM with liquidity pools
+    /// Initialize AMM with liquidity pools.
+    ///
+    /// `min_liquidity` is the minimum collateral required to seed any pool.
     pub fn initialize(
         env: Env,
         admin: Address,
         factory: Address,
         usdc_token: Address,
         max_liquidity_cap: u128,
+        min_liquidity: u128,
     ) {
         // Verify admin signature
         admin.require_auth();
@@ -155,6 +184,11 @@ impl AMM {
             &Symbol::new(&env, MAX_LIQUIDITY_CAP_KEY),
             &max_liquidity_cap,
         );
+
+        // Set minimum liquidity required to seed a pool
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, MIN_LIQUIDITY_KEY), &min_liquidity);
 
         // Set slippage_protection default (2% = 200 basis points)
         env.storage()
@@ -1228,7 +1262,7 @@ mod tests {
         let amm = AMMClient::new(env, &amm_id);
 
         env.mock_all_auths();
-        amm.initialize(&admin, &factory, &usdc.address, &1_000_000_000u128);
+        amm.initialize(&admin, &factory, &usdc.address, &1_000_000_000u128, &1_000u128);
 
         let market_id = BytesN::from_array(env, &[7u8; 32]);
         usdc.mint(&initial_lp, &2_000_000i128);

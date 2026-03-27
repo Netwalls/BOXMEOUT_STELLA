@@ -93,11 +93,19 @@ const VOLUME_24H_KEY: &str = "volume_24h";
 const LAST_TRADE_AT_KEY: &str = "last_trade_at";
 
 /// Market states
+const STATE_INITIALIZING: u32 = 5; // Awaiting seed_pool before trading opens
 const STATE_OPEN: u32 = 0;
 const STATE_CLOSED: u32 = 1;
 const STATE_RESOLVED: u32 = 2;
 const STATE_DISPUTED: u32 = 3;
 const STATE_CANCELLED: u32 = 4;
+
+/// Public re-exports so the AMM contract can read/write market state
+/// without duplicating magic numbers.
+#[allow(dead_code)]
+pub const MARKET_STATE_INITIALIZING: u32 = STATE_INITIALIZING;
+#[allow(dead_code)]
+pub const MARKET_STATE_OPEN: u32 = STATE_OPEN;
 
 /// Error codes following Soroban best practices
 #[contracterror]
@@ -299,7 +307,7 @@ impl PredictionMarket {
 
         env.storage()
             .persistent()
-            .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_OPEN);
+            .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_INITIALIZING);
 
         // Initialize prediction pools
         env.storage()
@@ -508,6 +516,39 @@ impl PredictionMarket {
         env.storage()
             .persistent()
             .get(&Symbol::new(&env, MARKET_STATE_KEY))
+    }
+
+    /// Return the market creator address.
+    pub fn get_creator(env: Env) -> Address {
+        env.storage()
+            .persistent()
+            .get(&Symbol::new(&env, CREATOR_KEY))
+            .expect("market not initialized")
+    }
+
+    /// Transition market from Initializing → Open.
+    /// Only callable by the stored creator (enforced by the AMM seed_pool path).
+    pub fn set_open(env: Env, caller: Address) {
+        caller.require_auth();
+        let creator: Address = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, CREATOR_KEY))
+            .expect("market not initialized");
+        if caller != creator {
+            panic!("only the market creator can open the market");
+        }
+        let state: u32 = env
+            .storage()
+            .persistent()
+            .get(&Symbol::new(&env, MARKET_STATE_KEY))
+            .expect("market not initialized");
+        if state != STATE_INITIALIZING {
+            panic!("market is not in Initializing state");
+        }
+        env.storage()
+            .persistent()
+            .set(&Symbol::new(&env, MARKET_STATE_KEY), &STATE_OPEN);
     }
 
     /// Phase 2: User reveals their committed prediction

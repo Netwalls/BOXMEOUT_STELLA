@@ -49,7 +49,7 @@ fn test_complete_prediction_flow() {
     factory_client.initialize(&admin, &usdc_token, &treasury_id);
     treasury_client.initialize(&admin, &usdc_token, &factory_id);
     oracle_client.initialize(&admin, &2u32);
-    amm_client.initialize(&admin, &factory_id, &usdc_token, &100_000_000_000u128);
+    amm_client.initialize(&admin, &factory_id, &usdc_token, &100_000_000_000u128, &1_000u128);
 
     // Step 3: Register oracles
     let oracle1 = Address::generate(&env);
@@ -142,7 +142,7 @@ fn test_market_creation_and_trading() {
 
     // Initialize
     factory_client.initialize(&admin, &usdc_token, &treasury);
-    amm_client.initialize(&admin, &factory_id, &usdc_token, &100_000_000_000u128);
+    amm_client.initialize(&admin, &factory_id, &usdc_token, &100_000_000_000u128, &1_000u128);
 
     // TODO: Implement when functions ready
     // Create market

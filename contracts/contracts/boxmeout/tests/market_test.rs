@@ -82,6 +82,9 @@ fn setup_test_market(
         &resolution_time,
     );
 
+    // Transition from Initializing → Open so commit/reveal tests work.
+    client.set_open(&creator);
+
     (
         client,
         market_id,
@@ -140,7 +143,7 @@ fn test_market_initialize() {
     let (client, _market_id, _creator, _admin, _usdc_address, _market_contract) =
         setup_test_market(&env);
 
-    // Verify market state is OPEN (0)
+    // Verify market state is OPEN (0) — setup_test_market calls set_open after initialize
     let state = client.get_market_state_value();
     assert_eq!(state, Some(0));
 

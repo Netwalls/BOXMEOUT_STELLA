@@ -1885,7 +1885,10 @@ impl PredictionMarketContract {
         env: Env,
         market_id: u64,
     ) -> Result<Market, PredictionMarketError> {
-        todo!("Implement get_market")
+        env.storage()
+            .persistent()
+            .get(&DataKey::Market(market_id))
+            .ok_or(PredictionMarketError::MarketNotFound)
     }
 
     /// Return a user's position in a specific outcome of a specific market.
