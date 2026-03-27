@@ -1,6 +1,10 @@
 // Base repository with common CRUD operations
 import { PrismaClient } from '@prisma/client';
 import { prisma } from '../database/prisma.js';
+import {
+  databaseQueryDuration,
+  databaseQueryErrors,
+} from '../config/metrics.js';
 
 // ─── Typed Repository Error ───────────────────────────────────────────────────
 
@@ -27,7 +31,10 @@ export class RepositoryError extends Error {
  * Exported so subclasses can wrap their own domain-specific Prisma calls.
  * Uses duck-typing to avoid importing Prisma error classes directly (Prisma v5 compat).
  */
-export function toRepositoryError(modelName: string, err: unknown): RepositoryError {
+export function toRepositoryError(
+  modelName: string,
+  err: unknown
+): RepositoryError {
   // PrismaClientKnownRequestError has a `code` string property
   if (isPrismaKnownError(err)) {
     switch (err.code) {
@@ -100,18 +107,34 @@ export abstract class BaseRepository<T> {
     return (this.prisma as any)[this.getModelName()];
   }
 
+  /**
+   * Wraps a Prisma call with databaseQueryDuration histogram instrumentation.
+   * On error it increments databaseQueryErrors and re-throws as RepositoryError.
+   */
+  protected async timedQuery<R>(
+    operation: string,
+    fn: () => Promise<R>
+  ): Promise<R> {
+    const table = this.getModelName();
+    const end = databaseQueryDuration.startTimer({ operation, table });
+    try {
+      const result = await fn();
+      end();
+      return result;
+    } catch (error) {
+      end();
+      databaseQueryErrors.labels(operation, table).inc();
+      throw toRepositoryError(table, error);
+    }
+  }
+
   async findById(
     id: string,
     options?: { select?: any; include?: any }
   ): Promise<T | null> {
-    try {
-      return await this.getModel().findUnique({
-        where: { id },
-        ...options,
-      });
-    } catch (error) {
-      throw toRepositoryError(this.getModelName(), error);
-    }
+    return this.timedQuery('findById', () =>
+      this.getModel().findUnique({ where: { id }, ...options })
+    );
   }
 
   async findMany(options?: {
@@ -122,22 +145,16 @@ export abstract class BaseRepository<T> {
     take?: number;
     include?: any;
   }): Promise<T[]> {
-    try {
-      return await this.getModel().findMany(options);
-    } catch (error) {
-      throw toRepositoryError(this.getModelName(), error);
-    }
+    return this.timedQuery('findMany', () => this.getModel().findMany(options));
   }
 
   async create(
     data: any,
     options?: { select?: any; include?: any }
   ): Promise<T> {
-    try {
-      return await this.getModel().create({ data, ...options });
-    } catch (error) {
-      throw toRepositoryError(this.getModelName(), error);
-    }
+    return this.timedQuery('create', () =>
+      this.getModel().create({ data, ...options })
+    );
   }
 
   async update(
@@ -145,39 +162,25 @@ export abstract class BaseRepository<T> {
     data: any,
     options?: { select?: any; include?: any }
   ): Promise<T> {
-    try {
-      return await this.getModel().update({
-        where: { id },
-        data,
-        ...options,
-      });
-    } catch (error) {
-      throw toRepositoryError(this.getModelName(), error);
-    }
+    return this.timedQuery('update', () =>
+      this.getModel().update({ where: { id }, data, ...options })
+    );
   }
 
   async delete(id: string): Promise<T> {
-    try {
-      return await this.getModel().delete({ where: { id } });
-    } catch (error) {
-      throw toRepositoryError(this.getModelName(), error);
-    }
+    return this.timedQuery('delete', () =>
+      this.getModel().delete({ where: { id } })
+    );
   }
 
   async count(where?: any): Promise<number> {
-    try {
-      return await this.getModel().count({ where });
-    } catch (error) {
-      throw toRepositoryError(this.getModelName(), error);
-    }
+    return this.timedQuery('count', () => this.getModel().count({ where }));
   }
 
   async exists(where: any): Promise<boolean> {
-    try {
+    return this.timedQuery('exists', async () => {
       const result = await this.getModel().count({ where });
       return result > 0;
-    } catch (error) {
-      throw toRepositoryError(this.getModelName(), error);
-    }
+    });
   }
 }

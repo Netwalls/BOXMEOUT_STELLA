@@ -1,6 +1,6 @@
 // Prediction repository - data access layer for predictions
 import { Prediction, PredictionStatus } from '@prisma/client';
-import { BaseRepository, toRepositoryError } from './base.repository.js';
+import { BaseRepository } from './base.repository.js';
 
 export class PredictionRepository extends BaseRepository<Prediction> {
   getModelName(): string {
@@ -17,26 +17,22 @@ export class PredictionRepository extends BaseRepository<Prediction> {
     transactionHash?: string;
     status?: PredictionStatus;
   }): Promise<Prediction> {
-    try {
-      return await this.prisma.prediction.create({
+    return this.timedQuery('createPrediction', () =>
+      this.prisma.prediction.create({
         data: { ...data, status: data.status || PredictionStatus.COMMITTED },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async findByUserAndMarket(userId: string, marketId: string): Promise<Prediction | null> {
-    try {
-      return await this.prisma.prediction.findFirst({ where: { userId, marketId } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('findByUserAndMarket', () =>
+      this.prisma.prediction.findFirst({ where: { userId, marketId } })
+    );
   }
 
   async revealPrediction(predictionId: string, predictedOutcome: number, revealTxHash?: string): Promise<Prediction> {
-    try {
-      return await this.prisma.prediction.update({
+    return this.timedQuery('revealPrediction', () =>
+      this.prisma.prediction.update({
         where: { id: predictionId },
         data: {
           predictedOutcome,
@@ -46,40 +42,34 @@ export class PredictionRepository extends BaseRepository<Prediction> {
           encryptedSalt: null,
           saltIv: null,
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async settlePrediction(predictionId: string, isWinner: boolean, pnlUsd: number): Promise<Prediction> {
-    try {
-      return await this.prisma.prediction.update({
+    return this.timedQuery('settlePrediction', () =>
+      this.prisma.prediction.update({
         where: { id: predictionId },
         data: { status: PredictionStatus.SETTLED, isWinner, pnlUsd, settledAt: new Date() },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async claimWinnings(predictionId: string): Promise<Prediction> {
-    try {
-      return await this.prisma.prediction.update({
+    return this.timedQuery('claimWinnings', () =>
+      this.prisma.prediction.update({
         where: { id: predictionId },
         data: { winningsClaimed: true },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async findUserPredictions(
     userId: string,
     options?: { status?: PredictionStatus; skip?: number; take?: number }
   ): Promise<Prediction[]> {
-    try {
-      return await this.prisma.prediction.findMany({
+    return this.timedQuery('findUserPredictions', () =>
+      this.prisma.prediction.findMany({
         where: { userId, ...(options?.status && { status: options.status }) },
         orderBy: { createdAt: 'desc' },
         skip: options?.skip,
@@ -87,38 +77,32 @@ export class PredictionRepository extends BaseRepository<Prediction> {
         include: {
           market: { select: { id: true, title: true, category: true, status: true, outcomeA: true, outcomeB: true } },
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async findMarketPredictions(marketId: string): Promise<Prediction[]> {
-    try {
-      return await this.prisma.prediction.findMany({
+    return this.timedQuery('findMarketPredictions', () =>
+      this.prisma.prediction.findMany({
         where: { marketId, status: PredictionStatus.REVEALED },
         include: {
           user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async getUnclaimedWinnings(userId: string): Promise<Prediction[]> {
-    try {
-      return await this.prisma.prediction.findMany({
+    return this.timedQuery('getUnclaimedWinnings', () =>
+      this.prisma.prediction.findMany({
         where: { userId, status: PredictionStatus.SETTLED, isWinner: true, winningsClaimed: false },
         include: { market: { select: { id: true, title: true, category: true } } },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async getUserPredictionStats(userId: string) {
-    try {
+    return this.timedQuery('getUserPredictionStats', async () => {
       const [total, wins, losses, totalPnl, avgPnl] = await Promise.all([
         this.prisma.prediction.count({ where: { userId, status: PredictionStatus.SETTLED } }),
         this.prisma.prediction.count({ where: { userId, status: PredictionStatus.SETTLED, isWinner: true } }),
@@ -134,13 +118,11 @@ export class PredictionRepository extends BaseRepository<Prediction> {
         totalPnl: totalPnl._sum.pnlUsd || 0,
         avgPnl: avgPnl._avg.pnlUsd || 0,
       };
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    });
   }
 
   async getMarketPredictionStats(marketId: string) {
-    try {
+    return this.timedQuery('getMarketPredictionStats', async () => {
       const [total, yesCount, noCount, totalVolume] = await Promise.all([
         this.prisma.prediction.count({ where: { marketId, status: PredictionStatus.REVEALED } }),
         this.prisma.prediction.count({ where: { marketId, status: PredictionStatus.REVEALED, predictedOutcome: 1 } }),
@@ -155,8 +137,6 @@ export class PredictionRepository extends BaseRepository<Prediction> {
         noPercentage: total > 0 ? (noCount / total) * 100 : 0,
         totalVolume: totalVolume._sum.amountUsdc || 0,
       };
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    });
   }
 }

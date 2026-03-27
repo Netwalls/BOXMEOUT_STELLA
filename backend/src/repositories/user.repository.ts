@@ -1,6 +1,6 @@
 // User repository - data access layer for users
 import { User, UserTier, Prisma } from '@prisma/client';
-import { BaseRepository, toRepositoryError } from './base.repository.js';
+import { BaseRepository } from './base.repository.js';
 
 export class UserRepository extends BaseRepository<User> {
   getModelName(): string {
@@ -8,27 +8,21 @@ export class UserRepository extends BaseRepository<User> {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    try {
-      return await this.prisma.user.findUnique({ where: { email } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('findByEmail', () =>
+      this.prisma.user.findUnique({ where: { email } })
+    );
   }
 
   async findByUsername(username: string): Promise<User | null> {
-    try {
-      return await this.prisma.user.findUnique({ where: { username } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('findByUsername', () =>
+      this.prisma.user.findUnique({ where: { username } })
+    );
   }
 
   async findByWalletAddress(walletAddress: string): Promise<User | null> {
-    try {
-      return await this.prisma.user.findUnique({ where: { walletAddress } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('findByWalletAddress', () =>
+      this.prisma.user.findUnique({ where: { walletAddress } })
+    );
   }
 
   async createUser(data: {
@@ -38,51 +32,41 @@ export class UserRepository extends BaseRepository<User> {
     displayName?: string;
     walletAddress?: string;
   }): Promise<User> {
-    try {
-      return await this.prisma.user.create({ data });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('createUser', () =>
+      this.prisma.user.create({ data })
+    );
   }
 
   async updateBalance(userId: string, usdcBalance?: number, xlmBalance?: number): Promise<User> {
-    try {
+    return this.timedQuery('updateBalance', () => {
       const updateData: any = {};
       if (usdcBalance !== undefined) updateData.usdcBalance = usdcBalance;
       if (xlmBalance !== undefined) updateData.xlmBalance = xlmBalance;
-      return await this.prisma.user.update({ where: { id: userId }, data: updateData });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      return this.prisma.user.update({ where: { id: userId }, data: updateData });
+    });
   }
 
   async updateWalletAddress(userId: string, walletAddress: string): Promise<User> {
-    try {
-      return await this.prisma.user.update({ where: { id: userId }, data: { walletAddress } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('updateWalletAddress', () =>
+      this.prisma.user.update({ where: { id: userId }, data: { walletAddress } })
+    );
   }
 
   async updateTier(userId: string, tier: UserTier): Promise<User> {
-    try {
-      return await this.prisma.user.update({ where: { id: userId }, data: { tier } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('updateTier', () =>
+      this.prisma.user.update({ where: { id: userId }, data: { tier } })
+    );
   }
 
   async updateLastLogin(userId: string): Promise<User> {
-    try {
-      return await this.prisma.user.update({ where: { id: userId }, data: { lastLogin: new Date() } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('updateLastLogin', () =>
+      this.prisma.user.update({ where: { id: userId }, data: { lastLogin: new Date() } })
+    );
   }
 
   async searchUsers(query: string, limit: number = 10): Promise<Partial<User>[]> {
-    try {
-      return await this.prisma.user.findMany({
+    return this.timedQuery('searchUsers', () =>
+      this.prisma.user.findMany({
         where: {
           OR: [
             { username: { contains: query, mode: 'insensitive' } },
@@ -100,14 +84,12 @@ export class UserRepository extends BaseRepository<User> {
           reputationScore: true,
           createdAt: true,
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async getUserStats(userId: string) {
-    try {
+    return this.timedQuery('getUserStats', async () => {
       const [user, predictionCount, winCount, totalPnl] = await Promise.all([
         this.findById(userId),
         this.prisma.prediction.count({ where: { userId, status: 'SETTLED' } }),
@@ -125,8 +107,6 @@ export class UserRepository extends BaseRepository<User> {
         winRate: predictionCount > 0 ? (winCount / predictionCount) * 100 : 0,
         totalPnl: totalPnl._sum.pnlUsd || 0,
       };
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    });
   }
 }

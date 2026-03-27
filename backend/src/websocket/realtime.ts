@@ -3,6 +3,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { verifyAccessToken } from '../utils/jwt.js';
 import { logger } from '../utils/logger.js';
 import { AuthError } from '../types/auth.types.js';
+import { trackWebSocketConnection } from '../config/metrics.js';
 
 export interface MarketOdds {
   yes: number;
@@ -258,6 +259,8 @@ export function initializeSocketIO(
   io.on('connection', (socket: Socket) => {
     const socketData = socket.data as SocketData;
 
+    trackWebSocketConnection('connect');
+
     logger.info('WebSocket connected', {
       socketId: socket.id,
       userId: socketData.userId,
@@ -351,6 +354,8 @@ export function initializeSocketIO(
 
     // Disconnect handler
     socket.on('disconnect', (reason: string) => {
+      trackWebSocketConnection('disconnect');
+
       logger.info('WebSocket disconnected', {
         socketId: socket.id,
         userId: socketData.userId,

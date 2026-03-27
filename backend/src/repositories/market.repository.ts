@@ -1,6 +1,6 @@
 // Market repository - data access layer for markets
 import { Market, MarketStatus, MarketCategory } from '@prisma/client';
-import { BaseRepository, toRepositoryError } from './base.repository.js';
+import { BaseRepository } from './base.repository.js';
 
 export class MarketRepository extends BaseRepository<Market> {
   getModelName(): string {
@@ -8,16 +8,14 @@ export class MarketRepository extends BaseRepository<Market> {
   }
 
   async findByContractAddress(contractAddress: string): Promise<Market | null> {
-    try {
-      return await this.prisma.market.findUnique({ where: { contractAddress } });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    return this.timedQuery('findByContractAddress', () =>
+      this.prisma.market.findUnique({ where: { contractAddress } })
+    );
   }
 
   async addAttestation(marketId: string, oracleId: string, outcome: number, txHash: string) {
-    try {
-      return await this.prisma.$transaction(async (tx) => {
+    return this.timedQuery('addAttestation', () =>
+      this.prisma.$transaction(async (tx) => {
         const attestation = await tx.attestation.create({
           data: { marketId, oracleId, outcome, txHash },
         });
@@ -26,21 +24,17 @@ export class MarketRepository extends BaseRepository<Market> {
           data: { attestationCount: { increment: 1 } },
         });
         return { attestation, market };
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async hasAttested(marketId: string, oracleId: string): Promise<boolean> {
-    try {
+    return this.timedQuery('hasAttested', async () => {
       const record = await this.prisma.attestation.findUnique({
         where: { marketId_oracleId: { marketId, oracleId } },
       });
       return !!record;
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    });
   }
 
   async createMarket(data: {
@@ -53,16 +47,14 @@ export class MarketRepository extends BaseRepository<Market> {
     outcomeB: string;
     closingAt: Date;
   }): Promise<Market> {
-    try {
-      return await this.prisma.market.create({
+    return this.timedQuery('createMarket', () =>
+      this.prisma.market.create({
         data,
         include: {
           creator: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async findActiveMarkets(options?: {
@@ -70,8 +62,8 @@ export class MarketRepository extends BaseRepository<Market> {
     skip?: number;
     take?: number;
   }): Promise<Market[]> {
-    try {
-      return await this.prisma.market.findMany({
+    return this.timedQuery('findActiveMarkets', () =>
+      this.prisma.market.findMany({
         where: {
           status: MarketStatus.OPEN,
           closingAt: { gt: new Date() },
@@ -83,21 +75,17 @@ export class MarketRepository extends BaseRepository<Market> {
         include: {
           creator: { select: { id: true, username: true, displayName: true } },
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async findMarketsByCreator(creatorId: string): Promise<Market[]> {
-    try {
-      return await this.prisma.market.findMany({
+    return this.timedQuery('findMarketsByCreator', () =>
+      this.prisma.market.findMany({
         where: { creatorId },
         orderBy: { createdAt: 'desc' },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async updateMarketStatus(
@@ -110,14 +98,12 @@ export class MarketRepository extends BaseRepository<Market> {
       resolutionSource?: string;
     }
   ): Promise<Market> {
-    try {
-      return await this.prisma.market.update({
+    return this.timedQuery('updateMarketStatus', () =>
+      this.prisma.market.update({
         where: { id: marketId },
         data: { status, ...additionalData },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async updateMarketVolume(
@@ -125,109 +111,93 @@ export class MarketRepository extends BaseRepository<Market> {
     volumeChange: number,
     incrementParticipants: boolean = false
   ): Promise<Market> {
-    try {
-      return await this.prisma.market.update({
+    return this.timedQuery('updateMarketVolume', () =>
+      this.prisma.market.update({
         where: { id: marketId },
         data: {
           totalVolume: { increment: volumeChange },
           ...(incrementParticipants && { participantCount: { increment: 1 } }),
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async updateLiquidity(marketId: string, yesLiquidity: number, noLiquidity: number): Promise<Market> {
-    try {
-      return await this.prisma.market.update({
+    return this.timedQuery('updateLiquidity', () =>
+      this.prisma.market.update({
         where: { id: marketId },
         data: { yesLiquidity, noLiquidity },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async setPoolTxHash(marketId: string, txHash: string): Promise<Market> {
-    try {
-      return await this.prisma.market.update({
+    return this.timedQuery('setPoolTxHash', () =>
+      this.prisma.market.update({
         where: { id: marketId },
         data: { poolTxHash: txHash },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async addFeesCollected(marketId: string, feeAmount: number): Promise<Market> {
-    try {
-      return await this.prisma.market.update({
+    return this.timedQuery('addFeesCollected', () =>
+      this.prisma.market.update({
         where: { id: marketId },
         data: { feesCollected: { increment: feeAmount } },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async getTrendingMarkets(limit: number = 10): Promise<Market[]> {
-    try {
-      return await this.prisma.market.findMany({
+    return this.timedQuery('getTrendingMarkets', () =>
+      this.prisma.market.findMany({
         where: { status: MarketStatus.OPEN, closingAt: { gt: new Date() } },
         orderBy: [{ totalVolume: 'desc' }, { participantCount: 'desc' }],
         take: limit,
         include: {
           creator: { select: { id: true, username: true, displayName: true } },
         },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async getMarketsByCategory(category: MarketCategory, skip?: number, take?: number): Promise<Market[]> {
-    try {
-      return await this.prisma.market.findMany({
+    return this.timedQuery('getMarketsByCategory', () =>
+      this.prisma.market.findMany({
         where: { category, status: MarketStatus.OPEN },
         orderBy: { closingAt: 'asc' },
         skip,
         take: take || 20,
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async getClosedMarketsAwaitingResolution(): Promise<Market[]> {
-    try {
-      return await this.prisma.market.findMany({
+    return this.timedQuery('getClosedMarketsAwaitingResolution', () =>
+      this.prisma.market.findMany({
         where: { status: MarketStatus.CLOSED },
         orderBy: { closedAt: 'asc' },
-      });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+      })
+    );
   }
 
   async getClosingMarkets(withinHours: number = 24): Promise<Market[]> {
-    try {
+    return this.timedQuery('getClosingMarkets', () => {
       const closingTime = new Date();
       closingTime.setHours(closingTime.getHours() + withinHours);
-      return await this.prisma.market.findMany({
+      return this.prisma.market.findMany({
         where: {
           status: MarketStatus.OPEN,
           closingAt: { gte: new Date(), lte: closingTime },
         },
         orderBy: { closingAt: 'asc' },
       });
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    });
   }
 
   async getMarketStatistics() {
-    try {
+    return this.timedQuery('getMarketStatistics', async () => {
       const [totalMarkets, activeMarkets, totalVolume, avgParticipants] = await Promise.all([
         this.prisma.market.count(),
         this.prisma.market.count({ where: { status: MarketStatus.OPEN } }),
@@ -240,8 +210,6 @@ export class MarketRepository extends BaseRepository<Market> {
         totalVolume: totalVolume._sum.totalVolume || 0,
         avgParticipants: avgParticipants._avg.participantCount || 0,
       };
-    } catch (err) {
-      throw toRepositoryError(this.getModelName(), err);
-    }
+    });
   }
 }
