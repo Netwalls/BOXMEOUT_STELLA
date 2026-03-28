@@ -30,6 +30,61 @@ router.post('/buy', requireAuth, (req, res) =>
  */
 router.get('/quote', (req, res) => tradingController.getQuote(req, res));
 
+/**
+ * @swagger
+ * /api/trading/history:
+ *   get:
+ *     summary: Get authenticated user's trade history
+ *     description: Returns a paginated list of trades for the logged-in user
+ *     tags: [Trading]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Records per page
+ *       - in: query
+ *         name: outcomeId
+ *         schema:
+ *           type: integer
+ *           enum: [0, 1]
+ *         description: Filter by outcome (0 for NO, 1 for YES)
+ *     responses:
+ *       200:
+ *         description: Trade history retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Trade'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router.get('/history', requireAuth, (req, res) =>
+  tradingController.getHistory(req, res)
+);
+
 // ─── Direct Trading / Admin-signed Routes ────────────────────────────────────
 // These are typically mounted at /api/markets
 
@@ -248,6 +303,57 @@ router.post(
  */
 router.get('/:marketId/odds', (req, res) =>
   tradingController.getOdds(req, res)
+);
+
+/**
+ * @swagger
+ * /api/markets/{marketId}/trades:
+ *   get:
+ *     summary: Get public trade history for a market
+ *     description: Returns a paginated list of all confirmed trades for a specific market
+ *     tags: [Trading]
+ *     parameters:
+ *       - $ref: '#/components/parameters/MarketId'
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *       - in: query
+ *         name: outcomeId
+ *         schema:
+ *           type: integer
+ *           enum: [0, 1]
+ *     responses:
+ *       200:
+ *         description: Market trades retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Trade'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.get('/:marketId/trades', (req, res) =>
+  tradingController.getMarketTrades(req, res)
 );
 
 /**

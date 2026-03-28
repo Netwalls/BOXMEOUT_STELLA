@@ -567,6 +567,50 @@ export class TradingService {
 
     return odds;
   }
+
+  /**
+   * Get paginated trade history for a user
+   */
+  async getUserTradeHistory(
+    userId: string,
+    params: { page: number; limit: number; outcomeId?: number }
+  ) {
+    const skip = (params.page - 1) * params.limit;
+    const { trades, total } = await tradeRepository.findUserTrades(userId, {
+      skip,
+      take: params.limit,
+      outcome: params.outcomeId,
+    });
+
+    return {
+      data: trades,
+      total,
+      page: params.page,
+      limit: params.limit,
+    };
+  }
+
+  /**
+   * Get paginated trade history for a market
+   */
+  async getMarketTradeHistory(
+    marketId: string,
+    params: { page: number; limit: number; outcomeId?: number }
+  ) {
+    const skip = (params.page - 1) * params.limit;
+    const { trades, total } = await tradeRepository.findMarketTrades(marketId, {
+      skip,
+      take: params.limit,
+      outcome: params.outcomeId,
+    });
+
+    return {
+      data: trades,
+      total,
+      page: params.page,
+      limit: params.limit,
+    };
+  }
 }
 
 export const tradingService = new TradingService();

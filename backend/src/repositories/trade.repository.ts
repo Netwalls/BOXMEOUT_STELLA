@@ -54,39 +54,59 @@ export class TradeRepository extends BaseRepository<Trade> {
     options?: {
       tradeType?: TradeType;
       status?: TradeStatus;
+      outcome?: number;
       skip?: number;
       take?: number;
     }
-  ): Promise<Trade[]> {
-    return this.timedQuery('findUserTrades', () =>
-      this.prisma.trade.findMany({
-        where: {
-          userId,
-          ...(options?.tradeType && { tradeType: options.tradeType }),
-          ...(options?.status && { status: options.status }),
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: options?.skip,
-        take: options?.take || 50,
-        include: {
-          market: { select: { id: true, title: true, category: true } },
-        },
-      })
-    );
-  }
+  ): Promise<{ trades: Trade[]; total: number }> {
+    return this.timedQuery('findUserTrades', async () => {
+      const where = {
+        userId,
+        ...(options?.tradeType && { tradeType: options.tradeType }),
+        ...(options?.status && { status: options.status }),
+        ...(options?.outcome !== undefined && { outcome: options.outcome }),
+      };
+
+      const [trades, total] = await Promise.all([
+        this.prisma.trade.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: options?.skip,
+          take: options?.take || 50,
+          include: {
+            market: { select: { id: true, title: true, category: true } },
+          },
+        }),
+        this.prisma.trade.count({ where }),
+      ]);
+
+      return { trades, total };
+    });
+}
 
   async findMarketTrades(
     marketId: string,
-    options?: { skip?: number; take?: number }
-  ): Promise<Trade[]> {
-    return this.timedQuery('findMarketTrades', () =>
-      this.prisma.trade.findMany({
-        where: { marketId, status: TradeStatus.CONFIRMED },
-        orderBy: { createdAt: 'desc' },
-        skip: options?.skip,
-        take: options?.take || 100,
-      })
-    );
+    options?: { outcome?: number; skip?: number; take?: number }
+  ): Promise<{ trades: Trade[]; total: number }> {
+    return this.timedQuery('findMarketTrades', async () => {
+      const where = {
+        marketId,
+        status: TradeStatus.CONFIRMED,
+        ...(options?.outcome !== undefined && { outcome: options.outcome }),
+      };
+
+      const [trades, total] = await Promise.all([
+        this.prisma.trade.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: options?.skip,
+          take: options?.take || 100,
+        }),
+        this.prisma.trade.count({ where }),
+      ]);
+
+      return { trades, total };
+    });
   }
 
   async getUserTradeVolume(userId: string): Promise<number> {

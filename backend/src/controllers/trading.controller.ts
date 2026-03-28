@@ -587,6 +587,81 @@ export class TradingController {
       });
     }
   }
+
+  /**
+   * GET /trading/history - Get authenticated user's trade history
+   */
+  async getHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required',
+          },
+        });
+        return;
+      }
+
+      const page = Number(req.query.page) || 1;
+      const limit = Math.min(Number(req.query.limit) || 20, 100);
+      const outcomeId = req.query.outcomeId ? Number(req.query.outcomeId) : undefined;
+
+      const result = await tradingService.getUserTradeHistory(userId, {
+        page,
+        limit,
+        outcomeId,
+      });
+
+      res.status(200).json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      console.error('Error fetching trade history:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error.message || 'Failed to fetch trade history',
+        },
+      });
+    }
+  }
+
+  /**
+   * GET /api/markets/:marketId/trades - Get public trade history for a market
+   */
+  async getMarketTrades(req: Request, res: Response): Promise<void> {
+    try {
+      const marketId = req.params.marketId as string;
+      const page = Number(req.query.page) || 1;
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const outcomeId = req.query.outcomeId ? Number(req.query.outcomeId) : undefined;
+
+      const result = await tradingService.getMarketTradeHistory(marketId, {
+        page,
+        limit,
+        outcomeId,
+      });
+
+      res.status(200).json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      console.error('Error fetching market trades:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error.message || 'Failed to fetch market trades',
+        },
+      });
+    }
+  }
 }
 
 export const tradingController = new TradingController();
