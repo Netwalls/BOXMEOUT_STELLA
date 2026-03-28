@@ -456,6 +456,171 @@ export class WalletService {
       newBalance,
     };
   }
+
+  // ==========================================================================
+  // GET BALANCE
+  // ==========================================================================
+
+  /**
+   * Get user's wallet balance (on-chain and off-chain)
+   *
+   * Returns:
+   * - onChainBalance: Balance from Stellar blockchain
+   * - offChainBalance: Balance stored in DB (platform balance)
+   * - lockedBalance: Amount locked in active predictions/trades
+   * - currency: Always "USDC"
+   */
+  async getBalance(userId: string): Promise<{
+    onChainBalance: number;
+    offChainBalance: number;
+    lockedBalance: number;
+    currency: string;
+  }> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
+    }
+
+    // Off-chain balance from DB
+    const offChainBalance = new Decimal(user.usdcBalance.toString()).toNumber();
+
+    // On-chain balance (would require Stellar API call in production)
+    // For now, return 0 or fetch from Stellar if wallet is connected
+    let onChainBalance = 0;
+    if (user.walletAddress) {
+      try {
+        // In production, fetch from Stellar Horizon
+        // For now, we'll return 0 as a placeholder
+        onChainBalance = 0;
+      } catch (error) {
+        logger.warn('Failed to fetch on-chain balance', { userId, error });
+        onChainBalance = 0;
+      }
+    }
+
+    // Calculate locked balance from active predictions
+    const lockedPredictions = await prisma.prediction.findMany({
+      where: {
+        userId,
+        status: { in: ['COMMITTED', 'REVEALED'] },
+      },
+      select: { amountUsdc: true },
+    });
+
+    const lockedBalance = lockedPredictions.reduce((sum, pred) => {
+      return sum + new Decimal(pred.amountUsdc.toString()).toNumber();
+    }, 0);
+
+    logger.info('Balance retrieved', {
+      userId,
+      onChainBalance,
+      offChainBalance,
+      lockedBalance,
+    });
+
+    return {
+      onChainBalance,
+      offChainBalance,
+      lockedBalance,
+      currency: 'USDC',
+    };
+  }
+
+  // ==========================================================================
+  // GET TRANSACTION HISTORY
+  // ==========================================================================
+
+  /**
+   * Get paginated transaction history for user
+   *
+   * Supports filtering by:
+   * - type: DEPOSIT, WITHDRAW, REWARD, REFUND
+   * - from/to: Date range
+   *
+   * Returns paginated results with total count
+   */
+  async getTransactions(params: {
+    userId: string;
+    page: number;
+    limit: number;
+    type?: TransactionType;
+    from?: Date;
+    to?: Date;
+  }): Promise<{
+    transactions: any[];
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  }> {
+    const { userId, page, limit, type, from, to } = params;
+
+    // Validate user exists
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
+    }
+
+    // Build where clause
+    const where: any = { userId };
+    if (type) {
+      where.txType = type;
+    }
+    if (from || to) {
+      where.createdAt = {};
+      if (from) {
+        where.createdAt.gte = from;
+      }
+      if (to) {
+        where.createdAt.lte = to;
+      }
+    }
+
+    // Get total count
+    const total = await prisma.transaction.count({ where });
+
+    // Get paginated results
+    const skip = (page - 1) * limit;
+    const transactions = await prisma.transaction.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        txType: true,
+        amountUsdc: true,
+        status: true,
+        txHash: true,
+        fromAddress: true,
+        toAddress: true,
+        createdAt: true,
+        confirmedAt: true,
+        failedReason: true,
+      },
+    });
+
+    const hasMore = skip + limit < total;
+
+    logger.info('Transactions retrieved', {
+      userId,
+      page,
+      limit,
+      total,
+      count: transactions.length,
+    });
+
+    return {
+      transactions: transactions.map((tx) => ({
+        ...tx,
+        amountUsdc: new Decimal(tx.amountUsdc.toString()).toNumber(),
+      })),
+      total,
+      page,
+      limit,
+      hasMore,
+    };
+  }
 }
 
 export const walletService = new WalletService();

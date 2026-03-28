@@ -96,6 +96,57 @@ export class WalletController {
       data: result,
     });
   }
+
+  /**
+   * GET /api/wallet/balance
+   *
+   * Response: { success: true, data: { onChainBalance, offChainBalance, lockedBalance, currency } }
+   */
+  async getBalance(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new ApiError(401, 'UNAUTHORIZED', 'Authentication required');
+    }
+
+    logger.info('Get balance request', { userId });
+
+    const result = await walletService.getBalance(userId);
+    res.status(200).json({ success: true, data: result });
+  }
+
+  /**
+   * GET /api/wallet/transactions
+   *
+   * Query: { page?, limit?, type?, from?, to? }
+   * Response: { success: true, data: { transactions, total, page, limit } }
+   */
+  async getTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new ApiError(401, 'UNAUTHORIZED', 'Authentication required');
+    }
+
+    const { page = 1, limit = 20, type, from, to } = req.query as {
+      page?: number;
+      limit?: number;
+      type?: string;
+      from?: string;
+      to?: string;
+    };
+
+    logger.info('Get transactions request', { userId, page, limit, type });
+
+    const result = await walletService.getTransactions({
+      userId,
+      page,
+      limit,
+      type: type as any,
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    });
+
+    res.status(200).json({ success: true, data: result });
+  }
 }
 
 export const walletController = new WalletController();

@@ -184,4 +184,141 @@ router.post(
   }
 );
 
-export default router;
+/**
+ * @swagger
+ * /api/wallet/balance:
+ *   get:
+ *     summary: Get wallet balance
+ *     description: >
+ *       Returns the authenticated user's on-chain and off-chain balance,
+ *       including locked balance in active predictions.
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Balance retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     onChainBalance:
+ *                       type: number
+ *                       description: Balance on Stellar blockchain
+ *                     offChainBalance:
+ *                       type: number
+ *                       description: Balance stored on platform
+ *                     lockedBalance:
+ *                       type: number
+ *                       description: Amount locked in active predictions
+ *                     currency:
+ *                       type: string
+ *                       example: USDC
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router.get(
+  '/balance',
+  requireAuth,
+  (req: Request, res: Response, next: NextFunction) => {
+    walletController.getBalance(req as AuthenticatedRequest, res).catch(next);
+  }
+);
+
+/**
+ * @swagger
+ * /api/wallet/transactions:
+ *   get:
+ *     summary: Get wallet transaction history
+ *     description: >
+ *       Returns paginated transaction history for the authenticated user.
+ *       Supports filtering by transaction type and date range.
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *       - name: type
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [DEPOSIT, WITHDRAW, REWARD, REFUND]
+ *       - name: from
+ *         in: query
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - name: to
+ *         in: query
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Transactions retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     transactions:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           txType:
+ *                             type: string
+ *                           amountUsdc:
+ *                             type: number
+ *                           status:
+ *                             type: string
+ *                           txHash:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     hasMore:
+ *                       type: boolean
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router.get(
+  '/transactions',
+  requireAuth,
+  (req: Request, res: Response, next: NextFunction) => {
+    walletController.getTransactions(req as AuthenticatedRequest, res).catch(next);
+  }
+);

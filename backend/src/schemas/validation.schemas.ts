@@ -316,3 +316,35 @@ export const resolveDisputeBody = z
       path: ['newWinningOutcome'],
     }
   );
+
+// --- Wallet schemas ---
+
+export const getBalanceQuery = z.object({}).strict();
+
+export const getTransactionsQuery = z.object({
+  page: z
+    .string()
+    .regex(/^\d+$/, 'page must be a number')
+    .transform(Number)
+    .refine((val) => val >= 1, 'page must be >= 1')
+    .optional()
+    .default('1'),
+  limit: z
+    .string()
+    .regex(/^\d+$/, 'limit must be a number')
+    .transform(Number)
+    .refine((val) => val >= 1 && val <= 100, 'limit must be between 1 and 100')
+    .optional()
+    .default('20'),
+  type: z
+    .enum(['DEPOSIT', 'WITHDRAW', 'REWARD', 'REFUND'])
+    .optional(),
+  from: z
+    .string()
+    .datetime()
+    .optional(),
+  to: z
+    .string()
+    .datetime()
+    .optional(),
+});

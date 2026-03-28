@@ -2,6 +2,7 @@
 import { DisputeRepository } from '../repositories/dispute.repository.js';
 import { MarketRepository } from '../repositories/market.repository.js';
 import { DisputeStatus, MarketStatus } from '@prisma/client';
+import { ApiError } from '../middleware/error.middleware.js';
 import { logger } from '../utils/logger.js';
 
 export class DisputeService {
@@ -15,6 +16,11 @@ export class DisputeService {
 
   /**
    * Submit a new dispute for a market
+   * 
+   * Validates:
+   * - Market exists
+   * - Market is in RESOLVED or CLOSED state
+   * - No existing active dispute for this market
    */
   async submitDispute(data: {
     marketId: string;
@@ -25,16 +31,35 @@ export class DisputeService {
     // Validate market exists
     const market = await this.marketRepository.findById(data.marketId);
     if (!market) {
-      throw new Error('Market not found');
+      throw new ApiError(404, 'MARKET_NOT_FOUND', 'Market not found');
     }
 
     // Only RESOLVED or CLOSED markets can be disputed
-    // (Open markets can be cancelled, but disputes usually follow a resolution)
     if (
       market.status !== MarketStatus.RESOLVED &&
       market.status !== MarketStatus.CLOSED
     ) {
-      throw new Error(`Market in ${market.status} status cannot be disputed`);
+      throw new ApiError(
+        400,
+        'INVALID_MARKET_STATUS',
+        `Market in ${market.status} status cannot be disputed`
+      );
+    }
+
+    // Check for existing active dispute
+    const existingDisputes = await this.disputeRepository.findByMarketId(
+      data.marketId
+    );
+    const activeDispute = existingDisputes.find(
+      (d) => d.status !== DisputeStatus.DISMISSED && d.status !== DisputeStatus.RESOLVED
+    );
+
+    if (activeDispute) {
+      throw new ApiError(
+        409,
+        'DISPUTE_EXISTS',
+        'An active dispute already exists for this market'
+      );
     }
 
     logger.info('Creating new dispute', {
@@ -51,7 +76,7 @@ export class DisputeService {
       status: DisputeStatus.OPEN,
     });
 
-    // Optionally update market status to DISPUTED to pause further actions
+    // Update market status to DISPUTED to pause further actions
     await this.marketRepository.updateMarketStatus(
       data.marketId,
       MarketStatus.DISPUTED
@@ -66,11 +91,15 @@ export class DisputeService {
   async reviewDispute(disputeId: string, adminNotes: string) {
     const dispute = await this.disputeRepository.findById(disputeId);
     if (!dispute) {
-      throw new Error('Dispute not found');
+      throw new ApiError(404, 'DISPUTE_NOT_FOUND', 'Dispute not found');
     }
 
     if (dispute.status !== DisputeStatus.OPEN) {
-      throw new Error(`Dispute is already ${dispute.status}`);
+      throw new ApiError(
+        400,
+        'INVALID_STATUS',
+        `Dispute is already ${dispute.status}`
+      );
     }
 
     return await this.disputeRepository.updateStatus(
@@ -97,17 +126,16 @@ export class DisputeService {
   ) {
     const dispute = await this.disputeRepository.findById(disputeId);
     if (!dispute) {
-      throw new Error('Dispute not found');
+      throw new ApiError(404, 'DISPUTE_NOT_FOUND', 'Dispute not found');
     }
 
     const market = await this.marketRepository.findById(dispute.marketId);
     if (!market) {
-      throw new Error('Market not found');
+      throw new ApiError(404, 'MARKET_NOT_FOUND', 'Market not found');
     }
 
     if (action === 'DISMISS') {
       // Dismiss the dispute, return market to previous status (Resolved if it was resolved before)
-      // Actually, if it was RESOLVED, it stays RESOLVED.
       await this.disputeRepository.updateStatus(
         disputeId,
         DisputeStatus.DISMISSED,
@@ -126,7 +154,11 @@ export class DisputeService {
     } else {
       // Resolve with new outcome
       if (data.newWinningOutcome === undefined) {
-        throw new Error('New winning outcome is required for resolution');
+        throw new ApiError(
+          400,
+          'MISSING_OUTCOME',
+          'New winning outcome is required for resolution'
+        );
       }
 
       await this.disputeRepository.updateStatus(
@@ -149,10 +181,6 @@ export class DisputeService {
           resolutionSource: `Dispute Resolution: ${data.resolution}`,
         }
       );
-
-      // NOTE: In a real system, we might need to re-settle predictions if they were already settled
-      // For now, we update the outcome. The settlement logic in MarketService might need to be re-run.
-      // However, the prompt only asks for resolving the dispute record and market status.
     }
 
     return await this.disputeRepository.findById(disputeId);

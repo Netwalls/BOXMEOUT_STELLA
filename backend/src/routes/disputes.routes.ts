@@ -1,9 +1,10 @@
 // Disputes routes
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { disputesController } from '../controllers/disputes.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/admin.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
+import { AuthenticatedRequest } from '../types/auth.types.js';
 import {
   submitDisputeBody,
   reviewDisputeBody,
@@ -24,6 +25,7 @@ const router: Router = Router();
  * /api/disputes:
  *   post:
  *     summary: Submit a new dispute
+ *     description: User challenges an oracle report by submitting a dispute
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
@@ -39,23 +41,31 @@ const router: Router = Router();
  *             properties:
  *               marketId:
  *                 type: string
+ *                 format: uuid
  *               reason:
  *                 type: string
+ *                 minLength: 10
+ *                 maxLength: 1000
  *               evidenceUrl:
  *                 type: string
+ *                 format: url
  *     responses:
  *       201:
- *         description: Dispute submitted
+ *         description: Dispute submitted successfully
  *       400:
- *         description: Bad request
+ *         description: Bad request or invalid market status
  *       401:
  *         description: Unauthorized
+ *       409:
+ *         description: Dispute already exists for this market
  */
 router.post(
   '/',
   requireAuth,
   validate({ body: submitDisputeBody }),
-  (req, res) => disputesController.submitDispute(req, res)
+  (req: Request, res: Response, next: NextFunction) => {
+    disputesController.submitDispute(req as AuthenticatedRequest, res).catch(next);
+  }
 );
 
 /**
@@ -74,7 +84,9 @@ router.post(
  *       200:
  *         description: List of disputes
  */
-router.get('/', (req, res) => disputesController.listDisputes(req, res));
+router.get('/', (req: Request, res: Response, next: NextFunction) => {
+  disputesController.listDisputes(req as AuthenticatedRequest, res).catch(next);
+});
 
 /**
  * @swagger
@@ -88,15 +100,16 @@ router.get('/', (req, res) => disputesController.listDisputes(req, res));
  *         required: true
  *         schema:
  *           type: string
+ *           format: uuid
  *     responses:
  *       200:
  *         description: Dispute details
  *       404:
  *         description: Dispute not found
  */
-router.get('/:disputeId', (req, res) =>
-  disputesController.getDispute(req, res)
-);
+router.get('/:disputeId', (req: Request, res: Response, next: NextFunction) => {
+  disputesController.getDispute(req as AuthenticatedRequest, res).catch(next);
+});
 
 /**
  * @swagger
@@ -112,6 +125,7 @@ router.get('/:disputeId', (req, res) =>
  *         required: true
  *         schema:
  *           type: string
+ *           format: uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -123,18 +137,24 @@ router.get('/:disputeId', (req, res) =>
  *             properties:
  *               adminNotes:
  *                 type: string
+ *                 minLength: 5
+ *                 maxLength: 5000
  *     responses:
  *       200:
  *         description: Dispute updated to REVIEWING
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Admin access required
+ *       404:
+ *         description: Dispute not found
  */
 router.patch(
   '/:disputeId/review',
   requireAuth,
   requireAdmin,
   validate({ body: reviewDisputeBody }),
-  (req, res) => disputesController.reviewDispute(req, res)
+  (req: Request, res: Response, next: NextFunction) => {
+    disputesController.reviewDispute(req as AuthenticatedRequest, res).catch(next);
+  }
 );
 
 /**
@@ -142,6 +162,7 @@ router.patch(
  * /api/disputes/{disputeId}/resolve:
  *   patch:
  *     summary: Resolve a dispute (Admin only)
+ *     description: Admin rules on an active dispute - upholding it refunds the bond; rejecting it slashes it
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
@@ -151,6 +172,7 @@ router.patch(
  *         required: true
  *         schema:
  *           type: string
+ *           format: uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -166,22 +188,33 @@ router.patch(
  *                 enum: [DISMISS, RESOLVE_NEW_OUTCOME]
  *               resolution:
  *                 type: string
+ *                 minLength: 10
+ *                 maxLength: 5000
  *               adminNotes:
  *                 type: string
+ *                 minLength: 5
+ *                 maxLength: 5000
  *               newWinningOutcome:
- *                 type: number
+ *                 type: integer
+ *                 enum: [0, 1]
  *     responses:
  *       200:
- *         description: Dispute resolved
+ *         description: Dispute resolved successfully
+ *       400:
+ *         description: Invalid action or missing required fields
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Admin access required
+ *       404:
+ *         description: Dispute or market not found
  */
 router.patch(
   '/:disputeId/resolve',
   requireAuth,
   requireAdmin,
   validate({ body: resolveDisputeBody }),
-  (req, res) => disputesController.resolveDispute(req, res)
+  (req: Request, res: Response, next: NextFunction) => {
+    disputesController.resolveDispute(req as AuthenticatedRequest, res).catch(next);
+  }
 );
 
 export default router;
