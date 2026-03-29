@@ -3,6 +3,8 @@ import { Router, Response, NextFunction } from 'express';
 import { usersController } from '../controllers/users.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/admin.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import { updateProfileBody } from '../schemas/validation.schemas.js';
 import { AuthenticatedRequest } from '../types/auth.types.js';
 import { UserRepository } from '../repositories/user.repository.js';
 
@@ -46,6 +48,41 @@ async function rejectSuspended(
  *         description: Account suspended
  */
 router.get('/me', requireAuth, rejectSuspended, usersController.getMyProfile.bind(usersController));
+
+/**
+ * @swagger
+ * /api/users/me:
+ *   patch:
+ *     summary: Update authenticated user's profile
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 minLength: 3
+ *                 maxLength: 30
+ *                 pattern: '^[a-zA-Z0-9_]+$'
+ *               avatarUrl:
+ *                 type: string
+ *                 format: uri
+ *     responses:
+ *       200:
+ *         description: Updated user profile
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       409:
+ *         description: Username already in use
+ */
+router.patch('/me', requireAuth, rejectSuspended, validate({ body: updateProfileBody }), usersController.updateMyProfile.bind(usersController));
 
 /**
  * @swagger

@@ -106,7 +106,7 @@ export class UserService {
 
     if (sanitizedData.username) {
       const existing = await this.userRepository.findByUsername(sanitizedData.username);
-      if (existing && existing.id !== userId) throw new Error('Username already taken');
+      if (existing && existing.id !== userId) throw new Error('Username already in use');
     }
 
     const user = await this.userRepository.update(userId, sanitizedData);

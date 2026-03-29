@@ -43,6 +43,27 @@ export class UsersController {
   }
 
   /**
+   * PATCH /api/users/me — requires auth; updates username and/or avatarUrl
+   */
+  async updateMyProfile(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user!.userId;
+      const { username, avatarUrl } = req.body;
+      const updated = await userService.updateProfile(userId, { username, avatarUrl });
+      return res.status(200).json({ success: true, data: updated });
+    } catch (error: any) {
+      if (error.message === 'User not found') {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      if (error.message === 'Username already in use') {
+        return res.status(409).json({ success: false, message: 'Username already in use' });
+      }
+      logger.error('UsersController.updateMyProfile error', { error });
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+
+  /**
    * GET /api/users — admin only; paginated user list with filters
    */
   async listUsers(req: AuthenticatedRequest, res: Response) {

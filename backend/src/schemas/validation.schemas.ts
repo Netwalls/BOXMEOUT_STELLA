@@ -374,3 +374,20 @@ export const getTransactionsQuery = z.object({
     .datetime()
     .optional(),
 });
+
+// --- User profile update schema (issue #36) ---
+
+export const updateProfileBody = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .min(3, 'Username must be at least 3 characters')
+      .max(30, 'Username must be at most 30 characters')
+      .regex(/^[a-zA-Z0-9_]+$/, 'Username may only contain letters, numbers, and underscores')
+      .optional(),
+    avatarUrl: z.string().url('avatarUrl must be a valid URL').optional(),
+  })
+  .refine((data) => data.username !== undefined || data.avatarUrl !== undefined, {
+    message: 'At least one field (username or avatarUrl) must be provided',
+  });
