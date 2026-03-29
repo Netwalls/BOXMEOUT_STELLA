@@ -143,6 +143,27 @@ export class LeaderboardService {
   async getUserRank(userId: string) {
     return await this.leaderboardRepository.getUserRank(userId);
   }
+
+  /**
+   * Awards accuracy points to a user after prediction settlement (issue #20).
+   * Winners earn points proportional to their stake; losers earn 0.
+   * Also triggers a full rank recalculation.
+   */
+  async awardAccuracyPoints(
+    userId: string,
+    marketId: string,
+    category: MarketCategory,
+    isWinner: boolean,
+    pnlUsd: number
+  ): Promise<void> {
+    try {
+      await this.leaderboardRepository.updateUserStats(userId, pnlUsd, isWinner);
+      await this.leaderboardRepository.updateCategoryStats(userId, category, pnlUsd, isWinner);
+      logger.info('Accuracy points awarded', { userId, marketId, isWinner, pnlUsd });
+    } catch (error) {
+      logger.error('Failed to award accuracy points', { userId, marketId, error });
+    }
+  }
 }
 
 export const leaderboardService = new LeaderboardService();

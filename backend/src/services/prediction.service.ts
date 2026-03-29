@@ -19,6 +19,9 @@ import {
   marketBlockchainService,
   MarketBlockchainService,
 } from './blockchain/market.js';
+import { leaderboardService } from './leaderboard.service.js';
+import { notificationService } from './notification.service.js';
+import { logger } from '../utils/logger.js';
 
 export class PredictionService {
   private predictionRepository: PredictionRepository;
@@ -320,5 +323,108 @@ export class PredictionService {
 
   async getMarketPredictionStats(marketId: string) {
     return await this.predictionRepository.getMarketPredictionStats(marketId);
+  }
+
+  /**
+   * Settle all predictions for a resolved market (issue #20).
+   * Triggered by market resolution (cron or webhook).
+   * - Compares each prediction's outcomeId with winningOutcomeId
+   * - Marks won/lost and calculates accuracy points (pnlUsd)
+   * - Updates leaderboard via leaderboard.service.ts
+   * - Sends notification via notification.service.ts
+   */
+  async settleMarketPredictions(
+    marketId: string,
+    winningOutcomeId: number
+  ): Promise<{ settled: number; skipped: number }> {
+    const market = await this.marketRepository.findById(marketId);
+    if (!market) throw new Error('Market not found');
+
+    if (market.status !== 'RESOLVED' as any) {
+      throw new Error('Market must be RESOLVED before settling predictions');
+    }
+
+    const predictions = await this.predictionRepository.findMarketPredictions(marketId);
+    const unsettled = predictions.filter((p) => p.status !== PredictionStatus.SETTLED);
+
+    if (unsettled.length === 0) {
+      logger.info('settleMarketPredictions: no unsettled predictions', { marketId });
+      return { settled: 0, skipped: 0 };
+    }
+
+    // Settle all in one transaction
+    await executeTransaction(async (tx) => {
+      const predRepo = new PredictionRepository(tx);
+      for (const prediction of unsettled) {
+        const isWinner = prediction.predictedOutcome === winningOutcomeId;
+        const pnlUsd = isWinner
+          ? Number(prediction.amountUsdc) * 0.9   // 90% return (10% fee)
+          : -Number(prediction.amountUsdc);
+        await predRepo.settlePrediction(prediction.id, isWinner, pnlUsd);
+      }
+    });
+
+    logger.info('settleMarketPredictions: DB settlement complete', {
+      marketId,
+      count: unsettled.length,
+    });
+
+    // Group by user for leaderboard + notification (one call per user)
+    const byUser = new Map<string, { pnlUsd: number; isWinner: boolean }>();
+    for (const prediction of unsettled) {
+      const isWinner = prediction.predictedOutcome === winningOutcomeId;
+      const pnlUsd = isWinner
+        ? Number(prediction.amountUsdc) * 0.9
+        : -Number(prediction.amountUsdc);
+
+      const existing = byUser.get(prediction.userId);
+      if (existing) {
+        existing.pnlUsd += pnlUsd;
+        existing.isWinner = existing.isWinner || isWinner;
+      } else {
+        byUser.set(prediction.userId, { pnlUsd, isWinner });
+      }
+    }
+
+    const winningLabel = winningOutcomeId === 1 ? market.outcomeA : market.outcomeB;
+
+    for (const [userId, { pnlUsd, isWinner }] of byUser) {
+      // Update leaderboard score
+      await leaderboardService.awardAccuracyPoints(
+        userId,
+        marketId,
+        market.category,
+        isWinner,
+        pnlUsd
+      );
+
+      // Send prediction result notification (fire-and-forget)
+      notificationService
+        .notifyPredictionResult(userId, market.title, isWinner, pnlUsd)
+        .catch((err) =>
+          logger.error('Failed to send prediction result notification', { userId, marketId, err })
+        );
+
+      // Notify winners that winnings are available
+      if (isWinner) {
+        notificationService
+          .notifyWinningsAvailable(userId, market.title, pnlUsd)
+          .catch((err) =>
+            logger.error('Failed to send winnings available notification', { userId, marketId, err })
+          );
+      }
+    }
+
+    // Recalculate global ranks after all users are updated
+    await leaderboardService.calculateRanks();
+
+    logger.info('settleMarketPredictions: complete', {
+      marketId,
+      settled: unsettled.length,
+      winningOutcomeId,
+      winningLabel,
+    });
+
+    return { settled: unsettled.length, skipped: predictions.length - unsettled.length };
   }
 }
