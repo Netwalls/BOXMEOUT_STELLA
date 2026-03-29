@@ -449,4 +449,60 @@ export class TradingController {
   }
 }
 
+  /**
+   * POST /api/trading/sell — requires auth (issue #16)
+   * Body: { marketId, outcomeId, sharesAmount, minCollateralOut }
+   */
+  async sellSharesDirect(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+        return;
+      }
+
+      const { marketId, outcomeId, sharesAmount, minCollateralOut } = req.body;
+
+      const result = await tradingService.sellShares({
+        userId,
+        marketId,
+        outcome: outcomeId,
+        shares: Number(sharesAmount),
+        minPayout: minCollateralOut ? Number(minCollateralOut) : undefined,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          sharesSold: result.sharesSold,
+          pricePerUnit: result.pricePerUnit,
+          payout: result.payout,
+          feeAmount: result.feeAmount,
+          txHash: result.txHash,
+          tradeId: result.tradeId,
+          remainingShares: result.remainingShares,
+        },
+      });
+    } catch (error: any) {
+      logger.error('TradingController.sellSharesDirect error', { error });
+
+      if (
+        error.message?.includes('Insufficient') ||
+        error.message?.includes('No shares') ||
+        error.message?.includes('Invalid outcome') ||
+        error.message?.includes('Slippage')
+      ) {
+        res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: error.message } });
+        return;
+      }
+      if (error.message?.includes('not found')) {
+        res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: error.message } });
+        return;
+      }
+
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to sell shares' } });
+    }
+  }
+}
+
 export const tradingController = new TradingController();

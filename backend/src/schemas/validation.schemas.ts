@@ -374,3 +374,23 @@ export const getTransactionsQuery = z.object({
     .datetime()
     .optional(),
 });
+
+// --- Trading: POST /trading/sell schema (issue #16) ---
+
+export const sellSharesDirectBody = z.object({
+  marketId: z.string().uuid('marketId must be a valid UUID'),
+  outcomeId: z.number().int().min(0).max(1, 'outcomeId must be 0 (NO) or 1 (YES)'),
+  sharesAmount: z
+    .string()
+    .regex(/^\d+$/, 'sharesAmount must be a numeric string (base units)')
+    .refine(
+      (val) => {
+        try { return BigInt(val) > 0n; } catch { return false; }
+      },
+      { message: 'sharesAmount must be greater than 0' }
+    ),
+  minCollateralOut: z
+    .string()
+    .regex(/^\d+$/, 'minCollateralOut must be a numeric string')
+    .optional(),
+});
