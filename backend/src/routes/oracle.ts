@@ -122,7 +122,7 @@ router.post(
 router.post(
   '/:id/resolve',
   requireAuth,
-  validate({ params: uuidParam }),
+  validate({ params: uuidParam, body: resolveMarketBody }),
   (req, res) => oracleController.resolveMarket(req, res)
 );
 

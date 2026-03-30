@@ -61,6 +61,14 @@ pub struct ChallengeResolvedEvent {
     pub slashed_amount: i128,
 }
 
+#[contractevent]
+pub struct MarketReportedEvent {
+    pub market_id: BytesN<32>,
+    pub outcome: u32,
+    pub reporter: Address,
+    pub timestamp: u64,
+}
+
 // Storage keys
 const ADMIN_KEY: &str = "admin";
 const REQUIRED_CONSENSUS_KEY: &str = "required_consensus";
@@ -569,6 +577,44 @@ impl OracleManager {
             market_id,
             final_outcome,
             timestamp: current_time,
+        }
+        .publish(&env);
+    }
+
+    /// Report winning outcome for a closed market
+    /// Phase 1 of two-phase resolution
+    pub fn report_outcome(env: Env, reporter: Address, market_id: BytesN<32>, outcome: u32) {
+        // 1. Require reporter authentication
+        reporter.require_auth();
+
+        // 2. Validate reporter is registered (trusted attestor)
+        let oracle_key = (Symbol::new(&env, "oracle"), reporter.clone());
+        let is_registered: bool = env.storage().persistent().get(&oracle_key).unwrap_or(false);
+        if !is_registered {
+            panic!("Reporter not registered");
+        }
+
+        // 3. Validate market is registered
+        let market_key = (Symbol::new(&env, MARKET_RES_TIME_KEY), market_id.clone());
+        if !env.storage().persistent().has(&market_key) {
+            panic!("Market not registered");
+        }
+
+        // 4. Validate outcome is binary (0 or 1)
+        if outcome > 1 {
+            panic!("Invalid outcome");
+        }
+
+        // 5. Store the reported outcome
+        let report_key = (Symbol::new(&env, "reported_outcome"), market_id.clone());
+        env.storage().persistent().set(&report_key, &outcome);
+
+        // 6. Emit MarketReported event
+        MarketReportedEvent {
+            market_id,
+            outcome,
+            reporter,
+            timestamp: env.ledger().timestamp(),
         }
         .publish(&env);
     }

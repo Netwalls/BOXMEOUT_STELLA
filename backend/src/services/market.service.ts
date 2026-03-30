@@ -245,6 +245,35 @@ export class MarketService {
     return resolvedMarket;
   }
 
+  async reportMarketOutcome(
+    marketId: string,
+    winningOutcome: number,
+    resolutionSource: string
+  ) {
+    const market = await this.marketRepository.findById(marketId);
+    if (!market) {
+      throw new Error('Market not found');
+    }
+
+    if (market.status !== MarketStatus.CLOSED) {
+      throw new Error(`Market must be CLOSED to report outcome. Current status: ${market.status}`);
+    }
+
+    if (winningOutcome !== 0 && winningOutcome !== 1) {
+      throw new Error('Winning outcome must be 0 or 1');
+    }
+
+    // Update market status to REPORTED
+    return await this.marketRepository.updateMarketStatus(
+      marketId,
+      MarketStatus.REPORTED,
+      {
+        winningOutcome,
+        resolutionSource,
+      }
+    );
+  }
+
   async markWinningsClaimed(marketId: string, userId: string) {
     const prediction = await this.predictionRepository.findByUserAndMarket(
       userId,

@@ -166,6 +166,75 @@ export class OracleService extends BaseBlockchainService {
       return null;
     }
   }
+
+  /**
+   * Report the winning outcome for a market (Phase 1 of resolution)
+   * @param marketContractAddress - The contract address of the market being resolved
+   * @param outcome - The winning outcome (0 or 1)
+   * @returns Transaction hash
+   */
+  async reportOutcome(
+    marketContractAddress: string,
+    outcome: number
+  ): Promise<string> {
+    if (!this.oracleContractId) {
+      throw new Error('Oracle contract address not configured');
+    }
+
+    // Use the first available oracle keypair (usually admin)
+    const signer = this.oracleKeypairs[0];
+    if (!signer) {
+      throw new Error('No oracle signer available');
+    }
+
+    try {
+      const contract = new Contract(this.oracleContractId);
+      const sourceAccount = await this.rpcServer.getAccount(signer.publicKey());
+
+      // marketContractAddress is used as market_id in the oracle contract
+      const marketIdBuffer = Buffer.from(marketContractAddress, 'hex');
+
+      const builtTransaction = new TransactionBuilder(sourceAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(
+          contract.call(
+            'report_outcome',
+            signer.address().toScVal(),
+            nativeToScVal(marketIdBuffer, { type: 'bytes' }),
+            nativeToScVal(outcome, { type: 'u32' })
+          )
+        )
+        .setTimeout(30)
+        .build();
+
+      const preparedTransaction =
+        await this.rpcServer.prepareTransaction(builtTransaction);
+      preparedTransaction.sign(signer);
+
+      const response =
+        await this.rpcServer.sendTransaction(preparedTransaction);
+
+      if (response.status === 'PENDING') {
+        const txHash = response.hash;
+        await this.waitForTransaction(txHash, 'reportOutcome', {
+          marketContractAddress,
+          outcome,
+        });
+        return txHash;
+      } else {
+        throw new Error(`Transaction failed: ${response.status}`);
+      }
+    } catch (error) {
+      logger.error('Oracle.report_outcome() error', { error });
+      throw new Error(
+        `Failed to report outcome on blockchain: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
 }
 
 export const oracleService = new OracleService();

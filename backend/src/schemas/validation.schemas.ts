@@ -245,6 +245,10 @@ export const attestBody = z.object({
   outcome: z.number().int().min(0).max(1),
 });
 
+export const resolveMarketBody = z.object({
+  outcome: z.number().int().min(0).max(1),
+});
+
 // --- Treasury schemas ---
 
 export const distributeLeaderboardBody = z.object({

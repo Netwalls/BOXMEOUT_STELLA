@@ -93,48 +93,50 @@ export class OracleController {
 
   /**
    * POST /api/markets/:id/resolve
-   * Admin Only
+   * Admin/Oracle Only
+   * Phase 1 of resolution: Report the winning outcome
    */
   async resolveMarket(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const marketId = String(req.params.id);
+      const { outcome } = req.body;
+
       const market = await this.marketService.getMarketDetails(marketId);
 
-      // 1. Check if consensus reached on-chain
-      const winningOutcome = await oracleService.checkConsensus(
-        market.contractAddress
-      );
-      if (winningOutcome === null) {
-        res
-          .status(400)
-          .json({ success: false, error: 'Consensus not yet reached' });
+      // 1. Validate: Market must be CLOSED to report outcome
+      if (market.status !== 'CLOSED') {
+        res.status(409).json({
+          success: false,
+          error: `Market is in ${market.status} state, but must be CLOSED to resolve.`,
+        });
         return;
       }
 
-      // 2. Resolve on-chain
-      const blockchainResult = await marketBlockchainService.resolveMarket(
-        market.contractAddress
+      // 2. Call blockchain: Report outcome (Phase 1)
+      const blockchainTxHash = await oracleService.reportOutcome(
+        market.contractAddress,
+        outcome
       );
 
-      // 3. Update DB
-      const resolvedMarket = await this.marketService.resolveMarket(
+      // 3. Update DB: Set status to REPORTED
+      const reportedMarket = await this.marketService.reportMarketOutcome(
         marketId,
-        winningOutcome,
-        'Oracle Consensus'
+        outcome,
+        'Oracle Reporting'
       );
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: {
-          txHash: blockchainResult.txHash,
-          market: resolvedMarket,
+          txHash: blockchainTxHash,
+          market: reportedMarket,
         },
       });
     } catch (error) {
-      (req.log || logger).error('Resolve error', { error });
+      (req.log || logger).error('Resolve (Report) error', { error });
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Resolution failed',
+        error: error instanceof Error ? error.message : 'Reporting failed',
       });
     }
   }
