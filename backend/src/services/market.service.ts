@@ -147,7 +147,7 @@ export class MarketService {
   }
 
   async getMarketDetails(marketId: string) {
-    const market = await this.marketRepository.findById(marketId);
+    const market = await this.marketRepository.findByIdWithDetails(marketId);
     if (!market) {
       throw new Error('Market not found');
     }

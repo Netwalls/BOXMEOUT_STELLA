@@ -18,10 +18,4 @@ export {
 export { validate } from './validation.middleware';
 export { errorHandler, notFoundHandler, ApiError } from './error.middleware';
 export { requestLogger } from './logging.middleware';
-export {
-  securityHeaders,
-  corsMiddleware,
-  xssProtection,
-  frameGuard,
-  noCache,
-} from './security.middleware';
+export { securityHeaders, corsMiddleware } from './security.middleware';

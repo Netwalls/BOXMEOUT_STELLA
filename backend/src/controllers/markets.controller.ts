@@ -6,6 +6,9 @@ import { AuthenticatedRequest } from '../types/auth.types.js';
 import { MarketService } from '../services/market.service.js';
 import { logger } from '../utils/logger.js';
 import { MarketCategory } from '@prisma/client';
+import { getRedisClient } from '../config/redis.js';
+
+const MARKET_CACHE_TTL = 5; // seconds
 export class MarketsController {
   private marketService: MarketService;
 
@@ -170,23 +173,38 @@ export class MarketsController {
     req: AuthenticatedRequest,
     res: Response
   ): Promise<void> {
+    const marketId = req.params.id as string;
+    const cacheKey = `market:${marketId}`;
+
     try {
-      const marketId = req.params.id as string;
+      // Try Redis cache first
+      try {
+        const redis = getRedisClient();
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          res.json({ success: true, data: JSON.parse(cached) });
+          return;
+        }
+      } catch {
+        // Redis unavailable — fall through to DB
+      }
 
       const market = await this.marketService.getMarketDetails(marketId);
 
-      res.json({
-        success: true,
-        data: market,
-      });
+      // Cache result for 5 seconds (best-effort)
+      try {
+        const redis = getRedisClient();
+        await redis.setex(cacheKey, MARKET_CACHE_TTL, JSON.stringify(market));
+      } catch {
+        // Cache write failure is non-fatal
+      }
+
+      res.json({ success: true, data: market });
     } catch (error) {
       if (error instanceof Error && error.message === 'Market not found') {
         res.status(404).json({
           success: false,
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Market not found',
-          },
+          error: { code: 'NOT_FOUND', message: 'Market not found' },
         });
         return;
       }
@@ -194,10 +212,7 @@ export class MarketsController {
       (req.log || logger).error('Get market details error', { error });
       res.status(500).json({
         success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to fetch market details',
-        },
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch market details' },
       });
     }
   }

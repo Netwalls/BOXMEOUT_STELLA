@@ -7,6 +7,20 @@ export class MarketRepository extends BaseRepository<Market> {
     return 'market';
   }
 
+  async findByIdWithDetails(marketId: string): Promise<Market | null> {
+    return this.timedQuery('findByIdWithDetails', () =>
+      this.prisma.market.findUnique({
+        where: { id: marketId },
+        include: {
+          creator: {
+            select: { id: true, username: true, displayName: true, avatarUrl: true },
+          },
+          _count: { select: { predictions: true, trades: true } },
+        },
+      })
+    );
+  }
+
   async findByContractAddress(contractAddress: string): Promise<Market | null> {
     return this.timedQuery('findByContractAddress', () =>
       this.prisma.market.findUnique({ where: { contractAddress } })

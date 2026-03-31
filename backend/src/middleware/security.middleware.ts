@@ -1,8 +1,11 @@
-import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 
-// Helmet security headers
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim());
+
+// Helmet: sets X-Content-Type-Options, X-Frame-Options, HSTS, CSP, and more
 export const securityHeaders = helmet({
   contentSecurityPolicy: {
     directives: {
@@ -12,46 +15,30 @@ export const securityHeaders = helmet({
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: [
         "'self'",
-        process.env.STELLAR_HORIZON_URL ||
-          'https://horizon-testnet.stellar.org',
+        process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org',
       ],
     },
   },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  frameguard: { action: 'deny' },
+  noSniff: true,
 });
 
-// CORS middleware
+// CORS: whitelisted origins from env, OPTIONS preflight handled automatically
 export const corsMiddleware = cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. server-to-server, curl)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin '${origin}' not allowed`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
+  optionsSuccessStatus: 204, // Correct OPTIONS preflight response
 });
-
-// Additional security headers
-export const xssProtection = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  next();
-};
-
-export const frameGuard = (req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('X-Frame-Options', 'DENY');
-  next();
-};
-
-export const noCache = (req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('Surrogate-Control', 'no-store');
-  res.setHeader(
-    'Cache-Control',
-    'no-store, no-cache, must-revalidate, proxy-revalidate'
-  );
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  next();
-};

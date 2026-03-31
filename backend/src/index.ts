@@ -26,13 +26,7 @@ import {
 } from './config/redis.js';
 
 // Import ALL middleware
-import {
-  securityHeaders,
-  corsMiddleware,
-  xssProtection,
-  frameGuard,
-  noCache,
-} from './middleware/security.middleware.js';
+import { securityHeaders, corsMiddleware } from './middleware/security.middleware.js';
 
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 import { requestLogger } from './middleware/logging.middleware.js';
@@ -80,10 +74,6 @@ app.use(securityHeaders);
 // CORS configuration (using new middleware)
 app.use(corsMiddleware);
 
-// Additional security headers
-app.use(xssProtection);
-app.use(frameGuard);
-app.use(noCache);
 
 // Request parsing with limits
 app.use(express.json({ limit: '10mb' })); // Increased for blockchain operations
