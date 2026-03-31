@@ -14,6 +14,7 @@ pub mod treasury;
 #[cfg(any(feature = "prediction_market", test, feature = "testutils"))]
 pub mod prediction_market;
 
+pub mod events;
 pub mod helpers;
 pub mod math;
 
