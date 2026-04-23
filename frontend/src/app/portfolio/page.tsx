@@ -7,15 +7,36 @@
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useWallet } from '../../hooks/useWallet';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import { ConnectPrompt } from '../../components/ui/ConnectPrompt';
 import { BetHistoryTable } from '../../components/bet/BetHistoryTable';
+import { TxStatusToast } from '../../components/ui/TxStatusToast';
 
 export default function PortfolioPage(): JSX.Element {
   const { isConnected } = useWallet();
-  const { portfolio, isLoading, claimWinnings, claimRefund } = usePortfolio();
+  const { portfolio, isLoading, claimTxStatus, claimWinnings, claimRefund } = usePortfolio();
+  const [dismissedError, setDismissedError] = useState(false);
+
+  // Reset dismissedError when status changes from error
+  useEffect(() => {
+    if (dismissedError && claimTxStatus.status !== 'error') {
+      setDismissedError(false);
+    }
+  }, [claimTxStatus.status, dismissedError]);
+
+  // Show toast unless it's an error and user dismissed it
+  const displayStatus = dismissedError && claimTxStatus.status === 'error' 
+    ? { hash: null, status: 'idle' as const, error: null }
+    : claimTxStatus;
+
+  const handleDismiss = () => {
+    if (claimTxStatus.status === 'error') {
+      setDismissedError(true);
+    }
+  };
 
   if (!isConnected) {
     return (
@@ -83,6 +104,8 @@ export default function PortfolioPage(): JSX.Element {
         <h2 className="text-white font-semibold mb-3">Bet History</h2>
         <BetHistoryTable bets={portfolio!.past_bets} onClaim={claimWinnings} onRefund={claimRefund} />
       </section>
+
+      <TxStatusToast txStatus={displayStatus} onDismiss={handleDismiss} />
     </main>
   );
 }
