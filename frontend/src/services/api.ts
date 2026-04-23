@@ -94,7 +94,14 @@ export async function fetchMarketById(market_id: string): Promise<Market> {
  * Returns all bets for the market.
  */
 export async function fetchBetsByMarket(market_id: string): Promise<Bet[]> {
-  // TODO: implement
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/markets/${market_id}/bets`);
+  } catch (e) {
+    throw new NetworkError((e as Error).message);
+  }
+  if (!res.ok) throw new NetworkError(`Unexpected response: ${res.status}`);
+  return res.json();
 }
 
 /**
