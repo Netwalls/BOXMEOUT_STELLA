@@ -21,7 +21,7 @@ use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use boxmeout_shared::{
     errors::ContractError,
     types::{
-        BetRecord, BetSide, ClaimReceipt, FightDetails, MarketConfig,
+        BetRecord, BetSide, ClaimReceipt, Config, FightDetails, MarketConfig,
         MarketState, Outcome, OracleReport, UserPosition,
     },
 };
@@ -36,6 +36,8 @@ const BETS: &str = "BETS";
 const BETTOR_LIST: &str = "BETTOR_LIST";
 /// Address — parent MarketFactory (used to validate oracle whitelist)
 const FACTORY: &str = "FACTORY";
+/// Config — global configuration for the market system
+const CONFIG: &str = "CONFIG";
 
 #[contract]
 pub struct Market;
@@ -255,5 +257,120 @@ impl Market {
     /// Returns current pool sizes as (pool_a, pool_b, pool_draw) in stroops.
     pub fn get_pool_sizes(env: Env) -> (i128, i128, i128) {
         todo!()
+    }
+
+    /// Updates the global dispute window duration (in seconds).
+    ///
+    /// Only callable by admin.
+    /// Validates window_secs >= 3600 (minimum 1 hour).
+    /// Updates Config.dispute_window_secs and persists.
+    /// Emits events::config_updated("dispute_window_secs", window_secs).
+    /// Does NOT retroactively change in-progress dispute windows.
+    pub fn set_dispute_window(
+        env: Env,
+        admin: Address,
+        window_secs: u64,
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+
+        if window_secs < 3600 {
+            return Err(ContractError::Unauthorized);
+        }
+
+        let mut config: Config = env
+            .storage()
+            .persistent()
+            .get(&CONFIG)
+            .unwrap_or(Config {
+                dispute_window_secs: 86400,
+                min_liquidity: 1_000_000,
+            });
+
+        config.dispute_window_secs = window_secs;
+        env.storage().persistent().set(&CONFIG, &config);
+
+        boxmeout_shared::emit_config_updated(
+            &env,
+            soroban_sdk::String::from_slice(&env, "dispute_window_secs"),
+            window_secs as i128,
+        );
+
+        Ok(())
+    }
+
+    /// Updates the minimum collateral required to seed a new AMM pool.
+    ///
+    /// Only callable by admin.
+    /// Validates min_liquidity > 0.
+    /// Updates Config.min_liquidity and persists.
+    /// Emits events::config_updated("min_liquidity", min_liquidity).
+    pub fn set_min_liquidity(
+        env: Env,
+        admin: Address,
+        min_liquidity: i128,
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+
+        if min_liquidity <= 0 {
+            return Err(ContractError::Unauthorized);
+        }
+
+        let mut config: Config = env
+            .storage()
+            .persistent()
+            .get(&CONFIG)
+            .unwrap_or(Config {
+                dispute_window_secs: 86400,
+                min_liquidity: 1_000_000,
+            });
+
+        config.min_liquidity = min_liquidity;
+        env.storage().persistent().set(&CONFIG, &config);
+
+        boxmeout_shared::emit_config_updated(
+            &env,
+            soroban_sdk::String::from_slice(&env, "min_liquidity"),
+            min_liquidity,
+        );
+
+        Ok(())
+    }
+
+    /// Returns claimable LP fees for a provider without claiming.
+    ///
+    /// Read-only preview of how many fees an LP provider can currently claim.
+    /// Used by the frontend to show pending fee rewards.
+    ///
+    /// Accepts market_id and provider address.
+    /// Returns 0 if no LP position exists (does not error).
+    /// Calls amm::calc_claimable_lp_fees with current LpFeePerShare and position's LpFeeDebt.
+    /// No state mutation.
+    pub fn get_lp_claimable_fees(
+        env: Env,
+        market_id: u64,
+        provider: Address,
+    ) -> i128 {
+        let lp_fee_per_share: i128 = env
+            .storage()
+            .persistent()
+            .get(&soroban_sdk::Symbol::new(&env, "lp_fee_per_share"))
+            .unwrap_or(0);
+
+        let position_key = soroban_sdk::Symbol::new(&env, "lp_position");
+        let position: Option<(i128, i128)> = env
+            .storage()
+            .persistent()
+            .get(&position_key);
+
+        match position {
+            Some((lp_shares, lp_fee_debt)) => {
+                boxmeout_shared::calc_claimable_lp_fees(
+                    lp_fee_per_share,
+                    lp_fee_debt,
+                    lp_shares,
+                )
+            }
+            None => 0,
+        }
     }
 }

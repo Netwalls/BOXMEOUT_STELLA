@@ -81,6 +81,16 @@ pub struct MarketConfig {
     pub resolution_window: u64,
 }
 
+/// Global configuration for the prediction market system.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Config {
+    /// Dispute window duration in seconds (minimum 3600 = 1 hour)
+    pub dispute_window_secs: u64,
+    /// Minimum collateral required to seed a new AMM pool
+    pub min_liquidity: i128,
+}
+
 /// A single bet placed by a user.
 #[contracttype]
 #[derive(Clone, Debug)]

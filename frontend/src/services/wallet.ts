@@ -10,6 +10,7 @@ import {
   TransactionBuilder,
   BASE_FEE,
   nativeToScVal,
+  Address,
   xdr,
 } from '@stellar/stellar-sdk';
 import type { BetSide } from '../types';
@@ -123,11 +124,25 @@ export async function submitBet(
 }
 
 export async function submitClaim(market_contract_address: string): Promise<string> {
-  return buildAndSubmit(market_contract_address, 'claim_winnings', []);
+  const bettor = getConnectedAddress();
+  if (!bettor) throw new Error('WalletNotConnected');
+  const token = process.env.NEXT_PUBLIC_XLM_TOKEN_ADDRESS;
+  if (!token) throw new Error('NEXT_PUBLIC_XLM_TOKEN_ADDRESS not set');
+  return buildAndSubmit(market_contract_address, 'claim_winnings', [
+    new Address(bettor).toScVal(),
+    new Address(token).toScVal(),
+  ]);
 }
 
 export async function submitRefund(market_contract_address: string): Promise<string> {
-  return buildAndSubmit(market_contract_address, 'claim_refund', []);
+  const bettor = getConnectedAddress();
+  if (!bettor) throw new Error('WalletNotConnected');
+  const token = process.env.NEXT_PUBLIC_XLM_TOKEN_ADDRESS;
+  if (!token) throw new Error('NEXT_PUBLIC_XLM_TOKEN_ADDRESS not set');
+  return buildAndSubmit(market_contract_address, 'claim_refund', [
+    new Address(bettor).toScVal(),
+    new Address(token).toScVal(),
+  ]);
 }
 
 export interface CreateMarketParams {

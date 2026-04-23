@@ -114,3 +114,10 @@ pub fn emit_fee_withdrawn(
 pub fn emit_emergency_drain(env: &Env, token: Address, amount: i128) {
     todo!()
 }
+
+/// Emitted by Market when a config parameter is updated.
+/// topic: ["config_updated"]
+/// data:  param_name, new_value
+pub fn emit_config_updated(env: &Env, param_name: String, new_value: i128) {
+    todo!()
+}
