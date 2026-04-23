@@ -132,23 +132,36 @@ export class MarketsController {
    */
   async listMarkets(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const category = req.query.category as MarketCategory | undefined;
-      const skip = parseInt(req.query.skip as string) || 0;
-      const take = Math.min(parseInt(req.query.take as string) || 20, 100);
+      const status = (req.query.status as string)?.toUpperCase();
+      const category = (req.query.category as string)?.toUpperCase();
+      const sort = (req.query.sort as string) || 'createdAt';
+      const order = (req.query.order as string) || 'desc';
+      const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const skip = (page - 1) * limit;
 
       const markets = await this.marketService.listMarkets({
-        category,
+        status: status as any,
+        category: category as any,
+        sort: sort as any,
+        order: order as any,
         skip,
-        take,
+        take: limit,
+      });
+
+      const total = await this.marketService.countMarkets({
+        status: status as any,
+        category: category as any,
       });
 
       res.json({
         success: true,
         data: markets,
         pagination: {
-          skip,
-          take,
-          hasMore: markets.length === take,
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
         },
       });
     } catch (error) {

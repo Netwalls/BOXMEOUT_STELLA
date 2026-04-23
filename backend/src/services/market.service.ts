@@ -164,25 +164,44 @@ export class MarketService {
   async listMarkets(options?: {
     category?: MarketCategory;
     status?: MarketStatus;
+    sort?: 'createdAt' | 'closingAt' | 'totalVolume' | 'participantCount';
+    order?: 'asc' | 'desc';
     skip?: number;
     take?: number;
   }) {
-    if (options?.status === MarketStatus.OPEN) {
-      return await this.marketRepository.findActiveMarkets({
-        category: options.category,
-        skip: options.skip,
-        take: options.take,
-      });
-    }
+    const sortField = options?.sort || 'createdAt';
+    const sortOrder = options?.order || 'desc';
 
     return await this.marketRepository.findMany({
       where: {
         ...(options?.category && { category: options.category }),
         ...(options?.status && { status: options.status }),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [sortField]: sortOrder },
       skip: options?.skip,
       take: options?.take || 20,
+      include: {
+        creator: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+  }
+
+  async countMarkets(options?: {
+    category?: MarketCategory;
+    status?: MarketStatus;
+  }) {
+    return await this.marketRepository.count({
+      where: {
+        ...(options?.category && { category: options.category }),
+        ...(options?.status && { status: options.status }),
+      },
     });
   }
 
