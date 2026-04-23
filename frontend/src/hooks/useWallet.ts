@@ -1,10 +1,6 @@
-// ============================================================
-// BOXMEOUT — useWallet Hook
-// Global wallet state. Use this hook everywhere in the app
-// instead of calling wallet.ts functions directly.
-// ============================================================
-
 import { useState, useEffect, useCallback } from 'react';
+import { connectWallet, disconnectWallet, getConnectedAddress, getWalletBalance } from '../services/wallet';
+import { useAppStore } from '../store';
 
 export interface UseWalletResult {
   address: string | null;
@@ -16,16 +12,47 @@ export interface UseWalletResult {
   disconnect: () => void;
 }
 
-/**
- * Manages wallet connection state for the entire app.
- * On mount: reads stored address from localStorage and refreshes balance.
- * Exposes connect() and disconnect() actions.
- *
- * Stores connected address in localStorage key "boxmeout_wallet_address"
- * so the connection persists across page refreshes.
- */
+const STORAGE_KEY = 'boxmeout_wallet_address';
+
 export function useWallet(): UseWalletResult {
-  // TODO: implement
-  // Hint: call connectWallet() on connect(), then fetch balance
-  //       read localStorage on mount to auto-restore prior session
+  const { walletAddress, walletBalance, isConnecting, setWallet, clearWallet } = useAppStore();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const stored = getConnectedAddress();
+    if (stored) {
+      getWalletBalance().then((bal) => setWallet(stored, bal)).catch(() => {});
+    }
+  }, []);
+
+  const connect = useCallback(async () => {
+    setError(null);
+    useAppStore.setState({ isConnecting: true });
+    try {
+      const address = await connectWallet();
+      const balance = await getWalletBalance();
+      localStorage.setItem(STORAGE_KEY, address);
+      setWallet(address, balance);
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to connect wallet');
+    } finally {
+      useAppStore.setState({ isConnecting: false });
+    }
+  }, [setWallet]);
+
+  const disconnect = useCallback(() => {
+    disconnectWallet();
+    localStorage.removeItem(STORAGE_KEY);
+    clearWallet();
+  }, [clearWallet]);
+
+  return {
+    address: walletAddress,
+    balance: walletBalance,
+    isConnected: !!walletAddress,
+    isConnecting,
+    error,
+    connect,
+    disconnect,
+  };
 }

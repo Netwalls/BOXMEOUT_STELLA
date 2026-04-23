@@ -32,14 +32,15 @@ interface AppState {
   setTxStatus: (status: TxStatus) => void;
 }
 
-/**
- * Creates the global Zustand store.
- *
- * Initial state:
- *   walletAddress = null
- *   network = "testnet"
- *   lastTxStatus = { hash: null, status: "idle", error: null }
- */
 export const useAppStore = create<AppState>((set) => ({
-  // TODO: implement initial state and all action implementations
+  walletAddress: null,
+  walletBalance: null,
+  isConnecting: false,
+  network: (process.env.NEXT_PUBLIC_STELLAR_NETWORK as Network) ?? 'testnet',
+  lastTxStatus: { hash: null, status: 'idle', error: null },
+
+  setWallet: (address, balance) => set({ walletAddress: address, walletBalance: balance }),
+  clearWallet: () => set({ walletAddress: null, walletBalance: null }),
+  setNetwork: (network) => set({ network }),
+  setTxStatus: (status) => set({ lastTxStatus: status }),
 }));
