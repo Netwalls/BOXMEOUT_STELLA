@@ -3,6 +3,7 @@ import { errorMiddleware } from "./middleware/error.middleware";
 import { rateLimit } from "./middleware/rate-limit.middleware";
 import { AppError } from "./utils/AppError";
 import { logger } from "./utils/logger";
+import authRouter from "./routes/auth.routes";
 
 const app = express();
 
@@ -22,7 +23,7 @@ app.use(
   rateLimit({ windowMs: 60_000, max: 5, keyBy: "userId" }),
 );
 
-app.post("/auth/login", (_req, res) => res.json({ ok: true }));
+app.use("/auth", authRouter);
 app.post("/trading/bet", (_req, res) => res.json({ ok: true }));
 app.post("/wallet/withdraw", (_req, res) => res.json({ ok: true }));
 
