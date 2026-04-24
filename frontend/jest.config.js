@@ -15,7 +15,10 @@ module.exports = {
       testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
       transform: sharedTransform,
-      moduleNameMapper: sharedModuleNameMapper,
+      moduleNameMapper: {
+        ...sharedModuleNameMapper,
+        '^@stellar/stellar-sdk$': '<rootDir>/src/__tests__/mocks/stellar-sdk.js',
+      },
       testPathIgnorePatterns: ['/node_modules/'],
       globals: { 'ts-jest': { isolatedModules: true } },
     },

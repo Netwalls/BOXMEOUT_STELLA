@@ -29,6 +29,20 @@ const LS_KEY = 'boxmeout_wallet_address';
 
 // ─── Custom Errors ───────────────────────────────────────────────────────────
 
+export class WalletNotInstalledError extends Error {
+  constructor(message: string = 'No wallet extension found. Install Freighter at https://freighter.app') {
+    super(message);
+    this.name = 'WalletNotInstalledError';
+  }
+}
+
+export class WalletConnectionError extends Error {
+  constructor(message: string = 'User rejected wallet connection') {
+    super(message);
+    this.name = 'WalletConnectionError';
+  }
+}
+
 export class WalletSignError extends Error {
   constructor(message: string = 'User rejected transaction signing') {
     super(message);
@@ -121,17 +135,31 @@ export async function connectWallet(): Promise<string> {
   const freighter = (window as any).freighter;
   const albedo = (window as any).albedo;
   if (freighter) {
-    await freighter.requestAccess();
-    const { publicKey } = await freighter.getPublicKey();
-    localStorage.setItem(LS_KEY, publicKey);
-    return publicKey;
+    try {
+      await freighter.requestAccess();
+      const { publicKey } = await freighter.getPublicKey();
+      localStorage.setItem(LS_KEY, publicKey);
+      return publicKey;
+    } catch (err) {
+      throw new WalletConnectionError(
+        err instanceof Error ? err.message : 'User rejected wallet connection',
+      );
+    }
   }
   if (albedo) {
-    const { pubkey } = await albedo.publicKey({ token: 'boxmeout' });
-    localStorage.setItem(LS_KEY, pubkey);
-    return pubkey;
+    try {
+      const { pubkey } = await albedo.publicKey({ token: 'boxmeout' });
+      localStorage.setItem(LS_KEY, pubkey);
+      return pubkey;
+    } catch (err) {
+      throw new WalletConnectionError(
+        err instanceof Error ? err.message : 'User rejected wallet connection',
+      );
+    }
   }
-  throw new Error('WalletNotInstalledError: Install Freighter or Albedo');
+  throw new WalletNotInstalledError(
+    'No wallet extension found. Install Freighter at https://freighter.app',
+  );
 }
 
 export function disconnectWallet(): void {
