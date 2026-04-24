@@ -6,6 +6,7 @@
 pub mod amm;
 pub mod errors;
 pub mod events;
+pub mod math;
 pub mod types;
 
 pub use amm::*;
