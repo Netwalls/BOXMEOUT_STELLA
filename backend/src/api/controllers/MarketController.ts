@@ -29,8 +29,21 @@ export async function listMarkets(req: Request, res: Response): Promise<void> {
  * Returns full market detail including current odds.
  * Responds 404 if market_id not found, 200 with Market object.
  */
-export async function getMarket(req: Request, res: Response): Promise<void> {
-  // TODO: implement
+export async function getMarket(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { market_id } = req.params;
+    const market = await MarketService.getMarketById(market_id);
+    res.status(200).json(market);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 404) {
+      return next(err);
+    }
+    next(err);
+  }
 }
 
 const marketBetsQuerySchema = z.object({
