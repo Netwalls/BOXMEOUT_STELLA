@@ -14,6 +14,7 @@ import treasuryRoutes from './routes/treasury.routes.js';
 import referralsRoutes from './routes/referrals.routes.js';
 import leaderboardRoutes from './routes/leaderboard.routes.js';
 import indexerRoutes from './routes/indexer.routes.js';
+import betsRoutes from './routes/bets.routes.js';
 
 // Import Redis initialization
 import {
@@ -220,6 +221,9 @@ app.use('/api/leaderboard', leaderboardRoutes);
 
 // Indexer routes (admin only)
 app.use('/api/indexer', indexerRoutes);
+
+// Bets routes
+app.use('/api/bets', betsRoutes);
 
 // =============================================================================
 // ERROR HANDLING - UPDATED WITH NEW ERROR HANDLER

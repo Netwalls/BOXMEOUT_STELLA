@@ -113,6 +113,32 @@ export class PredictionRepository extends BaseRepository<Prediction> {
     });
   }
 
+  /**
+   * Find all predictions (bets) placed by a wallet address.
+   * Joins through the User table since predictions are keyed by userId,
+   * not walletAddress directly.
+   */
+  async findByBettorAddress(walletAddress: string): Promise<Prediction[]> {
+    return await this.prisma.prediction.findMany({
+      where: {
+        user: { walletAddress },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        market: {
+          select: {
+            id: true,
+            title: true,
+            category: true,
+            status: true,
+            outcomeA: true,
+            outcomeB: true,
+          },
+        },
+      },
+    });
+  }
+
   async findMarketPredictions(marketId: string): Promise<Prediction[]> {
     return await this.prisma.prediction.findMany({
       where: { marketId, status: PredictionStatus.REVEALED },

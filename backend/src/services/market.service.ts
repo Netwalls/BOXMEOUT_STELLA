@@ -396,4 +396,12 @@ export class MarketService {
   async getClosingMarkets(withinHours: number = 24) {
     return await this.marketRepository.getClosingMarkets(withinHours);
   }
+
+  /**
+   * Return all bets (predictions) placed by a given Stellar wallet address.
+   * Returns an empty array when the address has no bets or is not registered.
+   */
+  async getBetsByBettorAddress(walletAddress: string) {
+    return await this.predictionRepository.findByBettorAddress(walletAddress);
+  }
 }

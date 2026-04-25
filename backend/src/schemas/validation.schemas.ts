@@ -43,6 +43,10 @@ export const marketIdParam = z.object({
   marketId: z.string().uuid(),
 });
 
+export const bettorAddressParam = z.object({
+  bettor_address: stellarAddress,
+});
+
 // --- Auth schemas ---
 
 export const challengeBody = z.object({
