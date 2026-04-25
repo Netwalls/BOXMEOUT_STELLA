@@ -76,3 +76,8 @@ pub fn emit_config_updated(env: &Env, param_name: String, new_value: i128) {
     let topics = (Symbol::new(env, "config_updated"),);
     env.events().publish(topics, (param_name, new_value));
 }
+
+pub fn emit_conflicting_oracle_report(env: &Env, market_id: u64, oracle_address: Address) {
+    let topics = (Symbol::new(env, "conflicting_oracle_report"), market_id);
+    env.events().publish(topics, oracle_address);
+}

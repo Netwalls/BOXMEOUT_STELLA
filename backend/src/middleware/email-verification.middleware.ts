@@ -12,7 +12,7 @@ export function requireEmailVerification(
   _res: Response,
   next: NextFunction,
 ): void {
-  const userId = (req as any).userId;
+  const userId = (req as unknown as Record<string, unknown>).userId;
   if (!userId) {
     return next(new AppError(401, 'Authentication required'));
   }

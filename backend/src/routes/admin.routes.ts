@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../utils/AppError';
-import { flagDispute } from '../api/controllers/AdminController';
+import { flagDispute, cancelMarket } from '../api/controllers/AdminController';
 
 const router = Router();
 
@@ -32,8 +32,8 @@ async function requireAdmin(req: Request, _res: Response, next: NextFunction): P
     // const revoked = await authService.isSessionRevoked(userId, sessionVersion);
     // if (revoked) throw new AppError(401, 'Session has been invalidated');
 
-    (req as any).userId = userId;
-    (req as any).sessionVersion = sessionVersion;
+    (req as unknown as Record<string, unknown>).userId = userId;
+    (req as unknown as Record<string, unknown>).sessionVersion = sessionVersion;
     next();
   } catch (err) {
     next(err instanceof AppError ? err : new AppError(401, 'Invalid or expired token'));
@@ -43,6 +43,14 @@ async function requireAdmin(req: Request, _res: Response, next: NextFunction): P
 router.post('/dispute/:market_id', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     await flagDispute(req, res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/cancel/:market_id', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await cancelMarket(req, res);
   } catch (err) {
     next(err);
   }

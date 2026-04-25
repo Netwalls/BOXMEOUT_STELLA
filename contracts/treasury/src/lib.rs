@@ -20,7 +20,10 @@ pub struct Treasury;
 
 impl Treasury {
     fn require_admin(env: &Env, caller: &Address) -> Result<(), ContractError> {
-        let admin: Address = env.storage().persistent().get(&ADMIN).unwrap();
+        let admin: Address = env
+            .storage().persistent()
+            .get(&ADMIN)
+            .ok_or(ContractError::Unauthorized)?;
         if *caller != admin {
             return Err(ContractError::Unauthorized);
         }
@@ -34,6 +37,10 @@ impl Treasury {
 
 #[contractimpl]
 impl Treasury {
+    /// Initializes the treasury with admin and withdrawal limit.
+    ///
+    /// # Errors
+    /// - `AlreadyInitialized`: Treasury has already been initialized
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -50,6 +57,10 @@ impl Treasury {
         Ok(())
     }
 
+    /// Approves a market contract to deposit fees.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn approve_market(
         env: Env,
         admin: Address,
@@ -67,6 +78,10 @@ impl Treasury {
         Ok(())
     }
 
+    /// Revokes a market contract's permission to deposit fees.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn revoke_market(
         env: Env,
         admin: Address,
@@ -87,7 +102,11 @@ impl Treasury {
         Ok(())
     }
 
-    /// deposit_fees — called by approved Market contracts.
+    /// Deposits fees from an approved market contract.
+    ///
+    /// # Errors
+    /// - `MarketNotApproved`: Market is not in the approved list
+    ///
     /// # Security (CEI)
     /// 1. CHECKS: caller in APPROVED_MARKETS, market.require_auth()
     /// 2. EFFECTS: increment ACCUMULATED_FEES before transfer
@@ -121,7 +140,13 @@ impl Treasury {
         Ok(())
     }
 
-    /// withdraw_fees — admin only, with per-tx and daily caps.
+    /// Withdraws accumulated fees with per-transaction and daily limits.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
+    /// - `DailyWithdrawalLimitExceeded`: Withdrawal exceeds daily limit
+    /// - `InsufficientBalance`: Not enough fees accumulated
+    ///
     /// # Security (CEI)
     /// 1. CHECKS: require_auth, limits, balance
     /// 2. EFFECTS: decrement fees + increment daily tracker
@@ -171,12 +196,14 @@ impl Treasury {
         Ok(())
     }
 
+    /// Returns the accumulated fees for a specific token.
     pub fn get_accumulated_fees(env: Env, token: Address) -> i128 {
         let fees: Map<Address, i128> =
             env.storage().persistent().get(&ACCUMULATED_FEES).unwrap_or_else(|| Map::new(&env));
         fees.get(token).unwrap_or(0)
     }
 
+    /// Returns the total amount withdrawn today.
     pub fn get_daily_withdrawal_amount(env: Env) -> i128 {
         let bucket = Self::day_bucket(&env);
         let daily: Map<u64, i128> =
@@ -184,6 +211,10 @@ impl Treasury {
         daily.get(bucket).unwrap_or(0)
     }
 
+    /// Updates the daily withdrawal limit.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn update_withdrawal_limit(
         env: Env,
         admin: Address,
@@ -195,7 +226,11 @@ impl Treasury {
         Ok(())
     }
 
-    /// emergency_drain — transfers entire token balance to admin.
+    /// Emergency drain of all accumulated fees for a token.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
+    ///
     /// # Security (CEI)
     /// 1. CHECKS: require_auth, admin check
     /// 2. EFFECTS: zero ACCUMULATED_FEES[token]

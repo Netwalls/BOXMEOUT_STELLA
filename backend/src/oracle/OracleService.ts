@@ -99,7 +99,7 @@ export async function submitFightResult(
   }
 
   const contract_address = marketResult.rows[0].contract_address;
-  const tx_hash = await invokeContract(contract_address, 'resolve_market', [] as unknown as any);
+  const tx_hash = await invokeContract(contract_address, 'resolve_market', [] as unknown[]);
 
   const insertResult = await pool.query(
     `INSERT INTO oracle_reports
@@ -177,7 +177,7 @@ export function getOraclePublicKey(): string {
  * Returns the outcome string if found, null if the result is not yet available.
  */
 export async function fetchFallbackResult(
-  match_id: string,
+  _match_id: string,
 ): Promise<FightOutcome | null> {
   // TODO: implement
   throw new Error('Not implemented');
@@ -196,9 +196,9 @@ export async function fetchFallbackResult(
  * Requires ADMIN_PRIVATE_KEY to be set in environment.
  */
 export async function adminOverrideResult(
-  match_id: string,
-  outcome: FightOutcome,
-  admin_signature: string,
+  _match_id: string,
+  _outcome: FightOutcome,
+  _admin_signature: string,
 ): Promise<void> {
   // TODO: implement
 }

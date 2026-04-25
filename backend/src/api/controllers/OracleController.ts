@@ -19,8 +19,8 @@ import type { Request, Response } from 'express';
  * Protected by oracle API key header: X-Oracle-Key
  */
 export async function submitOracleResult(
-  req: Request,
-  res: Response,
+  _req: Request,
+  _res: Response,
 ): Promise<void> {
   // TODO: implement
 }
@@ -33,8 +33,8 @@ export async function submitOracleResult(
  * Responds 200 with OracleReport[].
  */
 export async function getOracleReports(
-  req: Request,
-  res: Response,
+  _req: Request,
+  _res: Response,
 ): Promise<void> {
   // TODO: implement
 }

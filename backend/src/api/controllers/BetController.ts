@@ -12,8 +12,8 @@ import type { Request, Response } from 'express';
  * Responds 400 on invalid address, 200 with Bet[].
  */
 export async function getBetsByAddress(
-  req: Request,
-  res: Response,
+  _req: Request,
+  _res: Response,
 ): Promise<void> {
   // TODO: implement
 }
@@ -29,8 +29,8 @@ export async function getBetsByAddress(
  * Returns empty portfolio (all zeros, empty arrays) if address has no bets.
  */
 export async function getPortfolio(
-  req: Request,
-  res: Response,
+  _req: Request,
+  _res: Response,
 ): Promise<void> {
   // TODO: implement
 }

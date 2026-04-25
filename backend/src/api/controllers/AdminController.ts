@@ -4,7 +4,6 @@
 // ============================================================
 
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import { AppError } from '../../utils/AppError';
 import * as StellarService from '../../services/StellarService';
 import { db } from '../../services/MarketService';
@@ -69,8 +68,8 @@ export async function flagDispute(
  *   4. Respond 200 with { tx_hash }
  */
 export async function resolveDispute(
-  req: Request,
-  res: Response,
+  _req: Request,
+  _res: Response,
 ): Promise<void> {
   // TODO: implement
 }
@@ -87,8 +86,8 @@ export async function resolveDispute(
  *   4. Respond 200 with { tx_hash }
  */
 export async function cancelMarket(
-  req: Request,
-  res: Response,
+  _req: Request,
+  _res: Response,
 ): Promise<void> {
   // TODO: implement
 }

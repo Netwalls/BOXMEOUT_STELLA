@@ -18,6 +18,7 @@ export interface DbAdapter {
   findMarkets(filters?: MarketFilters): Promise<Market[]>;
   findMarketById(market_id: string): Promise<Market | null>;
   findBetsByAddress(bettor_address: string): Promise<Bet[]>;
+  findBetsByMarket(market_id: string, bettor_address?: string): Promise<Bet[]>;
   updateMarketStatus(market_id: string, status: string): Promise<void>;
 }
 
@@ -174,7 +175,7 @@ export async function getMarketOdds(market_id: string): Promise<MarketOdds> {
   if (isStale) {
     // Fallback to on-chain read
     // Assume readContractState returns { pool_a: string, pool_b: string, pool_draw: string, total_pool: string }
-    const onChainData = await StellarService.readContractState(market.contract_address, 'get_pools', []);
+    const onChainData = await StellarService.readContractState(market.contract_address, 'get_pools', []) as { pool_a: string; pool_b: string; pool_draw: string; total_pool: string };
     pool_a = BigInt(onChainData.pool_a);
     pool_b = BigInt(onChainData.pool_b);
     pool_draw = BigInt(onChainData.pool_draw);
@@ -203,11 +204,26 @@ export async function getBetsByMarket(
   market_id: string,
   bettor_address?: string,
 ): Promise<Bet[]> {
-  // TODO: replace with real DB query once pg client is wired up
-  // e.g. SELECT * FROM bets WHERE market_id = $1 [AND bettor_address = $2]
-  void bettor_address;
-  void market_id;
-  return [];
+  if (_db) {
+    return db().findBetsByMarket(market_id, bettor_address);
+  }
+
+  const values: unknown[] = [market_id];
+  let sql = 'SELECT * FROM bets WHERE market_id = $1';
+
+  if (bettor_address) {
+    values.push(bettor_address);
+    sql += ` AND bettor_address = $${values.length}`;
+  }
+
+  sql += ' ORDER BY placed_at DESC';
+
+  const { rows } = await pool.query(sql, values);
+  return rows.map((row) => ({
+    ...row,
+    placed_at: new Date(row.placed_at),
+    claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
+  } as Bet));
 }
 
 /**
@@ -283,7 +299,7 @@ export async function getPortfolioByAddress(
  * Used as a helper by getPortfolioByAddress.
  */
 export async function getMarketsByBettor(
-  bettor_address: string,
+  _bettor_address: string,
 ): Promise<Market[]> {
   // TODO: implement
   throw new Error('Not implemented');

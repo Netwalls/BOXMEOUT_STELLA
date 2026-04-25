@@ -26,22 +26,25 @@ export async function invokeContract(
   contract_address: string,
   method: string,
   args: xdr.ScVal[],
-  source_keypair: Keypair,
+  source_keypair?: Keypair,
 ): Promise<string> {
   const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
   const networkPassphrase = process.env.STELLAR_NETWORK === 'public'
     ? Networks.PUBLIC
     : Networks.TESTNET;
 
+  if (!source_keypair) {
+    source_keypair = Keypair.random();
+  }
+
   const server = new Server(horizonUrl);
   const sourceAccount = await server.loadAccount(source_keypair.publicKey());
 
-  const invokeContractHostFunction = xdr.HostFunction.hostFunctionTypeInvokeContractHostFunction(
-    new xdr.InvokeContractHostFunction({
-      contractAddress: xdr.SorobanAddress.fromAddress(contract_address),
+  const invokeContractHostFunction = xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: xdr.ScAddress.contractFromAddress(contract_address),
       functionName: xdr.ScSymbol.fromString(method),
       args,
-      auth: [],
     }),
   );
 
@@ -49,7 +52,7 @@ export async function invokeContract(
     fee: 100,
     networkPassphrase,
   })
-    .addOperation(Operation.invokeHostFunction({ function: invokeContractHostFunction, auth: [] }))
+    .addOperation(Operation.invokeHostFunction({ hostFunction: invokeContractHostFunction, auth: [] }))
     .setTimeout(30)
     .build();
 
@@ -58,8 +61,9 @@ export async function invokeContract(
   try {
     const response = await server.submitTransaction(transaction);
     return response.hash;
-  } catch (error: any) {
-    throw new Error(`Contract invocation failed: ${error?.response?.data ?? error?.message ?? error}`);
+  } catch (error) {
+    const err = error as Record<string, unknown>;
+    throw new Error(`Contract invocation failed: ${err?.response?.data ?? err?.message ?? error}`);
   }
 }
 
@@ -90,12 +94,11 @@ export async function readContractState<T>(
   const sorobanServer = new SorobanServer(rpcUrl);
   const sourceAccount = new Account(Keypair.random().publicKey(), '0');
 
-  const invokeContractHostFunction = xdr.HostFunction.hostFunctionTypeInvokeContractHostFunction(
-    new xdr.InvokeContractHostFunction({
-      contractAddress: xdr.SorobanAddress.fromAddress(contract_address),
+  const invokeContractHostFunction = xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: xdr.ScAddress.contractFromAddress(contract_address),
       functionName: xdr.ScSymbol.fromString(method),
       args,
-      auth: [],
     }),
   );
 
@@ -103,7 +106,7 @@ export async function readContractState<T>(
     fee: 100,
     networkPassphrase,
   })
-    .addOperation(Operation.invokeHostFunction({ function: invokeContractHostFunction, auth: [] }))
+    .addOperation(Operation.invokeHostFunction({ hostFunction: invokeContractHostFunction, auth: [] }))
     .setTimeout(30)
     .build();
 
@@ -112,14 +115,14 @@ export async function readContractState<T>(
     throw new Error(`Simulation error: ${JSON.stringify(response.error)}`);
   }
 
-  const result = (response as any).results?.[0];
+  const result = (response as Record<string, unknown>).results?.[0] as Record<string, unknown>;
   if (!result || result.status !== 'SUCCESS') {
     throw new Error(
       `Simulation failed${result?.status ? `: ${result.status}` : ' without a result'}`,
     );
   }
 
-  const returnValue = result.returnValue;
+  const returnValue = result.returnValue as xdr.ScVal;
   if (!returnValue) {
     throw new Error('Simulation returned no returnValue');
   }
@@ -137,8 +140,8 @@ export async function readContractState<T>(
  * Returns an unsubscribe function that stops the stream.
  */
 export function subscribeToContractEvents(
-  contract_address: string,
-  onEvent: (event: unknown) => void,
+  _contract_address: string,
+  _onEvent: (event: unknown) => void,
 ): () => void {
   // TODO: implement
   throw new Error('Not implemented');
@@ -162,28 +165,28 @@ export function subscribeToContractEvents(
  * Throws ParseError for unsupported variants.
  */
 export function parseScVal(scval: xdr.ScVal): unknown {
-  const value: any = scval as any;
+  const value = scval as Record<string, unknown>;
   const type = scval.switch();
 
-  if (type === xdr.ScValType.scvBool()) return value.b?.();
-  if (type === xdr.ScValType.scvU32()) return value.u32?.();
-  if (type === xdr.ScValType.scvI32()) return value.i32?.();
+  if (type === xdr.ScValType.scvBool()) return (value.b as () => boolean)?.();
+  if (type === xdr.ScValType.scvU32()) return (value.u32 as () => number)?.();
+  if (type === xdr.ScValType.scvI32()) return (value.i32 as () => number)?.();
   if (type === xdr.ScValType.scvU64()) {
-    const u64 = value.u64?.();
+    const u64 = (value.u64 as () => bigint)?.();
     return typeof u64 === 'bigint' ? u64 : u64?.toString();
   }
   if (type === xdr.ScValType.scvI128()) {
-    const i128 = value.i128?.();
+    const i128 = (value.i128 as () => bigint)?.();
     return typeof i128 === 'bigint' ? i128 : i128?.toString();
   }
-  if (type === xdr.ScValType.scvString()) return value.str?.();
-  if (type === xdr.ScValType.scvAddress()) return value.address?.();
-  if (type === xdr.ScValType.scvSymbol()) return value.sym?.();
+  if (type === xdr.ScValType.scvString()) return (value.str as () => string)?.();
+  if (type === xdr.ScValType.scvAddress()) return (value.address as () => string)?.();
+  if (type === xdr.ScValType.scvSymbol()) return (value.sym as () => string)?.();
   if (type === xdr.ScValType.scvVec()) {
-    return value.vec()?.map((item: xdr.ScVal) => parseScVal(item));
+    return (value.vec as () => xdr.ScVal[])()?.map((item: xdr.ScVal) => parseScVal(item));
   }
   if (type === xdr.ScValType.scvMap()) {
-    const mapEntries = value.map?.() ?? [];
+    const mapEntries = (value.map as () => Array<{ key: () => xdr.ScVal; value: () => xdr.ScVal }>)?.() ?? [];
     const output: Record<string, unknown> = {};
     for (const entry of mapEntries) {
       const key = parseScVal(entry.key());

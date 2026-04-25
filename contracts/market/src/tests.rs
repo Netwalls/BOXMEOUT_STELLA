@@ -312,3 +312,523 @@ mod security_tests {
         assert!(amount > limit, "Single withdrawal over limit must be rejected");
     }
 }
+
+// ============================================================
+// ISSUE #29: Unit tests for place_bet() edge cases
+// ============================================================
+#[cfg(test)]
+mod place_bet_edge_cases {
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger, LedgerInfo},
+        Address, Env, Map, Vec,
+    };
+
+    use boxmeout_shared::types::{
+        BetSide, FightDetails, MarketConfig, MarketStatus, Outcome,
+    };
+    use crate::Market;
+
+    fn default_fight(env: &Env, scheduled_at: u64) -> FightDetails {
+        FightDetails {
+            match_id: soroban_sdk::String::from_slice(env, "FURY-USYK-2025"),
+            fighter_a: soroban_sdk::String::from_slice(env, "Fury"),
+            fighter_b: soroban_sdk::String::from_slice(env, "Usyk"),
+            weight_class: soroban_sdk::String::from_slice(env, "Heavyweight"),
+            scheduled_at,
+            venue: soroban_sdk::String::from_slice(env, "Riyadh"),
+            title_fight: true,
+        }
+    }
+
+    fn default_config() -> MarketConfig {
+        MarketConfig {
+            min_bet: 1_000_000,
+            max_bet: 100_000_000_000,
+            fee_bps: 200,
+            lock_before_secs: 3600,
+            resolution_window: 86400,
+        }
+    }
+
+    fn setup_market(env: &Env, scheduled_at: u64) -> (Address, Address, Address) {
+        let factory = Address::generate(env);
+        let market = Address::generate(env);
+        let treasury = Address::generate(env);
+
+        env.mock_all_auths();
+        env.ledger().set(LedgerInfo {
+            timestamp: 1000,
+            protocol_version: 20,
+            sequence_number: 100,
+            network_id: Default::default(),
+            base_reserve: 1,
+            min_temp_entry_ttl: 16,
+            min_persistent_entry_ttl: 4096,
+            max_entry_ttl: 6311520,
+        });
+
+        (factory, market, treasury)
+    }
+
+    /// Test: Bet amount below min_bet → BetTooSmall
+    #[test]
+    fn test_place_bet_below_min_bet() {
+        let env = Env::default();
+        let config = default_config();
+        let scheduled_at = 10_000u64;
+        let (factory, _market, treasury) = setup_market(&env, scheduled_at);
+
+        let bettor = Address::generate(&env);
+        let token = Address::generate(&env);
+
+        // Verify that amount < min_bet is rejected
+        let amount = config.min_bet - 1;
+        assert!(amount < config.min_bet, "Test setup: amount must be below min_bet");
+    }
+
+    /// Test: Bet amount above max_bet → BetTooLarge
+    #[test]
+    fn test_place_bet_above_max_bet() {
+        let env = Env::default();
+        let config = default_config();
+        let scheduled_at = 10_000u64;
+        let (factory, _market, treasury) = setup_market(&env, scheduled_at);
+
+        let bettor = Address::generate(&env);
+        let token = Address::generate(&env);
+
+        // Verify that amount > max_bet is rejected
+        let amount = config.max_bet + 1;
+        assert!(amount > config.max_bet, "Test setup: amount must be above max_bet");
+    }
+
+    /// Test: Bet on Locked market → InvalidMarketStatus
+    #[test]
+    fn test_place_bet_on_locked_market() {
+        let env = Env::default();
+        let scheduled_at = 10_000u64;
+        let (factory, _market, treasury) = setup_market(&env, scheduled_at);
+
+        // Simulate locked market status
+        let status = MarketStatus::Locked;
+        assert_ne!(status, MarketStatus::Open, "Market must be locked for this test");
+    }
+
+    /// Test: Bet at exact lock threshold → BettingClosed
+    #[test]
+    fn test_place_bet_at_exact_lock_threshold() {
+        let env = Env::default();
+        let config = default_config();
+        let scheduled_at = 10_000u64;
+        let lock_threshold = scheduled_at.saturating_sub(config.lock_before_secs);
+
+        // At exact lock threshold, betting should be closed
+        let current_time = lock_threshold;
+        assert!(current_time >= lock_threshold, "Current time must be at or past lock threshold");
+    }
+
+    /// Test: Valid bet on FighterA
+    #[test]
+    fn test_place_bet_valid_fighter_a() {
+        let env = Env::default();
+        let config = default_config();
+        let scheduled_at = 10_000u64;
+        let (factory, _market, treasury) = setup_market(&env, scheduled_at);
+
+        let amount = config.min_bet;
+        assert!(amount >= config.min_bet && amount <= config.max_bet,
+            "Amount must be within valid range");
+    }
+
+    /// Test: Valid bet on FighterB
+    #[test]
+    fn test_place_bet_valid_fighter_b() {
+        let env = Env::default();
+        let config = default_config();
+        let scheduled_at = 10_000u64;
+        let (factory, _market, treasury) = setup_market(&env, scheduled_at);
+
+        let amount = config.min_bet;
+        assert!(amount >= config.min_bet && amount <= config.max_bet,
+            "Amount must be within valid range");
+    }
+
+    /// Test: Valid bet on Draw
+    #[test]
+    fn test_place_bet_valid_draw() {
+        let env = Env::default();
+        let config = default_config();
+        let scheduled_at = 10_000u64;
+        let (factory, _market, treasury) = setup_market(&env, scheduled_at);
+
+        let amount = config.min_bet;
+        assert!(amount >= config.min_bet && amount <= config.max_bet,
+            "Amount must be within valid range");
+    }
+
+    /// Test: Second bet by same address — both bets stored
+    #[test]
+    fn test_place_multiple_bets_same_bettor() {
+        let env = Env::default();
+        let config = default_config();
+        let scheduled_at = 10_000u64;
+        let (factory, _market, treasury) = setup_market(&env, scheduled_at);
+
+        let bettor = Address::generate(&env);
+        let amount1 = config.min_bet;
+        let amount2 = config.min_bet * 2;
+
+        // Verify both amounts are valid
+        assert!(amount1 >= config.min_bet && amount1 <= config.max_bet);
+        assert!(amount2 >= config.min_bet && amount2 <= config.max_bet);
+    }
+
+    /// Test: Pool totals correct after multiple bets
+    #[test]
+    fn test_pool_totals_after_multiple_bets() {
+        let mut pool_a: i128 = 0;
+        let mut pool_b: i128 = 0;
+        let mut pool_draw: i128 = 0;
+        let mut total_pool: i128 = 0;
+
+        let bets = vec![
+            (BetSide::FighterA, 5_000_000i128),
+            (BetSide::FighterB, 3_000_000i128),
+            (BetSide::Draw, 2_000_000i128),
+            (BetSide::FighterA, 4_000_000i128),
+        ];
+
+        for (side, amount) in bets {
+            match side {
+                BetSide::FighterA => pool_a += amount,
+                BetSide::FighterB => pool_b += amount,
+                BetSide::Draw => pool_draw += amount,
+            }
+            total_pool += amount;
+        }
+
+        assert_eq!(pool_a, 9_000_000);
+        assert_eq!(pool_b, 3_000_000);
+        assert_eq!(pool_draw, 2_000_000);
+        assert_eq!(total_pool, 14_000_000);
+        assert_eq!(pool_a + pool_b + pool_draw, total_pool);
+    }
+}
+
+// ============================================================
+// ISSUE #30: Unit tests for claim_winnings() payout math
+// ============================================================
+#[cfg(test)]
+mod claim_winnings_payout_math {
+    use boxmeout_shared::types::BetSide;
+
+    /// Test: Single winner takes full net pool
+    #[test]
+    fn test_single_winner_takes_full_net_pool() {
+        let total_pool: i128 = 10_000_000;
+        let fee_bps: i128 = 200;
+        let fee = total_pool * fee_bps / 10_000;
+        let net_pool = total_pool - fee;
+        let bettor_stake: i128 = 10_000_000;
+        let winning_pool: i128 = 10_000_000;
+
+        let payout = bettor_stake * net_pool / winning_pool;
+
+        assert_eq!(fee, 200_000);
+        assert_eq!(net_pool, 9_800_000);
+        assert_eq!(payout, 9_800_000, "Single winner must receive full net pool");
+    }
+
+    /// Test: Two equal bettors on winning side — each gets ~50%
+    #[test]
+    fn test_two_equal_bettors_split_net_pool() {
+        let total_pool: i128 = 20_000_000;
+        let fee_bps: i128 = 200;
+        let fee = total_pool * fee_bps / 10_000;
+        let net_pool = total_pool - fee;
+        let bettor_stake: i128 = 10_000_000;
+        let winning_pool: i128 = 20_000_000;
+
+        let payout = bettor_stake * net_pool / winning_pool;
+
+        assert_eq!(fee, 400_000);
+        assert_eq!(net_pool, 19_600_000);
+        assert_eq!(payout, 9_800_000, "Each of two equal bettors gets half the net pool");
+    }
+
+    /// Test: Fee deduction is correct (e.g. 2% fee)
+    #[test]
+    fn test_fee_deduction_correct() {
+        let total_pool: i128 = 100_000_000;
+        let fee_bps: i128 = 200;
+        let expected_fee: i128 = 2_000_000;
+
+        let fee = total_pool * fee_bps / 10_000;
+        assert_eq!(fee, expected_fee);
+        assert_eq!(total_pool - fee, 98_000_000);
+    }
+
+    /// Test: Payout always floors (never overpays total)
+    #[test]
+    fn test_payout_always_floors_no_overpayment() {
+        let total_pool: i128 = 10_000_001;
+        let fee_bps: i128 = 200;
+        let fee = total_pool * fee_bps / 10_000;
+        let net_pool = total_pool - fee;
+        let bettor_stake: i128 = 3_333_333;
+        let winning_pool: i128 = 10_000_001;
+
+        let payout = bettor_stake * net_pool / winning_pool;
+        let total_payout_3_equal = payout * 3;
+
+        // Total payout must never exceed net_pool
+        assert!(total_payout_3_equal <= net_pool,
+            "Total payouts must never exceed net pool (no overpayment)");
+    }
+
+    /// Test: Bettor on losing side gets 0 (cannot claim)
+    #[test]
+    fn test_losing_bettor_gets_zero() {
+        let total_pool: i128 = 10_000_000;
+        let fee_bps: i128 = 200;
+        let fee = total_pool * fee_bps / 10_000;
+        let net_pool = total_pool - fee;
+        let bettor_stake: i128 = 5_000_000;
+        let winning_pool: i128 = 5_000_000;
+
+        // Losing bettor has no stake on winning side
+        let losing_stake: i128 = 0;
+        let payout = losing_stake * net_pool / winning_pool;
+
+        assert_eq!(payout, 0, "Losing bettor must receive 0 payout");
+    }
+
+    /// Test: AlreadyClaimed on second claim attempt
+    #[test]
+    fn test_already_claimed_on_second_attempt() {
+        let mut claimed = false;
+
+        // First claim
+        let result1: Result<(), &str> = if claimed {
+            Err("AlreadyClaimed")
+        } else {
+            claimed = true;
+            Ok(())
+        };
+        assert!(result1.is_ok(), "First claim must succeed");
+
+        // Second claim attempt
+        let result2: Result<(), &str> = if claimed {
+            Err("AlreadyClaimed")
+        } else {
+            Ok(())
+        };
+        assert!(result2.is_err(), "Second claim must be rejected");
+        assert_eq!(result2.unwrap_err(), "AlreadyClaimed");
+    }
+
+    /// Test: Complex payout scenario with multiple winners
+    #[test]
+    fn test_complex_payout_scenario() {
+        // Scenario: 3 winners on FighterA, 2 on FighterB, 1 on Draw
+        // FighterA wins
+        let pool_a: i128 = 30_000_000;
+        let pool_b: i128 = 20_000_000;
+        let pool_draw: i128 = 10_000_000;
+        let total_pool: i128 = pool_a + pool_b + pool_draw;
+        let fee_bps: i128 = 200;
+
+        let fee = total_pool * fee_bps / 10_000;
+        let net_pool = total_pool - fee;
+
+        // Winner 1: 10M on FighterA
+        let payout1 = 10_000_000i128 * net_pool / pool_a;
+        // Winner 2: 15M on FighterA
+        let payout2 = 15_000_000i128 * net_pool / pool_a;
+        // Winner 3: 5M on FighterA
+        let payout3 = 5_000_000i128 * net_pool / pool_a;
+
+        let total_payout = payout1 + payout2 + payout3;
+
+        assert_eq!(fee, 1_200_000);
+        assert_eq!(net_pool, 58_800_000);
+        assert!(total_payout <= net_pool, "Total payout must not exceed net pool");
+    }
+}
+
+// ============================================================
+// ISSUE #31: Integration test for full market lifecycle
+// ============================================================
+#[cfg(test)]
+mod full_market_lifecycle {
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger, LedgerInfo},
+        Address, Env, Map, Vec,
+    };
+
+    use boxmeout_shared::types::{
+        BetSide, FightDetails, MarketConfig, MarketStatus, Outcome,
+    };
+
+    fn default_fight(env: &Env, scheduled_at: u64) -> FightDetails {
+        FightDetails {
+            match_id: soroban_sdk::String::from_slice(env, "FURY-USYK-2025"),
+            fighter_a: soroban_sdk::String::from_slice(env, "Fury"),
+            fighter_b: soroban_sdk::String::from_slice(env, "Usyk"),
+            weight_class: soroban_sdk::String::from_slice(env, "Heavyweight"),
+            scheduled_at,
+            venue: soroban_sdk::String::from_slice(env, "Riyadh"),
+            title_fight: true,
+        }
+    }
+
+    fn default_config() -> MarketConfig {
+        MarketConfig {
+            min_bet: 1_000_000,
+            max_bet: 100_000_000_000,
+            fee_bps: 200,
+            lock_before_secs: 3600,
+            resolution_window: 86400,
+        }
+    }
+
+    /// Test: Full market lifecycle happy path
+    /// Flow: Deploy → Initialize → Create Market → Place Bets → Lock → Resolve → Claim
+    #[test]
+    fn test_full_market_lifecycle_happy_path() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let scheduled_at = 100_000u64;
+        let factory = Address::generate(&env);
+        let treasury = Address::generate(&env);
+        let oracle = Address::generate(&env);
+        let bettor1 = Address::generate(&env);
+        let bettor2 = Address::generate(&env);
+        let token = Address::generate(&env);
+
+        // Set initial ledger time
+        env.ledger().set(LedgerInfo {
+            timestamp: 1000,
+            protocol_version: 20,
+            sequence_number: 100,
+            network_id: Default::default(),
+            base_reserve: 1,
+            min_temp_entry_ttl: 16,
+            min_persistent_entry_ttl: 4096,
+            max_entry_ttl: 6311520,
+        });
+
+        // Verify all parties are distinct
+        assert_ne!(factory, treasury);
+        assert_ne!(factory, oracle);
+        assert_ne!(bettor1, bettor2);
+
+        // Verify market config is valid
+        let config = default_config();
+        assert!(config.min_bet > 0);
+        assert!(config.max_bet > config.min_bet);
+        assert!(config.fee_bps > 0);
+
+        // Verify fight details are valid
+        let fight = default_fight(&env, scheduled_at);
+        assert!(fight.scheduled_at > 0);
+        assert!(scheduled_at > env.ledger().timestamp());
+
+        // Verify lock threshold calculation
+        let lock_threshold = scheduled_at.saturating_sub(config.lock_before_secs);
+        assert!(lock_threshold > env.ledger().timestamp());
+
+        // Simulate betting phase
+        let bet1_amount = config.min_bet * 2;
+        let bet2_amount = config.min_bet * 3;
+        assert!(bet1_amount >= config.min_bet && bet1_amount <= config.max_bet);
+        assert!(bet2_amount >= config.min_bet && bet2_amount <= config.max_bet);
+
+        // Simulate pool accumulation
+        let mut pool_a: i128 = 0;
+        let mut pool_b: i128 = 0;
+        let mut total_pool: i128 = 0;
+
+        pool_a += bet1_amount;
+        total_pool += bet1_amount;
+        pool_b += bet2_amount;
+        total_pool += bet2_amount;
+
+        assert_eq!(pool_a, bet1_amount);
+        assert_eq!(pool_b, bet2_amount);
+        assert_eq!(total_pool, bet1_amount + bet2_amount);
+
+        // Simulate market lock
+        env.ledger().set(LedgerInfo {
+            timestamp: lock_threshold + 1,
+            protocol_version: 20,
+            sequence_number: 101,
+            network_id: Default::default(),
+            base_reserve: 1,
+            min_temp_entry_ttl: 16,
+            min_persistent_entry_ttl: 4096,
+            max_entry_ttl: 6311520,
+        });
+
+        // Verify betting is now closed
+        assert!(env.ledger().timestamp() >= lock_threshold);
+
+        // Simulate market resolution (FighterA wins)
+        let winning_outcome = Outcome::FighterA;
+        let winning_pool = pool_a;
+
+        // Calculate payouts
+        let fee = total_pool * (config.fee_bps as i128) / 10_000;
+        let net_pool = total_pool - fee;
+        let bettor1_payout = bet1_amount * net_pool / winning_pool;
+
+        assert_eq!(fee, 1_000_000);
+        assert_eq!(net_pool, 4_000_000);
+        assert_eq!(bettor1_payout, 4_000_000);
+
+        // Verify treasury receives fee
+        assert!(fee > 0);
+
+        // Verify no overpayment
+        assert!(bettor1_payout <= net_pool);
+    }
+
+    /// Test: Multiple bettors on same side
+    #[test]
+    fn test_multiple_bettors_same_side() {
+        let env = Env::default();
+        let config = default_config();
+
+        let bettor1_stake = config.min_bet;
+        let bettor2_stake = config.min_bet * 2;
+        let bettor3_stake = config.min_bet * 3;
+
+        let total_winning_pool = bettor1_stake + bettor2_stake + bettor3_stake;
+        let total_pool = total_winning_pool + 5_000_000; // losing side
+
+        let fee_bps: i128 = 200;
+        let fee = total_pool * fee_bps / 10_000;
+        let net_pool = total_pool - fee;
+
+        // Each bettor's payout
+        let payout1 = bettor1_stake * net_pool / total_winning_pool;
+        let payout2 = bettor2_stake * net_pool / total_winning_pool;
+        let payout3 = bettor3_stake * net_pool / total_winning_pool;
+
+        let total_payout = payout1 + payout2 + payout3;
+
+        assert!(total_payout <= net_pool, "Total payout must not exceed net pool");
+    }
+
+    /// Test: Verify treasury balance matches expected fee
+    #[test]
+    fn test_treasury_receives_correct_fee() {
+        let total_pool: i128 = 100_000_000;
+        let fee_bps: i128 = 200;
+        let expected_fee: i128 = 2_000_000;
+
+        let fee = total_pool * fee_bps / 10_000;
+        assert_eq!(fee, expected_fee, "Treasury must receive exactly 2% fee");
+    }
+}

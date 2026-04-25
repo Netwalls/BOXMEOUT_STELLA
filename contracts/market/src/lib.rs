@@ -33,6 +33,12 @@ const TREASURY: &str     = "TREASURY";
 const CLAIMING: &str     = "CLAIMING";
 /// Emergency pause — when true all fund-moving operations are blocked
 const PAUSED: &str       = "PAUSED";
+/// Pending oracle reports for 2-of-3 consensus
+const PENDING_REPORTS: &str = "PENDING_REPORTS";
+
+// ─── Storage TTL Constants ────────────────────────────────────────────────────
+/// Maximum TTL for market data (30 days in ledger entries)
+const MAX_TTL: u32 = 2_592_000;
 
 // ─── Cross-contract client for oracle whitelist check ─────────────────────────
 #[contractclient(name = "FactoryClient")]
@@ -64,8 +70,8 @@ impl Market {
         Ok(())
     }
 
-    fn load_state(env: &Env) -> MarketState {
-        env.storage().persistent().get(&STATE).unwrap()
+    fn load_state(env: &Env) -> Result<MarketState, ContractError> {
+        env.storage().persistent().get(&STATE).ok_or(ContractError::MarketNotFound)
     }
 
     fn save_state(env: &Env, state: &MarketState) {
@@ -85,11 +91,21 @@ impl Market {
         env.storage().persistent().set(&BETS, &map);
     }
 
-    fn is_oracle_whitelisted(env: &Env, caller: &Address) -> bool {
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+    fn is_oracle_whitelisted(env: &Env, caller: &Address) -> Result<bool, ContractError> {
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         let client = FactoryClient::new(env, &factory);
         let oracles = client.get_oracles();
-        oracles.contains(caller.clone())
+        Ok(oracles.contains(caller.clone()))
+    }
+
+    /// Extend TTL on market data entries to prevent premature expiration.
+    fn extend_market_ttl(env: &Env) {
+        env.storage().persistent().extend_ttl(&STATE, MAX_TTL, MAX_TTL);
+        env.storage().persistent().extend_ttl(&BETS, MAX_TTL, MAX_TTL);
+        env.storage().persistent().extend_ttl(&BETTOR_LIST, MAX_TTL, MAX_TTL);
     }
 }
 
@@ -99,6 +115,10 @@ impl Market {
     // INITIALIZE
     // =========================================================================
     /// Initializes this market immediately after deployment by the factory.
+    ///
+    /// # Errors
+    /// - `AlreadyInitialized`: Market has already been initialized
+    ///
     /// # Security
     /// - Caller must be the factory (NotFactory guard).
     /// - AlreadyInitialized guard prevents re-initialization.
@@ -138,6 +158,9 @@ impl Market {
         env.storage().instance().set(&PAUSED, &false);
         env.storage().instance().set(&CLAIMING, &false);
 
+        // Set TTL on market data entries
+        Self::extend_market_ttl(&env);
+
         Ok(())
     }
 
@@ -145,6 +168,13 @@ impl Market {
     // PLACE BET  — fund-moving
     // =========================================================================
     /// Places a bet on behalf of bettor.
+    ///
+    /// # Errors
+    /// - `InvalidMarketStatus`: Market is not open or fight is in the past
+    /// - `BettingClosed`: Betting window has closed
+    /// - `BetTooSmall`: Bet amount is below minimum
+    /// - `BetTooLarge`: Bet amount exceeds maximum
+    ///
     /// # Security (CEI enforced)
     /// 1. CHECKS: require_auth, pause guard, status, timing, amount bounds
     /// 2. EFFECTS: state + bets updated in storage
@@ -160,7 +190,7 @@ impl Market {
         bettor.require_auth();                          // auth first
         Self::require_not_paused(&env)?;                // pause guard
 
-        let state = Self::load_state(&env);
+        let state = Self::load_state(&env)?;
 
         if state.status != MarketStatus::Open {
             return Err(ContractError::InvalidMarketStatus);
@@ -210,6 +240,9 @@ impl Market {
             env.storage().persistent().set(&BETTOR_LIST, &bettor_list);
         }
 
+        // Extend TTL on each bet to keep market active
+        Self::extend_market_ttl(&env);
+
         // ── INTERACTIONS ──────────────────────────────────────────────────────
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&bettor, &env.current_contract_address(), &amount);
@@ -222,16 +255,22 @@ impl Market {
     // =========================================================================
     // LOCK MARKET
     // =========================================================================
+    /// Locks the market when the fight is about to start.
+    ///
+    /// # Errors
+    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
+    /// - `InvalidMarketStatus`: Market is not open
+    /// - `BettingClosed`: Betting window has not closed yet
     pub fn lock_market(env: Env, caller: Address) -> Result<(), ContractError> {
         // CHECKS
         caller.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &caller) {
+        if !Self::is_oracle_whitelisted(&env, &caller)? {
             return Err(ContractError::OracleNotWhitelisted);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Open {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -251,8 +290,16 @@ impl Market {
     }
 
     // =========================================================================
-    // RESOLVE MARKET
+    // RESOLVE MARKET — 2-of-3 Oracle Consensus
     // =========================================================================
+    /// Submits an oracle report for market resolution using 2-of-3 consensus.
+    ///
+    /// # Errors
+    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
+    /// - `InvalidMarketStatus`: Market is not locked
+    /// - `ResolutionWindowExpired`: Resolution deadline has passed
+    /// - `InvalidOracleSignature`: Signature verification failed
+    /// - `Unauthorized`: Oracle has already submitted a report
     pub fn resolve_market(
         env: Env,
         oracle: Address,
@@ -262,11 +309,11 @@ impl Market {
         oracle.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &oracle) {
+        if !Self::is_oracle_whitelisted(&env, &oracle)? {
             return Err(ContractError::OracleNotWhitelisted);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Locked {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -281,7 +328,7 @@ impl Market {
             return Err(ContractError::InvalidOracleSignature);
         }
 
-        // Verify Ed25519 signature over (match_id_bytes || outcome_byte || reported_at_be)
+        // Verify Ed25519 signature
         {
             use soroban_sdk::Bytes;
             let match_id_bytes = report.match_id.to_bytes();
@@ -300,11 +347,7 @@ impl Market {
                 msg.push_back(*b);
             }
 
-            // oracle_address raw bytes are the 32-byte Ed25519 public key on Stellar
             let pub_key_bytes = oracle.to_string().to_bytes();
-            // Use env.crypto().ed25519_verify — panics (traps) on invalid sig
-            // We catch via a guard: if the address bytes aren't 32 bytes we reject early.
-            // Soroban's ed25519_verify traps on failure; wrap in a check.
             env.crypto().ed25519_verify(
                 &soroban_sdk::BytesN::try_from_array(&env, &{
                     let mut arr = [0u8; 32];
@@ -319,20 +362,63 @@ impl Market {
             );
         }
 
-        // EFFECTS
-        state.outcome = Some(report.outcome.clone());
-        state.status = MarketStatus::Resolved;
-        state.resolved_at = Some(env.ledger().timestamp());
-        state.oracle_used = Some(OracleRole::Primary);
-        Self::save_state(&env, &state);
+        // EFFECTS — 2-of-3 consensus logic
+        let mut pending: Map<Address, OracleReport> =
+            env.storage().persistent().get(&PENDING_REPORTS).unwrap_or_else(|| Map::new(&env));
 
-        boxmeout_shared::emit_market_resolved(&env, state.market_id, report.outcome, oracle);
+        // Check if we already have a report from this oracle
+        if pending.contains_key(oracle.clone()) {
+            return Err(ContractError::Unauthorized);
+        }
+
+        // Store this report
+        pending.set(oracle.clone(), report.clone());
+        env.storage().persistent().set(&PENDING_REPORTS, &pending);
+
+        // Count matching and conflicting reports
+        let mut matching_count = 1u32;
+        let mut conflicting_count = 0u32;
+
+        for (stored_oracle, stored_report) in pending.iter() {
+            if stored_oracle != oracle {
+                if stored_report.outcome == report.outcome {
+                    matching_count += 1;
+                } else {
+                    conflicting_count += 1;
+                }
+            }
+        }
+
+        // Resolve if we have 2 matching reports
+        if matching_count >= 2 {
+            state.outcome = Some(report.outcome.clone());
+            state.status = MarketStatus::Resolved;
+            state.resolved_at = Some(env.ledger().timestamp());
+            state.oracle_used = Some(OracleRole::Primary);
+            Self::save_state(&env, &state);
+            
+            // Clear pending reports
+            env.storage().persistent().set(&PENDING_REPORTS, &Map::<Address, OracleReport>::new(&env));
+            
+            boxmeout_shared::emit_market_resolved(&env, state.market_id, report.outcome, oracle);
+        } else if conflicting_count > 0 && matching_count == 1 {
+            // Emit event for conflicting report, wait for third oracle
+            boxmeout_shared::emit_conflicting_oracle_report(&env, state.market_id, oracle);
+        }
+
         Ok(())
     }
 
     // =========================================================================
     // CLAIM WINNINGS  — fund-moving
     // =========================================================================
+    /// Claims winnings for a bettor who backed the winning outcome.
+    ///
+    /// # Errors
+    /// - `InvalidMarketStatus`: Market is not resolved
+    /// - `NoBetsFound`: Bettor has no bets in this market
+    /// - `AlreadyClaimed`: Bettor has already claimed winnings
+    ///
     /// # Security (CEI strictly enforced)
     /// 1. CHECKS: require_auth, pause guard, reentrancy guard, status, eligibility
     /// 2. EFFECTS: mark bets claimed + set CLAIMING lock BEFORE any transfer
@@ -350,7 +436,7 @@ impl Market {
         Self::require_not_claiming(&env)?;              // reentrancy guard
 
         // Reload state fresh from storage (never use a stale copy)
-        let state = Self::load_state(&env);
+        let state = Self::load_state(&env)?;
 
         if state.status != MarketStatus::Resolved {
             return Err(ContractError::InvalidMarketStatus);
@@ -421,7 +507,10 @@ impl Market {
 
         // ── INTERACTIONS ──────────────────────────────────────────────────────
         let token_client = token::Client::new(&env, &token);
-        let treasury: Address = env.storage().persistent().get(&TREASURY).unwrap();
+        let treasury: Address = env
+            .storage().persistent()
+            .get(&TREASURY)
+            .ok_or(ContractError::Unauthorized)?;
 
         // Transfer fee to treasury first
         if fee > 0 {
@@ -442,6 +531,13 @@ impl Market {
     // =========================================================================
     // CLAIM REFUND  — fund-moving
     // =========================================================================
+    /// Claims a full refund for a bettor when the market is cancelled.
+    ///
+    /// # Errors
+    /// - `InvalidMarketStatus`: Market is not cancelled
+    /// - `NoBetsFound`: Bettor has no bets in this market
+    /// - `AlreadyClaimed`: Bettor has already claimed refund
+    ///
     /// # Security (CEI strictly enforced)
     /// 1. CHECKS: require_auth, pause guard, reentrancy guard, status
     /// 2. EFFECTS: mark bets claimed + set CLAIMING lock BEFORE transfer
@@ -457,7 +553,7 @@ impl Market {
         Self::require_not_claiming(&env)?;
 
         // Reload state fresh from storage
-        let state = Self::load_state(&env);
+        let state = Self::load_state(&env)?;
 
         if state.status != MarketStatus::Cancelled {
             return Err(ContractError::InvalidMarketStatus);
@@ -508,6 +604,11 @@ impl Market {
     // =========================================================================
     // CANCEL MARKET
     // =========================================================================
+    /// Cancels the market, making all bets eligible for refund.
+    ///
+    /// # Errors
+    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
+    /// - `InvalidMarketStatus`: Market is not open or locked
     pub fn cancel_market(
         env: Env,
         caller: Address,
@@ -516,11 +617,11 @@ impl Market {
         caller.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &caller) {
+        if !Self::is_oracle_whitelisted(&env, &caller)? {
             return Err(ContractError::Unauthorized);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Open && state.status != MarketStatus::Locked {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -535,6 +636,11 @@ impl Market {
     // =========================================================================
     // DISPUTE MARKET
     // =========================================================================
+    /// Disputes a resolved market, freezing claims pending admin review.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the factory (admin)
+    /// - `InvalidMarketStatus`: Market is not resolved
     pub fn dispute_market(
         env: Env,
         admin: Address,
@@ -544,12 +650,15 @@ impl Market {
         Self::require_not_paused(&env)?;
 
         // Admin must be the factory address (factory is the privileged admin)
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Resolved {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -564,6 +673,11 @@ impl Market {
     // =========================================================================
     // RESOLVE DISPUTE
     // =========================================================================
+    /// Resolves a disputed market with a final admin-determined outcome.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the factory (admin)
+    /// - `InvalidMarketStatus`: Market is not disputed
     pub fn resolve_dispute(
         env: Env,
         admin: Address,
@@ -572,12 +686,15 @@ impl Market {
         admin.require_auth();
         Self::require_not_paused(&env)?;
 
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Disputed {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -595,16 +712,22 @@ impl Market {
     // READ-ONLY FUNCTIONS
     // =========================================================================
 
+    /// Returns the current state of the market.
     pub fn get_state(env: Env) -> MarketState {
         Self::load_state(&env)
     }
 
+    /// Returns all bets placed by a specific bettor.
     pub fn get_bets_by_address(env: Env, bettor: Address) -> Vec<BetRecord> {
         Self::load_bets(&env, &bettor)
     }
 
+    /// Returns the current odds for each outcome (in basis points).
     pub fn get_current_odds(env: Env) -> (u32, u32, u32) {
-        let state = Self::load_state(&env);
+        let state = match Self::load_state(&env) {
+            Ok(s) => s,
+            Err(_) => return (0, 0, 0),
+        };
         if state.total_pool == 0 {
             return (0, 0, 0);
         }
@@ -614,8 +737,12 @@ impl Market {
         (odds_a, odds_b, odds_draw)
     }
 
+    /// Estimates the payout for a hypothetical bet.
     pub fn estimate_payout(env: Env, side: BetSide, amount: i128) -> i128 {
-        let state = Self::load_state(&env);
+        let state = match Self::load_state(&env) {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
         if state.status != MarketStatus::Open {
             return 0;
         }
@@ -638,14 +765,19 @@ impl Market {
         amount * net_pool / winning_pool
     }
 
+    /// Returns the number of unique bettors in this market.
     pub fn get_bettor_count(env: Env) -> u32 {
         let list: Vec<Address> =
             env.storage().persistent().get(&BETTOR_LIST).unwrap_or_else(|| Vec::new(&env));
         list.len()
     }
 
+    /// Returns the current pool sizes for each outcome.
     pub fn get_pool_sizes(env: Env) -> (i128, i128, i128) {
-        let state = Self::load_state(&env);
+        let state = match Self::load_state(&env) {
+            Ok(s) => s,
+            Err(_) => return (0, 0, 0),
+        };
         (state.pool_a, state.pool_b, state.pool_draw)
     }
 
@@ -653,6 +785,10 @@ impl Market {
     // ADMIN CONFIG FUNCTIONS
     // =========================================================================
 
+    /// Sets the dispute window duration.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Window is less than 1 hour or caller is not admin
     pub fn set_dispute_window(
         env: Env,
         admin: Address,
@@ -676,6 +812,10 @@ impl Market {
         Ok(())
     }
 
+    /// Sets the minimum liquidity requirement.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Minimum liquidity is not positive or caller is not admin
     pub fn set_min_liquidity(
         env: Env,
         admin: Address,
@@ -718,7 +858,10 @@ impl Market {
     /// Only callable by the factory (admin).
     pub fn emergency_pause(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }
@@ -729,7 +872,10 @@ impl Market {
     /// Lifts the emergency pause.
     pub fn emergency_unpause(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }
