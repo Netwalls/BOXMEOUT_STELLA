@@ -358,7 +358,6 @@ impl Market {
         // Count matching and conflicting reports
         let mut matching_count = 1u32;
         let mut conflicting_count = 0u32;
-        let mut third_oracle: Option<Address> = None;
 
         for (stored_oracle, stored_report) in pending.iter() {
             if stored_oracle != oracle {
@@ -366,9 +365,6 @@ impl Market {
                     matching_count += 1;
                 } else {
                     conflicting_count += 1;
-                    if third_oracle.is_none() {
-                        third_oracle = Some(stored_oracle);
-                    }
                 }
             }
         }
