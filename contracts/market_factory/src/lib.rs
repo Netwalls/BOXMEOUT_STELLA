@@ -21,7 +21,7 @@ const MARKET_WASM_HASH: &str = "MARKET_WASM_HASH";
 #[contractclient(name = "MarketClient")]
 pub trait MarketInterface {
     fn get_bets_by_address(env: Env, bettor: Address) -> Vec<BetRecord>;
-    fn get_state(env: Env) -> MarketState;
+    fn get_state(env: Env) -> Result<MarketState, ContractError>;
 }
 
 #[contract]
@@ -29,7 +29,10 @@ pub struct MarketFactory;
 
 impl MarketFactory {
     fn require_admin(env: &Env, caller: &Address) -> Result<(), ContractError> {
-        let admin: Address = env.storage().persistent().get(&ADMIN).unwrap();
+        let admin: Address = env
+            .storage().persistent()
+            .get(&ADMIN)
+            .ok_or(ContractError::Unauthorized)?;
         if *caller != admin {
             return Err(ContractError::Unauthorized);
         }
@@ -183,8 +186,9 @@ impl MarketFactory {
         while i < count && fetched < cap {
             if let Some(addr) = map.get(i) {
                 let client = MarketClient::new(&env, &addr);
-                let state = client.get_state();
-                result.push_back((i, state.status));
+                if let Ok(state) = client.get_state() {
+                    result.push_back((i, state.status));
+                }
             }
             i += 1;
             fetched += 1;
@@ -258,7 +262,10 @@ impl MarketFactory {
         current_admin.require_auth();
         Self::require_admin(&env, &current_admin)?;
 
-        let old_admin: Address = env.storage().persistent().get(&ADMIN).unwrap();
+        let old_admin: Address = env
+            .storage().persistent()
+            .get(&ADMIN)
+            .ok_or(ContractError::Unauthorized)?;
         env.storage().persistent().set(&ADMIN, &new_admin);
         boxmeout_shared::emit_admin_transferred(&env, old_admin, new_admin);
         Ok(())
