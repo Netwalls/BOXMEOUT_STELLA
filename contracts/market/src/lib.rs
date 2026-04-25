@@ -64,8 +64,8 @@ impl Market {
         Ok(())
     }
 
-    fn load_state(env: &Env) -> MarketState {
-        env.storage().persistent().get(&STATE).unwrap()
+    fn load_state(env: &Env) -> Result<MarketState, ContractError> {
+        env.storage().persistent().get(&STATE).ok_or(ContractError::MarketNotFound)
     }
 
     fn save_state(env: &Env, state: &MarketState) {
@@ -85,11 +85,14 @@ impl Market {
         env.storage().persistent().set(&BETS, &map);
     }
 
-    fn is_oracle_whitelisted(env: &Env, caller: &Address) -> bool {
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+    fn is_oracle_whitelisted(env: &Env, caller: &Address) -> Result<bool, ContractError> {
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         let client = FactoryClient::new(env, &factory);
         let oracles = client.get_oracles();
-        oracles.contains(caller.clone())
+        Ok(oracles.contains(caller.clone()))
     }
 }
 
@@ -160,7 +163,7 @@ impl Market {
         bettor.require_auth();                          // auth first
         Self::require_not_paused(&env)?;                // pause guard
 
-        let state = Self::load_state(&env);
+        let state = Self::load_state(&env)?;
 
         if state.status != MarketStatus::Open {
             return Err(ContractError::InvalidMarketStatus);
@@ -227,11 +230,11 @@ impl Market {
         caller.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &caller) {
+        if !Self::is_oracle_whitelisted(&env, &caller)? {
             return Err(ContractError::OracleNotWhitelisted);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Open {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -262,11 +265,11 @@ impl Market {
         oracle.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &oracle) {
+        if !Self::is_oracle_whitelisted(&env, &oracle)? {
             return Err(ContractError::OracleNotWhitelisted);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Locked {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -350,7 +353,7 @@ impl Market {
         Self::require_not_claiming(&env)?;              // reentrancy guard
 
         // Reload state fresh from storage (never use a stale copy)
-        let state = Self::load_state(&env);
+        let state = Self::load_state(&env)?;
 
         if state.status != MarketStatus::Resolved {
             return Err(ContractError::InvalidMarketStatus);
@@ -421,7 +424,10 @@ impl Market {
 
         // ── INTERACTIONS ──────────────────────────────────────────────────────
         let token_client = token::Client::new(&env, &token);
-        let treasury: Address = env.storage().persistent().get(&TREASURY).unwrap();
+        let treasury: Address = env
+            .storage().persistent()
+            .get(&TREASURY)
+            .ok_or(ContractError::Unauthorized)?;
 
         // Transfer fee to treasury first
         if fee > 0 {
@@ -457,7 +463,7 @@ impl Market {
         Self::require_not_claiming(&env)?;
 
         // Reload state fresh from storage
-        let state = Self::load_state(&env);
+        let state = Self::load_state(&env)?;
 
         if state.status != MarketStatus::Cancelled {
             return Err(ContractError::InvalidMarketStatus);
@@ -516,11 +522,11 @@ impl Market {
         caller.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &caller) {
+        if !Self::is_oracle_whitelisted(&env, &caller)? {
             return Err(ContractError::Unauthorized);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Open && state.status != MarketStatus::Locked {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -544,12 +550,15 @@ impl Market {
         Self::require_not_paused(&env)?;
 
         // Admin must be the factory address (factory is the privileged admin)
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Resolved {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -572,12 +581,15 @@ impl Market {
         admin.require_auth();
         Self::require_not_paused(&env)?;
 
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }
 
-        let mut state = Self::load_state(&env);
+        let mut state = Self::load_state(&env)?;
         if state.status != MarketStatus::Disputed {
             return Err(ContractError::InvalidMarketStatus);
         }
@@ -595,7 +607,7 @@ impl Market {
     // READ-ONLY FUNCTIONS
     // =========================================================================
 
-    pub fn get_state(env: Env) -> MarketState {
+    pub fn get_state(env: Env) -> Result<MarketState, ContractError> {
         Self::load_state(&env)
     }
 
@@ -604,7 +616,10 @@ impl Market {
     }
 
     pub fn get_current_odds(env: Env) -> (u32, u32, u32) {
-        let state = Self::load_state(&env);
+        let state = match Self::load_state(&env) {
+            Ok(s) => s,
+            Err(_) => return (0, 0, 0),
+        };
         if state.total_pool == 0 {
             return (0, 0, 0);
         }
@@ -615,7 +630,10 @@ impl Market {
     }
 
     pub fn estimate_payout(env: Env, side: BetSide, amount: i128) -> i128 {
-        let state = Self::load_state(&env);
+        let state = match Self::load_state(&env) {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
         if state.status != MarketStatus::Open {
             return 0;
         }
@@ -645,7 +663,10 @@ impl Market {
     }
 
     pub fn get_pool_sizes(env: Env) -> (i128, i128, i128) {
-        let state = Self::load_state(&env);
+        let state = match Self::load_state(&env) {
+            Ok(s) => s,
+            Err(_) => return (0, 0, 0),
+        };
         (state.pool_a, state.pool_b, state.pool_draw)
     }
 
@@ -718,7 +739,10 @@ impl Market {
     /// Only callable by the factory (admin).
     pub fn emergency_pause(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }
@@ -729,7 +753,10 @@ impl Market {
     /// Lifts the emergency pause.
     pub fn emergency_unpause(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
-        let factory: Address = env.storage().persistent().get(&FACTORY).unwrap();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
         if admin != factory {
             return Err(ContractError::Unauthorized);
         }

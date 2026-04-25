@@ -20,7 +20,10 @@ pub struct Treasury;
 
 impl Treasury {
     fn require_admin(env: &Env, caller: &Address) -> Result<(), ContractError> {
-        let admin: Address = env.storage().persistent().get(&ADMIN).unwrap();
+        let admin: Address = env
+            .storage().persistent()
+            .get(&ADMIN)
+            .ok_or(ContractError::Unauthorized)?;
         if *caller != admin {
             return Err(ContractError::Unauthorized);
         }
