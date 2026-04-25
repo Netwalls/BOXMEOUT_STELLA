@@ -101,6 +101,10 @@ impl Market {
     // INITIALIZE
     // =========================================================================
     /// Initializes this market immediately after deployment by the factory.
+    ///
+    /// # Errors
+    /// - `AlreadyInitialized`: Market has already been initialized
+    ///
     /// # Security
     /// - Caller must be the factory (NotFactory guard).
     /// - AlreadyInitialized guard prevents re-initialization.
@@ -147,6 +151,13 @@ impl Market {
     // PLACE BET  — fund-moving
     // =========================================================================
     /// Places a bet on behalf of bettor.
+    ///
+    /// # Errors
+    /// - `InvalidMarketStatus`: Market is not open or fight is in the past
+    /// - `BettingClosed`: Betting window has closed
+    /// - `BetTooSmall`: Bet amount is below minimum
+    /// - `BetTooLarge`: Bet amount exceeds maximum
+    ///
     /// # Security (CEI enforced)
     /// 1. CHECKS: require_auth, pause guard, status, timing, amount bounds
     /// 2. EFFECTS: state + bets updated in storage
@@ -224,6 +235,12 @@ impl Market {
     // =========================================================================
     // LOCK MARKET
     // =========================================================================
+    /// Locks the market when the fight is about to start.
+    ///
+    /// # Errors
+    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
+    /// - `InvalidMarketStatus`: Market is not open
+    /// - `BettingClosed`: Betting window has not closed yet
     pub fn lock_market(env: Env, caller: Address) -> Result<(), ContractError> {
         // CHECKS
         caller.require_auth();
@@ -255,6 +272,14 @@ impl Market {
     // =========================================================================
     // RESOLVE MARKET — 2-of-3 Oracle Consensus
     // =========================================================================
+    /// Submits an oracle report for market resolution using 2-of-3 consensus.
+    ///
+    /// # Errors
+    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
+    /// - `InvalidMarketStatus`: Market is not locked
+    /// - `ResolutionWindowExpired`: Resolution deadline has passed
+    /// - `InvalidOracleSignature`: Signature verification failed
+    /// - `Unauthorized`: Oracle has already submitted a report
     pub fn resolve_market(
         env: Env,
         oracle: Address,
@@ -371,6 +396,13 @@ impl Market {
     // =========================================================================
     // CLAIM WINNINGS  — fund-moving
     // =========================================================================
+    /// Claims winnings for a bettor who backed the winning outcome.
+    ///
+    /// # Errors
+    /// - `InvalidMarketStatus`: Market is not resolved
+    /// - `NoBetsFound`: Bettor has no bets in this market
+    /// - `AlreadyClaimed`: Bettor has already claimed winnings
+    ///
     /// # Security (CEI strictly enforced)
     /// 1. CHECKS: require_auth, pause guard, reentrancy guard, status, eligibility
     /// 2. EFFECTS: mark bets claimed + set CLAIMING lock BEFORE any transfer
@@ -480,6 +512,13 @@ impl Market {
     // =========================================================================
     // CLAIM REFUND  — fund-moving
     // =========================================================================
+    /// Claims a full refund for a bettor when the market is cancelled.
+    ///
+    /// # Errors
+    /// - `InvalidMarketStatus`: Market is not cancelled
+    /// - `NoBetsFound`: Bettor has no bets in this market
+    /// - `AlreadyClaimed`: Bettor has already claimed refund
+    ///
     /// # Security (CEI strictly enforced)
     /// 1. CHECKS: require_auth, pause guard, reentrancy guard, status
     /// 2. EFFECTS: mark bets claimed + set CLAIMING lock BEFORE transfer
@@ -546,6 +585,11 @@ impl Market {
     // =========================================================================
     // CANCEL MARKET
     // =========================================================================
+    /// Cancels the market, making all bets eligible for refund.
+    ///
+    /// # Errors
+    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
+    /// - `InvalidMarketStatus`: Market is not open or locked
     pub fn cancel_market(
         env: Env,
         caller: Address,
@@ -573,6 +617,11 @@ impl Market {
     // =========================================================================
     // DISPUTE MARKET
     // =========================================================================
+    /// Disputes a resolved market, freezing claims pending admin review.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the factory (admin)
+    /// - `InvalidMarketStatus`: Market is not resolved
     pub fn dispute_market(
         env: Env,
         admin: Address,
@@ -602,6 +651,11 @@ impl Market {
     // =========================================================================
     // RESOLVE DISPUTE
     // =========================================================================
+    /// Resolves a disputed market with a final admin-determined outcome.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the factory (admin)
+    /// - `InvalidMarketStatus`: Market is not disputed
     pub fn resolve_dispute(
         env: Env,
         admin: Address,
@@ -633,14 +687,17 @@ impl Market {
     // READ-ONLY FUNCTIONS
     // =========================================================================
 
+    /// Returns the current state of the market.
     pub fn get_state(env: Env) -> MarketState {
         Self::load_state(&env)
     }
 
+    /// Returns all bets placed by a specific bettor.
     pub fn get_bets_by_address(env: Env, bettor: Address) -> Vec<BetRecord> {
         Self::load_bets(&env, &bettor)
     }
 
+    /// Returns the current odds for each outcome (in basis points).
     pub fn get_current_odds(env: Env) -> (u32, u32, u32) {
         let state = Self::load_state(&env);
         if state.total_pool == 0 {
@@ -652,6 +709,7 @@ impl Market {
         (odds_a, odds_b, odds_draw)
     }
 
+    /// Estimates the payout for a hypothetical bet.
     pub fn estimate_payout(env: Env, side: BetSide, amount: i128) -> i128 {
         let state = Self::load_state(&env);
         if state.status != MarketStatus::Open {
@@ -676,12 +734,14 @@ impl Market {
         amount * net_pool / winning_pool
     }
 
+    /// Returns the number of unique bettors in this market.
     pub fn get_bettor_count(env: Env) -> u32 {
         let list: Vec<Address> =
             env.storage().persistent().get(&BETTOR_LIST).unwrap_or_else(|| Vec::new(&env));
         list.len()
     }
 
+    /// Returns the current pool sizes for each outcome.
     pub fn get_pool_sizes(env: Env) -> (i128, i128, i128) {
         let state = Self::load_state(&env);
         (state.pool_a, state.pool_b, state.pool_draw)
@@ -691,6 +751,10 @@ impl Market {
     // ADMIN CONFIG FUNCTIONS
     // =========================================================================
 
+    /// Sets the dispute window duration.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Window is less than 1 hour or caller is not admin
     pub fn set_dispute_window(
         env: Env,
         admin: Address,
@@ -714,6 +778,10 @@ impl Market {
         Ok(())
     }
 
+    /// Sets the minimum liquidity requirement.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Minimum liquidity is not positive or caller is not admin
     pub fn set_min_liquidity(
         env: Env,
         admin: Address,

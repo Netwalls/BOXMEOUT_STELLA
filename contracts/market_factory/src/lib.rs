@@ -47,6 +47,10 @@ impl MarketFactory {
 
 #[contractimpl]
 impl MarketFactory {
+    /// Initializes the factory with admin, default fee, and oracle whitelist.
+    ///
+    /// # Errors
+    /// - `AlreadyInitialized`: Factory has already been initialized
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -81,6 +85,9 @@ impl MarketFactory {
 
     /// Updates the Market wasm hash used for new deployments.
     /// Only admin can call this. Existing markets are unaffected.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn update_market_wasm(
         env: Env,
         admin: Address,
@@ -92,6 +99,13 @@ impl MarketFactory {
         Ok(())
     }
 
+    /// Creates a new market for a boxing match.
+    ///
+    /// # Errors
+    /// - `InvalidMarketStatus`: Fight is in the past or fighter names are empty
+    /// - `BetTooSmall`: Minimum bet is invalid
+    /// - `Unauthorized`: Fee basis points exceed 1000
+    /// - `FactoryPaused`: Factory is paused
     pub fn create_market(
         env: Env,
         caller: Address,
@@ -142,12 +156,17 @@ impl MarketFactory {
         Ok(market_id)
     }
 
+    /// Retrieves the address of a market by ID.
+    ///
+    /// # Errors
+    /// - `MarketNotFound`: Market ID does not exist
     pub fn get_market_address(env: Env, market_id: u64) -> Result<Address, ContractError> {
         let map: Map<u64, Address> =
             env.storage().persistent().get(&MARKET_MAP).unwrap_or_else(|| Map::new(&env));
         map.get(market_id).ok_or(ContractError::MarketNotFound)
     }
 
+    /// Lists markets with pagination.
     pub fn list_markets(env: Env, offset: u64, limit: u32) -> Vec<(u64, MarketStatus)> {
         let count: u64 = env.storage().persistent().get(&MARKET_COUNT).unwrap_or(0);
         let map: Map<u64, Address> =
@@ -169,10 +188,15 @@ impl MarketFactory {
         result
     }
 
+    /// Returns the total number of markets created.
     pub fn get_market_count(env: Env) -> u64 {
         env.storage().persistent().get(&MARKET_COUNT).unwrap_or(0)
     }
 
+    /// Adds an oracle to the whitelist.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn add_oracle(env: Env, admin: Address, oracle: Address) -> Result<(), ContractError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
@@ -186,6 +210,11 @@ impl MarketFactory {
         Ok(())
     }
 
+    /// Removes an oracle from the whitelist.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
+    /// - `OracleNotWhitelisted`: Oracle is not in the whitelist
     pub fn remove_oracle(env: Env, admin: Address, oracle: Address) -> Result<(), ContractError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
@@ -208,10 +237,15 @@ impl MarketFactory {
         Ok(())
     }
 
+    /// Returns the list of whitelisted oracles.
     pub fn get_oracles(env: Env) -> Vec<Address> {
         env.storage().persistent().get(&ORACLE_WHITELIST).unwrap_or_else(|| Vec::new(&env))
     }
 
+    /// Transfers admin privileges to a new address.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the current admin
     pub fn transfer_admin(
         env: Env,
         current_admin: Address,
@@ -226,6 +260,10 @@ impl MarketFactory {
         Ok(())
     }
 
+    /// Pauses the factory, preventing new market creation.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn pause_factory(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
@@ -233,6 +271,10 @@ impl MarketFactory {
         Ok(())
     }
 
+    /// Unpauses the factory, allowing new market creation.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn unpause_factory(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
@@ -240,10 +282,15 @@ impl MarketFactory {
         Ok(())
     }
 
+    /// Returns whether the factory is paused.
     pub fn is_paused(env: Env) -> bool {
         env.storage().persistent().get(&PAUSED).unwrap_or(false)
     }
 
+    /// Updates the default market configuration.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the admin
     pub fn update_default_config(
         env: Env,
         admin: Address,
@@ -255,6 +302,11 @@ impl MarketFactory {
         Ok(())
     }
 
+    /// Retrieves all unclaimed positions for a bettor across multiple markets.
+    ///
+    /// # Errors
+    /// - `TooManyMarkets`: More than 20 market IDs provided
+    /// - `MarketNotFound`: One of the market IDs does not exist
     pub fn get_user_positions_all(
         env: Env,
         bettor: Address,
