@@ -56,6 +56,10 @@ export interface MarketOdds {
   odds_draw: number;
 }
 
+export interface MarketWithOdds extends Market {
+  odds: MarketOdds;
+}
+
 export interface Portfolio {
   address: string;
   active_bets: Bet[];
@@ -147,13 +151,28 @@ export async function getMarkets(
 }
 
 /**
- * Returns a single market by its on-chain market_id string.
- * Throws NotFoundError (HTTP 404) if market_id does not exist in DB.
+ * Returns a single market by its on-chain market_id string, enriched with
+ * live odds from getMarketOdds().
+ *
+ * Steps:
+ *   1. Check Redis cache — return cached result if fresh (TTL 10s)
+ *   2. Query DB; throw AppError 404 if no row found
+ *   3. Fetch live odds via getMarketOdds()
+ *   4. Merge market + odds, store in cache for 10 seconds, then return
  */
-export async function getMarketById(market_id: string): Promise<Market> {
+export async function getMarketById(market_id: string): Promise<MarketWithOdds> {
+  const cacheKey = `market:${market_id}`;
+  const cached = await cacheGet<MarketWithOdds>(cacheKey);
+  if (cached) return cached;
+
   const market = await db().findMarketById(market_id);
   if (!market) throw new AppError(404, `Market not found: ${market_id}`);
-  return market;
+
+  const odds = await getMarketOdds(market_id);
+  const result: MarketWithOdds = { ...market, odds };
+
+  await cacheSet(cacheKey, result, 10);
+  return result;
 }
 
 /**
