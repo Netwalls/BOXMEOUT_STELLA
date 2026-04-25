@@ -11,6 +11,7 @@
 
 import type { BlockchainEvent } from '../models/BlockchainEvent';
 import { pool } from '../config/db';
+import { logger } from '../utils/logger';
 
 // Raw event shape returned by Stellar RPC / Horizon
 export interface RawStellarEvent {
@@ -24,15 +25,116 @@ export interface RawStellarEvent {
 }
 
 export async function startIndexer(): Promise<void> {
-  // TODO: implement
+  const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS ?? 5000);
+  const STELLAR_RPC_URL = process.env.STELLAR_RPC_URL ?? 'https://soroban-testnet.stellar.org';
+
+  try {
+    let currentLedger = await getLastProcessedLedger();
+    logger.info(`Indexer starting from ledger ${currentLedger}`);
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      try {
+        // Fetch latest ledger from Stellar RPC
+        const response = await fetch(`${STELLAR_RPC_URL}/ledgers?limit=1&order=desc`);
+        const data = (await response.json()) as { records?: Array<{ sequence: number }> };
+        const latestLedger = data.records?.[0]?.sequence ?? currentLedger;
+
+        // Process each new ledger
+        if (latestLedger > currentLedger) {
+          for (let seq = currentLedger + 1; seq <= latestLedger; seq++) {
+            await processLedger(seq);
+            await saveCheckpoint(seq);
+            currentLedger = seq;
+          }
+        } else {
+          // No new ledgers, sleep
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+      } catch (err) {
+        logger.error('Error in indexer polling loop:', err);
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+    }
+  } catch (err) {
+    logger.error('Unrecoverable indexer error:', err);
+    process.exit(1);
+  }
 }
 
 export async function processLedger(ledger_sequence: number): Promise<void> {
-  // TODO: implement
+  const STELLAR_RPC_URL = process.env.STELLAR_RPC_URL ?? 'https://soroban-testnet.stellar.org';
+
+  try {
+    // Fetch events for this ledger
+    const response = await fetch(
+      `${STELLAR_RPC_URL}/events?start_ledger=${ledger_sequence}&end_ledger=${ledger_sequence}`,
+    );
+    const data = (await response.json()) as { events?: RawStellarEvent[] };
+    const events = data.events ?? [];
+
+    // Process each event
+    for (const event of events) {
+      await processEvent(event);
+    }
+  } catch (err) {
+    logger.error(`Error processing ledger ${ledger_sequence}:`, err);
+    throw err;
+  }
 }
 
 export async function processEvent(event: RawStellarEvent): Promise<void> {
-  // TODO: implement
+  try {
+    // Store raw event in blockchain_events table
+    await pool.query(
+      `INSERT INTO blockchain_events
+         (contract_address, event_type, payload, ledger_sequence, ledger_close_time, tx_hash, processed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (tx_hash) DO NOTHING`,
+      [
+        event.contract_address,
+        event.event_type,
+        parsePayload(event.data),
+        event.ledger_sequence,
+        new Date(event.ledger_close_time),
+        event.tx_hash,
+        false,
+      ],
+    );
+
+    // Route to appropriate handler
+    switch (event.event_type) {
+      case 'MarketCreated':
+        await handleMarketCreated(event);
+        break;
+      case 'BetPlaced':
+        await handleBetPlaced(event);
+        break;
+      case 'MarketLocked':
+        await handleMarketLocked(event);
+        break;
+      case 'MarketResolved':
+        await handleMarketResolved(event);
+        break;
+      case 'MarketCancelled':
+        await handleMarketCancelled(event);
+        break;
+      case 'WinningsClaimed':
+        await handleWinningsClaimed(event);
+        break;
+      default:
+        logger.debug(`Unknown event type: ${event.event_type}`);
+    }
+
+    // Mark as processed
+    await pool.query(
+      `UPDATE blockchain_events SET processed = TRUE WHERE tx_hash = $1`,
+      [event.tx_hash],
+    );
+  } catch (err) {
+    logger.error(`Error processing event ${event.tx_hash}:`, err);
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
