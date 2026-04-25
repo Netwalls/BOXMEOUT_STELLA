@@ -19,7 +19,7 @@ import * as MarketService from '../../services/MarketService';
  * Validates query params with Zod before passing to MarketService.
  * Responds 400 on invalid params, 200 with { markets, total, page, limit }.
  */
-export async function listMarkets(req: Request, res: Response): Promise<void> {
+export async function listMarkets(_req: Request, _res: Response): Promise<void> {
   // TODO: implement
 }
 
@@ -88,6 +88,6 @@ export async function getMarketBets(req: Request, res: Response, next: NextFunct
  * Returns aggregate market statistics.
  * Responds 404 if market not found, 200 with MarketStats.
  */
-export async function getMarketStats(req: Request, res: Response): Promise<void> {
+export async function getMarketStats(_req: Request, _res: Response): Promise<void> {
   // TODO: implement
 }

@@ -2,7 +2,6 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import * as authService from '../services/auth.service';
-import { redis } from '../services/cache.service';
 import { AppError } from '../utils/AppError';
 import { validateBody } from '../api/middleware/validate';
 import { rateLimit } from '../middleware/rate-limit.middleware';
@@ -35,8 +34,8 @@ async function requireAuth(req: Request, _res: Response, next: NextFunction): Pr
     const revoked = await authService.isSessionRevoked(userId, sessionVersion);
     if (revoked) throw new AppError(401, 'Session has been invalidated');
 
-    (req as any).userId = userId;
-    (req as any).sessionVersion = sessionVersion;
+    (req as unknown as Record<string, unknown>).userId = userId;
+    (req as unknown as Record<string, unknown>).sessionVersion = sessionVersion;
     next();
   } catch (err) {
     next(err instanceof AppError ? err : new AppError(401, 'Invalid or expired token'));
@@ -128,7 +127,7 @@ router.post(
 // ---------------------------------------------------------------------------
 router.post('/2fa/setup', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await authService.setup2FA((req as any).userId);
+    const result = await authService.setup2FA((req as unknown as Record<string, unknown>).userId as string);
     res.json(result);
   } catch (err) {
     next(err);
@@ -137,7 +136,7 @@ router.post('/2fa/setup', requireAuth, async (req: Request, res: Response, next:
 
 router.post('/2fa/enable', requireAuth, validateBody(otpSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await authService.enable2FA((req as any).userId, req.body.otp);
+    await authService.enable2FA((req as unknown as Record<string, unknown>).userId as string, req.body.otp);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -146,7 +145,7 @@ router.post('/2fa/enable', requireAuth, validateBody(otpSchema), async (req: Req
 
 router.post('/2fa/disable', requireAuth, validateBody(otpSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await authService.disable2FA((req as any).userId, req.body.otp);
+    await authService.disable2FA((req as unknown as Record<string, unknown>).userId as string, req.body.otp);
     res.json({ success: true });
   } catch (err) {
     next(err);

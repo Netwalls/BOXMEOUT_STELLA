@@ -10,6 +10,7 @@
 // ============================================================
 
 import { pool } from '../config/db';
+import { logger } from '../utils/logger';
 
 // Raw event shape returned by Stellar RPC / Horizon
 export interface RawStellarEvent {
@@ -23,15 +24,116 @@ export interface RawStellarEvent {
 }
 
 export async function startIndexer(): Promise<void> {
-  // TODO: implement
+  const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS ?? 5000);
+  const STELLAR_RPC_URL = process.env.STELLAR_RPC_URL ?? 'https://soroban-testnet.stellar.org';
+
+  try {
+    let currentLedger = await getLastProcessedLedger();
+    logger.info(`Indexer starting from ledger ${currentLedger}`);
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      try {
+        // Fetch latest ledger from Stellar RPC
+        const response = await fetch(`${STELLAR_RPC_URL}/ledgers?limit=1&order=desc`);
+        const data = (await response.json()) as { records?: Array<{ sequence: number }> };
+        const latestLedger = data.records?.[0]?.sequence ?? currentLedger;
+
+        // Process each new ledger
+        if (latestLedger > currentLedger) {
+          for (let seq = currentLedger + 1; seq <= latestLedger; seq++) {
+            await processLedger(seq);
+            await saveCheckpoint(seq);
+            currentLedger = seq;
+          }
+        } else {
+          // No new ledgers, sleep
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+      } catch (err) {
+        logger.error({ err }, 'Error in indexer polling loop');
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'Unrecoverable indexer error');
+    process.exit(1);
+  }
 }
 
-export async function processLedger(_ledger_sequence: number): Promise<void> {
-  // TODO: implement
+export async function processLedger(ledger_sequence: number): Promise<void> {
+  const STELLAR_RPC_URL = process.env.STELLAR_RPC_URL ?? 'https://soroban-testnet.stellar.org';
+
+  try {
+    // Fetch events for this ledger
+    const response = await fetch(
+      `${STELLAR_RPC_URL}/events?start_ledger=${ledger_sequence}&end_ledger=${ledger_sequence}`,
+    );
+    const data = (await response.json()) as { events?: RawStellarEvent[] };
+    const events = data.events ?? [];
+
+    // Process each event
+    for (const event of events) {
+      await processEvent(event);
+    }
+  } catch (err) {
+    logger.error({ err }, `Error processing ledger ${ledger_sequence}`);
+    throw err;
+  }
 }
 
-export async function processEvent(_event: RawStellarEvent): Promise<void> {
-  // TODO: implement
+export async function processEvent(event: RawStellarEvent): Promise<void> {
+  try {
+    // Store raw event in blockchain_events table
+    await pool.query(
+      `INSERT INTO blockchain_events
+         (contract_address, event_type, payload, ledger_sequence, ledger_close_time, tx_hash, processed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (tx_hash) DO NOTHING`,
+      [
+        event.contract_address,
+        event.event_type,
+        parsePayload(event.data),
+        event.ledger_sequence,
+        new Date(event.ledger_close_time),
+        event.tx_hash,
+        false,
+      ],
+    );
+
+    // Route to appropriate handler
+    switch (event.event_type) {
+      case 'MarketCreated':
+        await handleMarketCreated(event);
+        break;
+      case 'BetPlaced':
+        await handleBetPlaced(event);
+        break;
+      case 'MarketLocked':
+        await handleMarketLocked(event);
+        break;
+      case 'MarketResolved':
+        await handleMarketResolved(event);
+        break;
+      case 'MarketCancelled':
+        await handleMarketCancelled(event);
+        break;
+      case 'WinningsClaimed':
+        await handleWinningsClaimed(event);
+        break;
+      default:
+        logger.debug({ eventType: event.event_type }, 'Unknown event type');
+    }
+
+    // Mark as processed
+    await pool.query(
+      `UPDATE blockchain_events SET processed = TRUE WHERE tx_hash = $1`,
+      [event.tx_hash],
+    );
+  } catch (err) {
+    logger.error({ err, txHash: event.tx_hash }, 'Error processing event');
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -129,39 +231,10 @@ export async function handleMarketResolved(event: RawStellarEvent): Promise<void
 
 export async function handleMarketCancelled(event: RawStellarEvent): Promise<void> {
   const p = parsePayload(event.data);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    // Update market status and store cancel reason
-    await client.query(
-      `UPDATE markets SET status = 'cancelled', cancel_reason = $1, updated_at = NOW() WHERE market_id = $2`,
-      [p.reason ?? null, p.market_id],
-    );
-    
-    // Get all bettors for this market to enqueue notifications
-    const bettorsResult = await client.query(
-      `SELECT DISTINCT bettor_address FROM bets WHERE market_id = $1`,
-      [p.market_id],
-    );
-    
-    // Enqueue refund-available notifications for all bettors
-    for (const row of bettorsResult.rows) {
-      await client.query(
-        `INSERT INTO notifications (bettor_address, market_id, type, created_at)
-         VALUES ($1, $2, 'refund_available', NOW())
-         ON CONFLICT DO NOTHING`,
-        [row.bettor_address, p.market_id],
-      );
-    }
-    
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  await pool.query(
+    `UPDATE markets SET status = 'cancelled', updated_at = NOW() WHERE market_id = $1`,
+    [p.market_id],
+  );
 }
 
 export async function handleWinningsClaimed(event: RawStellarEvent): Promise<void> {

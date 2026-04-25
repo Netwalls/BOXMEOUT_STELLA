@@ -32,8 +32,8 @@ async function requireAdmin(req: Request, _res: Response, next: NextFunction): P
     // const revoked = await authService.isSessionRevoked(userId, sessionVersion);
     // if (revoked) throw new AppError(401, 'Session has been invalidated');
 
-    (req as any).userId = userId;
-    (req as any).sessionVersion = sessionVersion;
+    (req as unknown as Record<string, unknown>).userId = userId;
+    (req as unknown as Record<string, unknown>).sessionVersion = sessionVersion;
     next();
   } catch (err) {
     next(err instanceof AppError ? err : new AppError(401, 'Invalid or expired token'));

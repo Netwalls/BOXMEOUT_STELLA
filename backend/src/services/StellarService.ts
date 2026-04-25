@@ -4,59 +4,7 @@
 // Contributors: implement every function marked TODO.
 // ============================================================
 
-import {
-  Contract,
-  Keypair,
-  Networks,
-  TransactionBuilder,
-  Transaction,
-  xdr,
-  rpc,
-} from '@stellar/stellar-sdk';
-
-const POLL_INTERVAL_MS = 2_000;
-const POLL_TIMEOUT_MS  = 30_000;
-const MAX_RETRIES      = 3;
-const BASE_FEE         = 100;
-const FEE_BUMP_FACTOR  = 1.5;
-
-export class StellarInvocationError extends Error {
-  constructor(
-    message: string,
-    public readonly txHash?: string,
-    public readonly details?: unknown,
-  ) {
-    super(message);
-    this.name = 'StellarInvocationError';
-  }
-}
-
-function getRpcServer(): rpc.Server {
-  const rpcUrl = process.env.STELLAR_RPC_URL;
-  if (!rpcUrl) throw new Error('STELLAR_RPC_URL env var is required');
-  return new rpc.Server(rpcUrl);
-}
-
-function getNetworkPassphrase(): string {
-  return process.env.STELLAR_NETWORK === 'public' ? Networks.PUBLIC : Networks.TESTNET;
-}
-
-/**
- * Polls rpc.getTransaction() until SUCCESS or FAILED, or until timeout.
- * Returns the final status response, or null on timeout.
- */
-async function pollTransaction(
-  server: rpc.Server,
-  hash: string,
-): Promise<rpc.Api.GetTransactionResponse | null> {
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const result = await server.getTransaction(hash);
-    if (result.status !== rpc.Api.GetTransactionStatus.NOT_FOUND) return result;
-    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-  }
-  return null;
-}
+import { Account, Keypair, Networks, Operation, Server, SorobanServer, TransactionBuilder, xdr } from '@stellar/stellar-sdk';
 
 /**
  * Builds, simulates, signs, and submits a Soroban contract invocation.
@@ -78,79 +26,45 @@ export async function invokeContract(
   contract_address: string,
   method: string,
   args: xdr.ScVal[],
-  source_keypair: Keypair,
+  source_keypair?: Keypair,
 ): Promise<string> {
-  const server = getRpcServer();
-  const networkPassphrase = getNetworkPassphrase();
-  const contract = new Contract(contract_address);
+  const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  const networkPassphrase = process.env.STELLAR_NETWORK === 'public'
+    ? Networks.PUBLIC
+    : Networks.TESTNET;
 
-  let fee = BASE_FEE;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    // 1. Load fresh account (fresh sequence number on each retry)
-    const sourceAccount = await server.getAccount(source_keypair.publicKey());
-
-    // 2. Build transaction with invokeHostFunction operation
-    const builtTx = new TransactionBuilder(sourceAccount, { fee: String(fee), networkPassphrase })
-      .addOperation(contract.call(method, ...args))
-      .setTimeout(30)
-      .build();
-
-    // 3. Simulate to get resource fees + footprint
-    const simResult = await server.simulateTransaction(builtTx);
-    if (rpc.Api.isSimulationError(simResult)) {
-      throw new StellarInvocationError(`Simulation failed: ${simResult.error}`);
-    }
-
-    // 4. Assemble: applies resource footprint + sets fee = base_fee + resource_fee
-    const resourceFee = parseInt((simResult as rpc.Api.SimulateTransactionSuccessResponse).minResourceFee, 10);
-    fee = Math.ceil((fee + resourceFee) * (attempt > 0 ? FEE_BUMP_FACTOR : 1));
-
-    const preparedTx = rpc.assembleTransaction(builtTx, simResult)
-      .setNetworkPassphrase(networkPassphrase)
-      .build() as Transaction;
-
-    // 5. Sign
-    preparedTx.sign(source_keypair);
-
-    // 6. Submit
-    const sendResult = await server.sendTransaction(preparedTx);
-    if (sendResult.status === 'ERROR') {
-      throw new StellarInvocationError(
-        `sendTransaction rejected: ${sendResult.hash}`,
-        sendResult.hash,
-        sendResult.errorResult,
-      );
-    }
-
-    const hash = sendResult.hash;
-
-    // 7. Poll until SUCCESS / FAILED / timeout
-    const txResult = await pollTransaction(server, hash);
-
-    if (txResult === null) {
-      // TIMEOUT — retry with bumped fee (fee already bumped above for next iteration)
-      if (attempt === MAX_RETRIES) {
-        throw new StellarInvocationError(
-          `Transaction timed out after ${MAX_RETRIES} retries`,
-          hash,
-        );
-      }
-      continue;
-    }
-
-    if (txResult.status === rpc.Api.GetTransactionStatus.SUCCESS) return hash;
-
-    // FAILED
-    throw new StellarInvocationError(
-      `Transaction failed on-chain`,
-      hash,
-      txResult,
-    );
+  if (!source_keypair) {
+    source_keypair = Keypair.random();
   }
 
-  // Should be unreachable
-  throw new StellarInvocationError('Max retries exceeded');
+  const server = new Server(horizonUrl);
+  const sourceAccount = await server.loadAccount(source_keypair.publicKey());
+
+  const invokeContractHostFunction = xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: xdr.ScAddress.contractFromAddress(contract_address),
+      functionName: xdr.ScSymbol.fromString(method),
+      args,
+    }),
+  );
+
+  const transaction = new TransactionBuilder(sourceAccount, {
+    fee: 100,
+    networkPassphrase,
+  })
+    .addOperation(Operation.invokeHostFunction({ hostFunction: invokeContractHostFunction, auth: [] }))
+    .setTimeout(30)
+    .build();
+
+  transaction.sign(source_keypair);
+
+  try {
+    const response = await server.submitTransaction(transaction);
+    return response.hash;
+  } catch (error) {
+    const err = error as Record<string, unknown>;
+    throw new Error(`Contract invocation failed: ${err?.response?.data ?? err?.message ?? error}`);
+  }
 }
 
 /**
@@ -170,34 +84,50 @@ export async function readContractState<T>(
   method: string,
   args: xdr.ScVal[],
 ): Promise<T> {
-  const server = getRpcServer();
-  const networkPassphrase = getNetworkPassphrase();
-  const contract = new Contract(contract_address);
+  const rpcUrl = process.env.STELLAR_RPC_URL;
+  if (!rpcUrl) throw new Error('STELLAR_RPC_URL env var is required');
 
-  // Use a random ephemeral account — simulation doesn't need a real sequence number
-  const ephemeral = Keypair.random();
-  const sourceAccount = await server.getAccount(ephemeral.publicKey()).catch(() => {
-    // Fallback: build a dummy account object for simulation
-    const { Account } = require('@stellar/stellar-sdk');
-    return new Account(ephemeral.publicKey(), '0');
-  });
+  const networkPassphrase = process.env.STELLAR_NETWORK === 'public'
+    ? Networks.PUBLIC
+    : Networks.TESTNET;
 
-  const transaction = new TransactionBuilder(sourceAccount, { fee: String(BASE_FEE), networkPassphrase })
-    .addOperation(contract.call(method, ...args))
+  const sorobanServer = new SorobanServer(rpcUrl);
+  const sourceAccount = new Account(Keypair.random().publicKey(), '0');
+
+  const invokeContractHostFunction = xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: xdr.ScAddress.contractFromAddress(contract_address),
+      functionName: xdr.ScSymbol.fromString(method),
+      args,
+    }),
+  );
+
+  const transaction = new TransactionBuilder(sourceAccount, {
+    fee: 100,
+    networkPassphrase,
+  })
+    .addOperation(Operation.invokeHostFunction({ hostFunction: invokeContractHostFunction, auth: [] }))
     .setTimeout(30)
     .build();
 
-  const response = await server.simulateTransaction(transaction);
-  if (rpc.Api.isSimulationError(response)) {
-    throw new Error(`Simulation error: ${response.error}`);
+  const response = await sorobanServer.simulateTransaction(transaction);
+  if ('error' in response && response.error) {
+    throw new Error(`Simulation error: ${JSON.stringify(response.error)}`);
   }
 
-  const successResponse = response as rpc.Api.SimulateTransactionSuccessResponse;
-  if (!successResponse.result?.retval) {
-    throw new Error('Simulation returned no retval');
+  const result = (response as Record<string, unknown>).results?.[0] as Record<string, unknown>;
+  if (!result || result.status !== 'SUCCESS') {
+    throw new Error(
+      `Simulation failed${result?.status ? `: ${result.status}` : ' without a result'}`,
+    );
   }
 
-  return parseScVal(successResponse.result.retval) as T;
+  const returnValue = result.returnValue as xdr.ScVal;
+  if (!returnValue) {
+    throw new Error('Simulation returned no returnValue');
+  }
+
+  return parseScVal(returnValue) as T;
 }
 
 /**
@@ -210,8 +140,8 @@ export async function readContractState<T>(
  * Returns an unsubscribe function that stops the stream.
  */
 export function subscribeToContractEvents(
-  contract_address: string,
-  onEvent: (event: unknown) => void,
+  _contract_address: string,
+  _onEvent: (event: unknown) => void,
 ): () => void {
   // TODO: implement
   throw new Error('Not implemented');
@@ -235,28 +165,28 @@ export function subscribeToContractEvents(
  * Throws ParseError for unsupported variants.
  */
 export function parseScVal(scval: xdr.ScVal): unknown {
-  const value: any = scval as any;
+  const value = scval as Record<string, unknown>;
   const type = scval.switch();
 
-  if (type === xdr.ScValType.scvBool()) return value.b?.();
-  if (type === xdr.ScValType.scvU32()) return value.u32?.();
-  if (type === xdr.ScValType.scvI32()) return value.i32?.();
+  if (type === xdr.ScValType.scvBool()) return (value.b as () => boolean)?.();
+  if (type === xdr.ScValType.scvU32()) return (value.u32 as () => number)?.();
+  if (type === xdr.ScValType.scvI32()) return (value.i32 as () => number)?.();
   if (type === xdr.ScValType.scvU64()) {
-    const u64 = value.u64?.();
+    const u64 = (value.u64 as () => bigint)?.();
     return typeof u64 === 'bigint' ? u64 : u64?.toString();
   }
   if (type === xdr.ScValType.scvI128()) {
-    const i128 = value.i128?.();
+    const i128 = (value.i128 as () => bigint)?.();
     return typeof i128 === 'bigint' ? i128 : i128?.toString();
   }
-  if (type === xdr.ScValType.scvString()) return value.str?.();
-  if (type === xdr.ScValType.scvAddress()) return value.address?.();
-  if (type === xdr.ScValType.scvSymbol()) return value.sym?.();
+  if (type === xdr.ScValType.scvString()) return (value.str as () => string)?.();
+  if (type === xdr.ScValType.scvAddress()) return (value.address as () => string)?.();
+  if (type === xdr.ScValType.scvSymbol()) return (value.sym as () => string)?.();
   if (type === xdr.ScValType.scvVec()) {
-    return value.vec()?.map((item: xdr.ScVal) => parseScVal(item));
+    return (value.vec as () => xdr.ScVal[])()?.map((item: xdr.ScVal) => parseScVal(item));
   }
   if (type === xdr.ScValType.scvMap()) {
-    const mapEntries = value.map?.() ?? [];
+    const mapEntries = (value.map as () => Array<{ key: () => xdr.ScVal; value: () => xdr.ScVal }>)?.() ?? [];
     const output: Record<string, unknown> = {};
     for (const entry of mapEntries) {
       const key = parseScVal(entry.key());

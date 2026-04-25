@@ -2,7 +2,6 @@ import express from "express";
 import pinoHttp from "pino-http";
 import { errorMiddleware } from "./middleware/error.middleware";
 import { rateLimit } from "./middleware/rate-limit.middleware";
-import { requireEmailVerification } from "./middleware/email-verification.middleware";
 import { AppError } from "./utils/AppError";
 import { logger } from "./utils/logger";
 import authRouter from "./routes/auth.routes";

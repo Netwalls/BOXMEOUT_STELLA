@@ -299,7 +299,7 @@ export async function getPortfolioByAddress(
  * Used as a helper by getPortfolioByAddress.
  */
 export async function getMarketsByBettor(
-  bettor_address: string,
+  _bettor_address: string,
 ): Promise<Market[]> {
   // TODO: implement
   throw new Error('Not implemented');
