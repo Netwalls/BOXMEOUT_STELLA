@@ -7,6 +7,8 @@
 
 import { verify as cryptoVerify, createPublicKey } from 'crypto';
 import { Keypair } from '@stellar/stellar-sdk';
+import { pool } from '../config/db';
+import { invokeContract } from '../services/StellarService';
 import type { OracleReport } from '../models/OracleReport';
 
 export type FightOutcome = 'fighter_a' | 'fighter_b' | 'draw' | 'no_contest';
@@ -68,8 +70,46 @@ export async function submitFightResult(
   match_id: string,
   outcome: FightOutcome,
 ): Promise<OracleReport> {
-  // TODO: implement
-  throw new Error('Not implemented');
+  const secret = process.env.ORACLE_PRIVATE_KEY;
+  if (!secret) throw new Error('ORACLE_PRIVATE_KEY env var is required');
+
+  const keypair = Keypair.fromSecret(secret);
+  const oracle_address = keypair.publicKey();
+  const reported_at = new Date();
+
+  const outcomeIndex = OUTCOME_INDEX[outcome];
+  if (outcomeIndex === undefined) throw new Error(`Invalid fight outcome: ${outcome}`);
+
+  const tsBuf = Buffer.alloc(8);
+  tsBuf.writeBigInt64BE(BigInt(reported_at.getTime()));
+  const message = Buffer.concat([
+    Buffer.from(match_id, 'utf8'),
+    Buffer.from([outcomeIndex]),
+    tsBuf,
+  ]);
+
+  const signature = Buffer.from(keypair.sign(message)).toString('hex');
+
+  const marketResult = await pool.query(
+    'SELECT contract_address FROM markets WHERE match_id = $1 LIMIT 1',
+    [match_id],
+  );
+  if (marketResult.rowCount === 0) {
+    throw new Error(`Market not found for match_id: ${match_id}`);
+  }
+
+  const contract_address = marketResult.rows[0].contract_address;
+  const tx_hash = await invokeContract(contract_address, 'resolve_market', [] as unknown as any);
+
+  const insertResult = await pool.query(
+    `INSERT INTO oracle_reports
+       (match_id, oracle_address, outcome, reported_at, signature, accepted, tx_hash)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     RETURNING *`,
+    [match_id, oracle_address, outcome, reported_at, signature, true, tx_hash],
+  );
+
+  return insertResult.rows[0] as OracleReport;
 }
 
 /**

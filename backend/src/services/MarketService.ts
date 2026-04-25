@@ -6,6 +6,7 @@
 
 import type { Market, MarketStats } from '../models/Market';
 import type { Bet } from '../models/Bet';
+import { pool } from '../config/db';
 import { cacheGet, cacheSet } from './cache.service';
 import { AppError } from '../utils/AppError';
 
@@ -74,25 +75,68 @@ export async function getMarkets(
   filters?: MarketFilters,
   pagination?: Pagination,
 ): Promise<MarketListResult> {
-  const cacheKey = `markets:${JSON.stringify(filters ?? {})}:${JSON.stringify(pagination ?? {})}`;
+  const statusKey = filters?.status ?? '';
+  const weightKey = filters?.weight_class ?? '';
+  const page = pagination?.page ?? 1;
+  const limit = pagination?.limit ?? 50;
+  const cacheKey = `markets:${statusKey}:${weightKey}:${page}:${limit}`;
   const cached = await cacheGet<MarketListResult>(cacheKey);
   if (cached) return cached;
 
-  let markets = await db().findMarkets(filters);
+  let result: MarketListResult;
+  if (_db) {
+    const markets = await db().findMarkets(filters);
+    const filtered = markets.filter((market) => {
+      if (filters?.status && market.status !== filters.status) return false;
+      if (filters?.weight_class && market.weight_class !== filters.weight_class) return false;
+      return true;
+    });
 
-  if (filters?.status) markets = markets.filter(m => m.status === filters.status);
-  if (filters?.weight_class) markets = markets.filter(m => m.weight_class === filters.weight_class);
+    const sorted = [...filtered].sort(
+      (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+    );
 
-  markets = [...markets].sort(
-    (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
-  );
+    const offset = (page - 1) * limit;
+    const paged = sorted.slice(offset, offset + limit);
+    result = { markets: paged, total: sorted.length };
+  } else {
+    const whereClauses: string[] = [];
+    const values: unknown[] = [];
 
-  const page = pagination?.page ?? 1;
-  const limit = pagination?.limit ?? markets.length;
-  const offset = (page - 1) * limit;
-  const paged = markets.slice(offset, offset + limit);
+    if (filters?.status) {
+      values.push(filters.status);
+      whereClauses.push(`status = $${values.length}`);
+    }
+    if (filters?.weight_class) {
+      values.push(filters.weight_class);
+      whereClauses.push(`weight_class = $${values.length}`);
+    }
 
-  const result: MarketListResult = { markets: paged, total: markets.length };
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const offset = (page - 1) * limit;
+
+    const rows = await pool.query(
+      `SELECT * FROM markets ${whereSql} ORDER BY scheduled_at ASC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, limit, offset],
+    );
+
+    const countRows = await pool.query(
+      `SELECT COUNT(*) AS total FROM markets ${whereSql}`,
+      values,
+    );
+
+    result = {
+      markets: rows.rows.map((row) => ({
+        ...row,
+        scheduled_at: new Date(row.scheduled_at),
+        created_at: new Date(row.created_at),
+        updated_at: new Date(row.updated_at),
+        resolved_at: row.resolved_at ? new Date(row.resolved_at) : null,
+      } as Market)),
+      total: Number(countRows.rows[0]?.total ?? 0),
+    };
+  }
+
   await cacheSet(cacheKey, result, 30);
   return result;
 }

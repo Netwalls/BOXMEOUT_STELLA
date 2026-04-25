@@ -55,3 +55,15 @@ CREATE TABLE IF NOT EXISTS indexer_checkpoints (
   last_processed_ledger   INTEGER     NOT NULL,
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS oracle_reports (
+  id               SERIAL PRIMARY KEY,
+  match_id         TEXT        NOT NULL,
+  oracle_address   TEXT        NOT NULL,
+  outcome          TEXT        NOT NULL,
+  reported_at      TIMESTAMPTZ NOT NULL,
+  signature        TEXT        NOT NULL,
+  accepted         BOOLEAN     NOT NULL DEFAULT FALSE,
+  tx_hash          TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

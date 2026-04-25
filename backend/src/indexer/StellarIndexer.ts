@@ -155,7 +155,11 @@ export async function getLastProcessedLedger(): Promise<number> {
 
 export async function saveCheckpoint(ledger_sequence: number): Promise<void> {
   await pool.query(
-    `INSERT INTO indexer_checkpoints (last_processed_ledger) VALUES ($1)`,
+    `INSERT INTO indexer_checkpoints (id, last_processed_ledger)
+     VALUES (1, $1)
+     ON CONFLICT (id) DO UPDATE
+       SET last_processed_ledger = EXCLUDED.last_processed_ledger,
+           updated_at = NOW()`,
     [ledger_sequence],
   );
 }
