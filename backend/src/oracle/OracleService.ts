@@ -9,9 +9,22 @@ import { verify as cryptoVerify, createPublicKey } from 'crypto';
 import { Keypair } from '@stellar/stellar-sdk';
 import { pool } from '../config/db';
 import { invokeContract } from '../services/StellarService';
+import { logger } from '../utils/logger';
 import type { OracleReport } from '../models/OracleReport';
+import type { Market } from '../models/Market';
 
 export type FightOutcome = 'fighter_a' | 'fighter_b' | 'draw' | 'no_contest';
+
+// Shape of a single fight entry returned by the external boxing API
+interface BoxingApiFight {
+  fight_id: string;
+  status: string;          // e.g. "confirmed", "pending", "cancelled"
+  result?: string;         // e.g. "fighter_a", "fighter_b", "draw", "no_contest"
+}
+
+interface BoxingApiResponse {
+  fights: BoxingApiFight[];
+}
 
 const OUTCOME_INDEX: Record<FightOutcome, number> = {
   fighter_a: 0,
@@ -40,6 +53,53 @@ async function getOracleWhitelist(): Promise<Set<string>> {
 }
 
 /**
+ * Fetches a confirmed fight result from the external boxing data API.
+ *
+ * Calls BOXING_API_URL/fights?fight_id=<match_id> and returns the outcome
+ * if the fight status is "confirmed", or null if the result is not yet available.
+ *
+ * Throws on network / non-2xx errors so the caller can decide how to handle them.
+ */
+export async function fetchPrimaryResult(match_id: string): Promise<FightOutcome | null> {
+  const baseUrl = process.env.BOXING_API_URL;
+  if (!baseUrl) throw new Error('BOXING_API_URL env var is required');
+
+  const url = `${baseUrl}/fights?fight_id=${encodeURIComponent(match_id)}`;
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000), // 10 s hard timeout
+  });
+
+  if (!response.ok) {
+    throw new Error(`Boxing API responded ${response.status} for match_id=${match_id}`);
+  }
+
+  const body = (await response.json()) as BoxingApiResponse;
+  const fight = body.fights?.find((f) => f.fight_id === match_id);
+
+  if (!fight) {
+    logger.info({ match_id }, 'pollFightResults: fight not found in API response');
+    return null;
+  }
+
+  if (fight.status !== 'confirmed') {
+    logger.info({ match_id, apiStatus: fight.status }, 'pollFightResults: result not yet confirmed');
+    return null;
+  }
+
+  const validOutcomes: FightOutcome[] = ['fighter_a', 'fighter_b', 'draw', 'no_contest'];
+  const outcome = fight.result as FightOutcome | undefined;
+
+  if (!outcome || !validOutcomes.includes(outcome)) {
+    throw new Error(
+      `Boxing API returned unexpected outcome "${fight.result}" for match_id=${match_id}`,
+    );
+  }
+
+  return outcome;
+}
+
+/**
  * Polls external boxing data sources for confirmed fight results.
  *
  * Called on a cron schedule — every 5 minutes after a fight's scheduled_at.
@@ -51,7 +111,60 @@ async function getOracleWhitelist(): Promise<Set<string>> {
  *   4. Log failures but do not throw — continue to next market
  */
 export async function pollFightResults(): Promise<void> {
-  // TODO: implement
+  // ── Step 1: fetch all locked markets whose fight time has passed ──────────
+  let markets: Pick<Market, 'market_id' | 'match_id'>[];
+
+  try {
+    const { rows } = await pool.query<Pick<Market, 'market_id' | 'match_id'>>(
+      `SELECT market_id, match_id
+         FROM markets
+        WHERE status = 'locked'
+          AND scheduled_at < NOW()
+        ORDER BY scheduled_at ASC`,
+    );
+    markets = rows;
+  } catch (err) {
+    // DB failure is fatal for this poll cycle — log and bail out entirely
+    logger.error({ err }, 'pollFightResults: failed to query locked markets');
+    return;
+  }
+
+  if (markets.length === 0) {
+    logger.debug('pollFightResults: no locked markets pending resolution');
+    return;
+  }
+
+  logger.info({ count: markets.length }, 'pollFightResults: processing locked markets');
+
+  // ── Step 2-4: process each market independently ───────────────────────────
+  for (const market of markets) {
+    const { market_id, match_id } = market;
+
+    try {
+      // Step 2: call the external boxing API
+      const outcome = await fetchPrimaryResult(match_id);
+
+      // Step 3: skip if no confirmed result yet
+      if (outcome === null) {
+        logger.info({ market_id, match_id }, 'pollFightResults: no confirmed result yet, skipping');
+        continue;
+      }
+
+      // Step 3: submit the confirmed result on-chain and persist to DB
+      logger.info({ market_id, match_id, outcome }, 'pollFightResults: submitting fight result');
+      const report = await submitFightResult(match_id, outcome);
+      logger.info(
+        { market_id, match_id, outcome, tx_hash: report.tx_hash, report_id: report.id },
+        'pollFightResults: fight result submitted successfully',
+      );
+    } catch (err) {
+      // Step 4: log the error but continue processing remaining markets
+      logger.error(
+        { err, market_id, match_id },
+        'pollFightResults: error processing market, skipping to next',
+      );
+    }
+  }
 }
 
 /**
