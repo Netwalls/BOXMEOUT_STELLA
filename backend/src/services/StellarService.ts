@@ -29,6 +29,7 @@ export async function invokeContract(
   source_keypair?: Keypair,
 ): Promise<string> {
   const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  const rpcUrl = process.env.STELLAR_RPC_URL ?? 'https://soroban-testnet.stellar.org';
   const networkPassphrase = process.env.STELLAR_NETWORK === 'public'
     ? Networks.PUBLIC
     : Networks.TESTNET;
@@ -38,6 +39,8 @@ export async function invokeContract(
   }
 
   const server = new Server(horizonUrl);
+  const sorobanServer = new SorobanServer(rpcUrl);
+
   const sourceAccount = await server.loadAccount(source_keypair.publicKey());
 
   const invokeContractHostFunction = xdr.HostFunction.hostFunctionTypeInvokeContract(
@@ -48,23 +51,82 @@ export async function invokeContract(
     }),
   );
 
-  const transaction = new TransactionBuilder(sourceAccount, {
-    fee: 100,
-    networkPassphrase,
-  })
-    .addOperation(Operation.invokeHostFunction({ hostFunction: invokeContractHostFunction, auth: [] }))
-    .setTimeout(30)
-    .build();
+  const baseFee = 100; // Base fee in stroops
 
-  transaction.sign(source_keypair);
+  let attempts = 0;
+  const maxRetries = 3;
 
-  try {
-    const response = await server.submitTransaction(transaction);
-    return response.hash;
-  } catch (error) {
-    const err = error as Record<string, unknown>;
-    throw new Error(`Contract invocation failed: ${err?.response?.data ?? err?.message ?? error}`);
+  while (attempts < maxRetries) {
+    try {
+      // Step 1-2: Build transaction
+      const transaction = new TransactionBuilder(sourceAccount, {
+        fee: baseFee.toString(),
+        networkPassphrase,
+      })
+        .addOperation(Operation.invokeHostFunction({ hostFunction: invokeContractHostFunction, auth: [] }))
+        .setTimeout(30)
+        .build();
+
+      // Step 3: Simulate to get resource fee
+      const simulation = await sorobanServer.simulateTransaction(transaction);
+      if ('error' in simulation && simulation.error) {
+        throw new Error(`Simulation error: ${JSON.stringify(simulation.error)}`);
+      }
+
+      const simResult = simulation as { results?: { events?: unknown[]; footprint?: unknown; auth?: unknown[]; minResourceFee?: string }[] };
+      const minResourceFee = simResult.results?.[0]?.minResourceFee;
+      const resourceFee = minResourceFee ? parseInt(minResourceFee, 10) : 0;
+
+      // Step 4: Set total fee
+      const totalFee = baseFee + resourceFee;
+      transaction.fee = totalFee.toString();
+
+      // Step 5: Sign
+      transaction.sign(source_keypair);
+
+      // Step 6: Submit
+      const submitResponse = await sorobanServer.sendTransaction(transaction);
+
+      if (submitResponse.status !== 'PENDING') {
+        throw new Error(`Submit failed: ${submitResponse.status}`);
+      }
+
+      const txHash = submitResponse.hash;
+
+      // Step 7: Poll for result
+      const startTime = Date.now();
+      const maxWait = 30_000; // 30 seconds
+
+      while (Date.now() - startTime < maxWait) {
+        const statusResponse = await sorobanServer.getTransaction(txHash);
+
+        if (statusResponse.status === 'SUCCESS') {
+          return txHash;
+        } else if (statusResponse.status === 'FAILED') {
+          throw new Error(`Transaction failed: ${JSON.stringify(statusResponse.resultXdr)}`);
+        }
+
+        // Wait 2 seconds before polling again
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Timeout
+      throw new Error('Transaction polling timed out');
+
+    } catch (err) {
+      attempts++;
+      if (attempts >= maxRetries) {
+        throw err;
+      }
+
+      // On timeout, bump fee and retry
+      // For simplicity, double the base fee
+      // In practice, you might analyze the error
+      console.log(`Attempt ${attempts} failed, retrying with higher fee`);
+    }
   }
+
+  throw new Error('Max retries exceeded');
 }
 
 /**

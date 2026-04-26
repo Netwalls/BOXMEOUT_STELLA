@@ -30,7 +30,32 @@ const TREASURY_CONTRACT = process.env.TREASURY_CONTRACT_ADDRESS || '';
 const server = new rpc.Server(RPC_URL);
 
 export async function startIndexer(): Promise<void> {
-  // TODO: implement
+  const pollInterval = Number(process.env.POLL_INTERVAL_MS ?? 5000);
+  let lastProcessed = await getLastProcessedLedger();
+
+  console.log(`[Indexer] Starting from ledger ${lastProcessed}`);
+
+  while (true) {
+    try {
+      // Get the latest ledger sequence from Stellar RPC
+      const latestLedgerResponse = await server.getLatestLedger();
+      const latestLedger = latestLedgerResponse.sequence;
+
+      if (latestLedger > lastProcessed) {
+        for (let seq = lastProcessed + 1; seq <= latestLedger; seq++) {
+          await processLedger(seq);
+          await saveCheckpoint(seq);
+          lastProcessed = seq;
+        }
+      } else {
+        // No new ledgers, sleep
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+    } catch (err) {
+      console.error('[Indexer] Unrecoverable error:', err);
+      process.exit(1);
+    }
+  }
 }
 
 export async function processLedger(ledger_sequence: number): Promise<void> {

@@ -120,8 +120,14 @@ export async function getMarketBets(req: Request, res: Response, next: NextFunct
  * Returns aggregate market statistics.
  * Responds 404 if market not found, 200 with MarketStats.
  */
-export async function getMarketStats(_req: Request, _res: Response): Promise<void> {
-  // TODO: implement
+export async function getMarketStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { market_id } = req.params;
+    const stats = await MarketService.getMarketStats(market_id);
+    res.status(200).json(stats);
+  } catch (err) {
+    next(err);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +165,28 @@ export async function getPortfolio(req: Request, res: Response, next: NextFuncti
 
     const portfolio = await MarketService.getPortfolioByAddress(address);
     res.status(200).json(portfolio);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/bets/:bettor_address
+ *
+ * Returns all bets placed by a given Stellar address across all markets.
+ * Returns an empty array (never 404) when the address has no bets.
+ * Responds 400 on invalid address format.
+ */
+export async function getBetsByAddress(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { bettor_address } = req.params;
+
+    if (!StrKey.isValidEd25519PublicKey(bettor_address)) {
+      throw new AppError(400, 'Invalid Stellar address format — must be a valid G... public key');
+    }
+
+    const bets = await MarketService.getBetsByAddress(bettor_address);
+    res.status(200).json(bets);
   } catch (err) {
     next(err);
   }

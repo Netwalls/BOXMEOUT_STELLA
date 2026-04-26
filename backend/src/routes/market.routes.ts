@@ -5,6 +5,7 @@ import {
     getMarket,
     getMarketBets,
     getMarketBetsValidation,
+    getMarketStats,
 } from '../api/controllers/MarketController';
 
 const router = Router();
@@ -14,5 +15,6 @@ router.get('/', listMarketsValidation, listMarkets);
 
 router.get('/:market_id', getMarket);
 router.get('/:market_id/bets', getMarketBetsValidation, getMarketBets);
+router.get('/:market_id/stats', getMarketStats);
 
 export default router;

@@ -276,10 +276,26 @@ export async function getMarketStats(market_id: string): Promise<MarketStats> {
   const cached = await cacheGet<MarketStats>(cacheKey);
   if (cached) return cached;
 
-  // TODO: compute stats from bets table, then:
-  // await cacheSet(cacheKey, stats, 60);
-  // return stats;
-  throw new Error('Not implemented');
+  const bets = await db().findBetsByMarket(market_id);
+
+  const total_bets = bets.length;
+  const unique_bettors = new Set(bets.map(b => b.bettor_address)).size;
+  const amounts_xlm = bets.map(b => Number(b.amount) / 10_000_000);
+  const largest_bet_xlm = amounts_xlm.length > 0 ? Math.max(...amounts_xlm) : 0;
+  const average_bet_xlm = amounts_xlm.length > 0 ? amounts_xlm.reduce((s, a) => s + a, 0) / amounts_xlm.length : 0;
+  const total_pooled_xlm = amounts_xlm.reduce((s, a) => s + a, 0);
+
+  const stats: MarketStats = {
+    market_id,
+    total_bets,
+    unique_bettors,
+    largest_bet_xlm,
+    average_bet_xlm,
+    total_pooled_xlm,
+  };
+
+  await cacheSet(cacheKey, stats, 60);
+  return stats;
 }
 
 /**
@@ -332,6 +348,26 @@ export async function getPortfolioByAddress(
     total_lost_xlm,
     pending_claims,
   };
+}
+
+/**
+ * Returns all bets placed by a given Stellar address across all markets.
+ * Returns an empty array (never 404) when the address has no bets.
+ */
+export async function getBetsByAddress(bettor_address: string): Promise<Bet[]> {
+  if (_db) {
+    return db().findBetsByAddress(bettor_address);
+  }
+
+  const { rows } = await pool.query(
+    'SELECT * FROM bets WHERE bettor_address = $1 ORDER BY placed_at DESC',
+    [bettor_address],
+  );
+  return rows.map((row) => ({
+    ...row,
+    placed_at: new Date(row.placed_at),
+    claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
+  } as Bet));
 }
 
 /**

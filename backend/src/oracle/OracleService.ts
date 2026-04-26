@@ -280,8 +280,9 @@ export async function verifyOracleReport(report: OracleReport): Promise<boolean>
  * Used by the frontend to identify which oracle resolved a market.
  */
 export function getOraclePublicKey(): string {
-  // TODO: implement
-  throw new Error('Not implemented');
+  const secret = process.env.ORACLE_PRIVATE_KEY;
+  if (!secret) throw new Error('ORACLE_PRIVATE_KEY env var is required');
+  return Keypair.fromSecret(secret).publicKey();
 }
 
 /**
