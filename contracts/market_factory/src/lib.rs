@@ -20,6 +20,14 @@ const MARKET_WASM_HASH: &str = "MARKET_WASM_HASH";
 
 #[contractclient(name = "MarketClient")]
 pub trait MarketInterface {
+    fn initialize(
+        env: Env,
+        factory: Address,
+        market_id: u64,
+        fight: FightDetails,
+        config: MarketConfig,
+        treasury: Address,
+    ) -> Result<(), ContractError>;
     fn get_bets_by_address(env: Env, bettor: Address) -> Vec<BetRecord>;
     fn get_state(env: Env) -> Result<MarketState, ContractError>;
 }
@@ -125,33 +133,44 @@ impl MarketFactory {
         if fight.fighter_a.len() == 0 || fight.fighter_b.len() == 0 {
             return Err(ContractError::InvalidMarketStatus);
         }
-        if config.min_bet <= 0 {
+        if config.min_bet == 0 {
             return Err(ContractError::BetTooSmall);
         }
         if config.fee_bps > 1000 {
             return Err(ContractError::Unauthorized);
         }
 
-        // EFFECTS — increment counter and register market
+        // EFFECTS — read current count (this becomes the new market_id)
         let market_id: u64 = env.storage().persistent().get(&MARKET_COUNT).unwrap_or(0);
         let new_count = market_id + 1;
 
-        // Read the wasm hash dynamically from storage
         let wasm_hash: BytesN<32> = env.storage().persistent()
             .get(&MARKET_WASM_HASH)
             .unwrap_or_else(|| BytesN::from_array(&env, &[0u8; 32]));
 
-        // Deploy new market using the stored wasm hash
-        // Check if wasm hash is set (not all zeros)
-        let hash_bytes = wasm_hash.to_vec();
-        let is_hash_set = hash_bytes.iter().any(|&b| b != 0);
-        
-        let market_address = if is_hash_set {
-            env.deployer().with_address(env.current_contract_address(), wasm_hash).deploy(env.current_contract_address())
-        } else {
-            // Fallback: use factory address as placeholder if wasm hash not set
-            env.current_contract_address()
-        };
+        // Use market_id as salt so each deployment gets a unique address
+        let salt = BytesN::from_array(&env, &{
+            let mut arr = [0u8; 32];
+            let id_bytes = market_id.to_be_bytes();
+            arr[24..32].copy_from_slice(&id_bytes);
+            arr
+        });
+
+        // INTERACTIONS — deploy then initialize
+        let market_address = env
+            .deployer()
+            .with_address(env.current_contract_address(), salt)
+            .deploy(wasm_hash);
+
+        let treasury: Address = env.current_contract_address(); // placeholder; real treasury wired via DEFAULT_CONFIG
+        let market_client = MarketClient::new(&env, &market_address);
+        market_client.initialize(
+            &env.current_contract_address(),
+            &market_id,
+            &fight.clone(),
+            &config,
+            &treasury,
+        )?;
 
         let mut market_map: Map<u64, Address> =
             env.storage().persistent().get(&MARKET_MAP).unwrap_or_else(|| Map::new(&env));
@@ -185,13 +204,12 @@ impl MarketFactory {
         let mut fetched = 0u32;
         while i < count && fetched < cap {
             if let Some(addr) = map.get(i) {
-                let client = MarketClient::new(&env, &addr);
-                if let Ok(state) = client.get_state() {
+                if let Ok(state) = MarketClient::new(&env, &addr).get_state() {
                     result.push_back((i, state.status));
+                    fetched += 1;
                 }
             }
             i += 1;
-            fetched += 1;
         }
         result
     }
