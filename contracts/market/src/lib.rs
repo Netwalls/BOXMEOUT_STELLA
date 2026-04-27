@@ -328,38 +328,22 @@ impl Market {
             return Err(ContractError::InvalidOracleSignature);
         }
 
-        // Verify Ed25519 signature
+        // Verify Ed25519 signature over concat(match_id_bytes, outcome_byte, reported_at_be)
         {
             use soroban_sdk::Bytes;
-            let match_id_bytes = report.match_id.to_bytes();
             let outcome_byte: u8 = match report.outcome {
                 Outcome::FighterA  => 0,
                 Outcome::FighterB  => 1,
                 Outcome::Draw      => 2,
                 Outcome::NoContest => 3,
             };
-            let reported_at_be = report.reported_at.to_be_bytes();
-
             let mut msg = Bytes::new(&env);
-            msg.append(&match_id_bytes);
+            msg.append(&report.match_id.to_bytes());
             msg.push_back(outcome_byte);
-            for b in reported_at_be.iter() {
+            for b in report.reported_at.to_be_bytes().iter() {
                 msg.push_back(*b);
             }
-
-            let pub_key_bytes = oracle.to_string().to_bytes();
-            env.crypto().ed25519_verify(
-                &soroban_sdk::BytesN::try_from_array(&env, &{
-                    let mut arr = [0u8; 32];
-                    let b = pub_key_bytes.slice(0..32);
-                    for (i, byte) in b.iter().enumerate() {
-                        arr[i] = byte;
-                    }
-                    arr
-                }).map_err(|_| ContractError::InvalidOracleSignature)?,
-                &msg,
-                &report.signature,
-            );
+            env.crypto().ed25519_verify(&report.pub_key, &msg, &report.signature);
         }
 
         // EFFECTS — 2-of-3 consensus logic

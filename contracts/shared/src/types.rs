@@ -141,10 +141,12 @@ pub struct OracleReport {
     pub outcome: Outcome,
     /// Unix timestamp when the oracle submitted this report
     pub reported_at: u64,
-    /// Ed25519 signature over (match_id + outcome + reported_at)
+    /// Ed25519 signature over concat(match_id_bytes, outcome_byte, reported_at_be)
     pub signature: BytesN<64>,
     /// Stellar address corresponding to the oracle signing keypair
     pub oracle_address: Address,
+    /// Raw Ed25519 public key (32 bytes) matching oracle_address
+    pub pub_key: BytesN<32>,
 }
 
 /// A non-zero, non-redeemed position held by a user in a specific market.
