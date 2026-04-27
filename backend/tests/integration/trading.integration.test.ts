@@ -388,6 +388,97 @@ describe('Trading API - Direct Sell Flow', () => {
       minPayout: 48,
     });
   });
+
+  it('should return remainingShares 0 after buying then selling the full position', async () => {
+    // Initial buy step
+    vi.mocked(prisma.market.findUnique).mockResolvedValueOnce({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      status: MarketStatus.OPEN,
+    } as any);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'test-user-id',
+      usdcBalance: 200,
+    } as any);
+    vi.mocked(ammService.buyShares).mockResolvedValueOnce({
+      sharesReceived: 100,
+      pricePerUnit: 1,
+      totalCost: 100,
+      feeAmount: 0,
+      txHash: 'mock-tx-hash-buy-full',
+    });
+    vi.mocked(prisma.share.findFirst).mockResolvedValueOnce(null);
+    vi.mocked(prisma.share.create).mockResolvedValueOnce({
+      id: 'share-id',
+      quantity: 100,
+      costBasis: 100,
+    } as any);
+    vi.mocked(prisma.trade.create).mockResolvedValueOnce({
+      id: 'buy-trade-id',
+      tradeType: TradeType.BUY,
+    } as any);
+    vi.mocked(prisma.trade.update).mockResolvedValueOnce({
+      id: 'buy-trade-id',
+      status: TradeStatus.CONFIRMED,
+    } as any);
+
+    const buyResponse = await request(app)
+      .post('/api/markets/123e4567-e89b-12d3-a456-426614174000/buy')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        outcome: 1,
+        amount: '100',
+      })
+      .expect(201);
+
+    expect(buyResponse.body.success).toBe(true);
+    expect(buyResponse.body.data.sharesBought).toBe(100);
+
+    // Full sell step
+    vi.mocked(prisma.market.findUnique).mockResolvedValueOnce({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+    } as any);
+    vi.mocked(prisma.share.findFirst).mockResolvedValueOnce({
+      id: 'share-id',
+      quantity: 100,
+      costBasis: 100,
+      entryPrice: 1,
+      soldQuantity: 0,
+      realizedPnl: 0,
+    } as any);
+    vi.mocked(ammService.sellShares).mockResolvedValueOnce({
+      payout: 100,
+      pricePerUnit: 1,
+      feeAmount: 0,
+      txHash: 'mock-tx-hash-sell-full',
+    });
+    vi.mocked(prisma.share.update).mockResolvedValueOnce({
+      id: 'share-id',
+      quantity: 0,
+    } as any);
+    vi.mocked(prisma.trade.create).mockResolvedValueOnce({
+      id: 'sell-trade-id',
+      tradeType: TradeType.SELL,
+    } as any);
+    vi.mocked(prisma.trade.update).mockResolvedValueOnce({
+      id: 'sell-trade-id',
+      status: TradeStatus.CONFIRMED,
+    } as any);
+
+    const sellResponse = await request(app)
+      .post('/api/markets/123e4567-e89b-12d3-a456-426614174000/sell')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        outcome: 1,
+        shares: '100',
+        minPayout: '95',
+      })
+      .expect(200);
+
+    expect(sellResponse.body.success).toBe(true);
+    expect(sellResponse.body.data.remainingShares).toBe(0);
+    expect(sellResponse.body.data.sharesSold).toBe(100);
+    expect(sellResponse.body.data.payout).toBe(100);
+  });
 });
 
 describe('Trading API - Odds & Liquidity', () => {

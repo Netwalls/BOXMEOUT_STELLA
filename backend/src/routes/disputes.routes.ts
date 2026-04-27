@@ -136,15 +136,14 @@ router.post(
  *       403:
  *         description: Admin access required
  */
- feature/auth-disputes-implementation
-router.get('/', requireAuth, requireAdmin, (req, res) =>
-  disputesController.listDisputes(req, res)
+router.get(
+  '/',
+  requireAuth,
+  requireAdmin,
+  (req: Request, res: Response, next: NextFunction) => {
+    disputesController.listDisputes(req as AuthenticatedRequest, res).catch(next);
+  }
 );
-
-router.get('/', (req: Request, res: Response, next: NextFunction) => {
-  disputesController.listDisputes(req as AuthenticatedRequest, res).catch(next);
-});
- main
 
 /**
  * @swagger
