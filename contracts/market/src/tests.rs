@@ -1877,3 +1877,109 @@ mod claim_routing_tests {
         assert!(result.is_err(), "No bets must return NoBetsFound");
     }
 }
+
+// ============================================================
+// ISSUE #10: Bet timing lock validation — place_bet() boundary tests
+// ============================================================
+#[cfg(test)]
+mod bet_timing_lock_tests {
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger, LedgerInfo},
+        token::StellarAssetClient,
+        Address, Env,
+    };
+    use boxmeout_shared::types::{BetSide, FightDetails, MarketConfig};
+    use crate::Market;
+
+    const SCHEDULED_AT: u64 = 100_000;
+    const LOCK_BEFORE_SECS: u64 = 3_600;
+    // lock_threshold = SCHEDULED_AT - LOCK_BEFORE_SECS = 96_400
+
+    fn fight(env: &Env) -> FightDetails {
+        FightDetails {
+            match_id: soroban_sdk::String::from_slice(env, "FURY-USYK-2025"),
+            fighter_a: soroban_sdk::String::from_slice(env, "Fury"),
+            fighter_b: soroban_sdk::String::from_slice(env, "Usyk"),
+            weight_class: soroban_sdk::String::from_slice(env, "Heavyweight"),
+            scheduled_at: SCHEDULED_AT,
+            venue: soroban_sdk::String::from_slice(env, "Riyadh"),
+            title_fight: true,
+        }
+    }
+
+    fn config() -> MarketConfig {
+        MarketConfig {
+            min_bet: 1_000_000,
+            max_bet: 100_000_000_000,
+            fee_bps: 200,
+            lock_before_secs: LOCK_BEFORE_SECS,
+            resolution_window: 86_400,
+        }
+    }
+
+    /// Sets up a registered market contract and returns (client, contract_id, factory, token_id).
+    fn setup(env: &Env, timestamp: u64) -> (crate::MarketClient<'static>, Address, Address, Address) {
+        env.mock_all_auths();
+        env.ledger().set(LedgerInfo {
+            timestamp,
+            protocol_version: 20,
+            sequence_number: 100,
+            network_id: Default::default(),
+            base_reserve: 1,
+            min_temp_entry_ttl: 16,
+            min_persistent_entry_ttl: 4096,
+            max_entry_ttl: 6_311_520,
+        });
+
+        let factory = Address::generate(env);
+        let treasury = Address::generate(env);
+        let contract_id = env.register_contract(None, Market);
+        let client = crate::MarketClient::new(env, &contract_id);
+        client.initialize(&factory, &1u64, &fight(env), &config(), &treasury);
+
+        let token_id = env.register_stellar_asset_contract(factory.clone());
+        (client, contract_id, factory, token_id)
+    }
+
+    /// Bets placed strictly before the lock threshold must succeed.
+    #[test]
+    fn test_bet_before_threshold_succeeds() {
+        let lock_threshold = SCHEDULED_AT - LOCK_BEFORE_SECS; // 96_400
+        let env = Env::default();
+        let (client, contract_id, factory, token_id) = setup(&env, lock_threshold - 1);
+
+        let bettor = Address::generate(&env);
+        StellarAssetClient::new(&env, &token_id).mint(&bettor, &10_000_000i128);
+
+        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
+        assert!(result.is_ok(), "Bet before lock threshold must succeed");
+    }
+
+    /// Bets placed exactly at the lock threshold must return BettingClosed.
+    #[test]
+    fn test_bet_at_exact_threshold_returns_betting_closed() {
+        let lock_threshold = SCHEDULED_AT - LOCK_BEFORE_SECS; // 96_400
+        let env = Env::default();
+        let (client, _contract_id, factory, token_id) = setup(&env, lock_threshold);
+
+        let bettor = Address::generate(&env);
+        StellarAssetClient::new(&env, &token_id).mint(&bettor, &10_000_000i128);
+
+        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
+        assert!(result.is_err(), "Bet at exact lock threshold must return BettingClosed");
+    }
+
+    /// Bets placed after the lock threshold must return BettingClosed.
+    #[test]
+    fn test_bet_after_threshold_returns_betting_closed() {
+        let lock_threshold = SCHEDULED_AT - LOCK_BEFORE_SECS; // 96_400
+        let env = Env::default();
+        let (client, _contract_id, factory, token_id) = setup(&env, lock_threshold + 1);
+
+        let bettor = Address::generate(&env);
+        StellarAssetClient::new(&env, &token_id).mint(&bettor, &10_000_000i128);
+
+        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
+        assert!(result.is_err(), "Bet after lock threshold must return BettingClosed");
+    }
+}
