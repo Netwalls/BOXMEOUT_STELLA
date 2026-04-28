@@ -1,10 +1,10 @@
-/// ============================================================
-/// BOXMEOUT — Shared Types
-/// All contracts import from this crate.
-/// Contributors: DO NOT add logic here — types and structs only.
-/// ============================================================
+//! ============================================================
+//! BOXMEOUT — Shared Types
+//! All contracts import from this crate.
+//! Contributors: DO NOT add logic here — types and structs only.
+//! ============================================================
 
-use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, String};
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -109,6 +109,23 @@ pub struct BetRecord {
     pub claimed: bool,
 }
 
+/// Optional outcome — used in MarketState to avoid Option<EnumType> which
+/// is not supported by #[contracttype] in soroban-sdk 20.x.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum OptionalOutcome {
+    None,
+    Some(Outcome),
+}
+
+/// Optional oracle role — same workaround as OptionalOutcome.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum OptionalOracleRole {
+    None,
+    Some(OracleRole),
+}
+
 /// Full runtime state of a market — stored inside the Market contract.
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -118,7 +135,7 @@ pub struct MarketState {
     pub config: MarketConfig,
     pub status: MarketStatus,
     /// None until market is resolved
-    pub outcome: Option<Outcome>,
+    pub outcome: OptionalOutcome,
     /// Total stroops staked on FighterA
     pub pool_a: i128,
     /// Total stroops staked on FighterB
@@ -127,10 +144,10 @@ pub struct MarketState {
     pub pool_draw: i128,
     /// Sum of all three pools
     pub total_pool: i128,
+    /// 0 until resolved
+    pub resolved_at: u64,
     /// None until resolved
-    pub resolved_at: Option<u64>,
-    /// Which oracle role submitted the final resolution
-    pub oracle_used: Option<OracleRole>,
+    pub oracle_used: OptionalOracleRole,
 }
 
 /// Signed result report submitted by an oracle.

@@ -1,14 +1,13 @@
 #![no_std]
-/// ============================================================
-/// BOXMEOUT — Market Contract (Security-Audited Implementation)
+//! ============================================================
+//! BOXMEOUT — Market Contract (Security-Audited Implementation)
+//! All fund-moving functions follow Checks-Effects-Interactions.
+//! require_auth() is always the first call in fund-moving fns.
+//! Emergency pause guard precedes every fund-moving operation.
+//! ============================================================
 
 #[cfg(test)]
 mod tests;
-
-/// All fund-moving functions follow Checks-Effects-Interactions.
-/// require_auth() is always the first call in fund-moving fns.
-/// Emergency pause guard precedes every fund-moving operation.
-/// ============================================================
 
 use soroban_sdk::{
     contract, contractimpl, contractclient, token, Address, Env, Map, Vec,
@@ -18,7 +17,7 @@ use boxmeout_shared::{
     errors::ContractError,
     types::{
         BetRecord, BetSide, ClaimReceipt, Config, FightDetails, MarketConfig,
-        MarketState, MarketStatus, Outcome, OracleReport, OracleRole, UserPosition,
+        MarketState, MarketStatus, OptionalOracleRole, OptionalOutcome, Outcome, OracleReport, OracleRole,
     },
 };
 
@@ -142,13 +141,13 @@ impl Market {
             fight,
             config,
             status: MarketStatus::Open,
-            outcome: None,
+            outcome: OptionalOutcome::None,
             pool_a: 0,
             pool_b: 0,
             pool_draw: 0,
             total_pool: 0,
-            resolved_at: None,
-            oracle_used: None,
+            resolved_at: 0,
+            oracle_used: OptionalOracleRole::None,
         };
         env.storage().persistent().set(&STATE, &state);
         env.storage().persistent().set(&FACTORY, &factory);
@@ -384,10 +383,10 @@ impl Market {
 
         // Resolve if we have 2 matching reports
         if matching_count >= 2 {
-            state.outcome = Some(report.outcome.clone());
+            state.outcome = OptionalOutcome::Some(report.outcome.clone());
             state.status = MarketStatus::Resolved;
-            state.resolved_at = Some(env.ledger().timestamp());
-            state.oracle_used = Some(OracleRole::Primary);
+            state.resolved_at = env.ledger().timestamp();
+            state.oracle_used = OptionalOracleRole::Some(OracleRole::Primary);
             Self::save_state(&env, &state);
             
             // Clear pending reports
@@ -435,7 +434,10 @@ impl Market {
             return Err(ContractError::InvalidMarketStatus);
         }
 
-        let winning_outcome = state.outcome.clone().ok_or(ContractError::InvalidMarketStatus)?;
+        let winning_outcome = match state.outcome.clone() {
+            OptionalOutcome::Some(o) => o,
+            OptionalOutcome::None => return Err(ContractError::InvalidMarketStatus),
+        };
 
         let winning_side = match &winning_outcome {
             Outcome::FighterA  => BetSide::FighterA,
@@ -709,9 +711,9 @@ impl Market {
             return Err(ContractError::InvalidMarketStatus);
         }
 
-        state.outcome = Some(final_outcome.clone());
+        state.outcome = OptionalOutcome::Some(final_outcome.clone());
         state.status = MarketStatus::Resolved;
-        state.oracle_used = Some(OracleRole::Admin);
+        state.oracle_used = OptionalOracleRole::Some(OracleRole::Admin);
         Self::save_state(&env, &state);
 
         boxmeout_shared::emit_dispute_resolved(&env, state.market_id, final_outcome);
@@ -816,7 +818,7 @@ impl Market {
         env.storage().persistent().set(&CONFIG, &config);
         boxmeout_shared::emit_config_updated(
             &env,
-            soroban_sdk::String::from_slice(&env, "dispute_window_secs"),
+            soroban_sdk::String::from_str(&env, "dispute_window_secs"),
             window_secs as i128,
         );
         Ok(())
@@ -843,7 +845,7 @@ impl Market {
         env.storage().persistent().set(&CONFIG, &config);
         boxmeout_shared::emit_config_updated(
             &env,
-            soroban_sdk::String::from_slice(&env, "min_liquidity"),
+            soroban_sdk::String::from_str(&env, "min_liquidity"),
             min_liquidity,
         );
         Ok(())

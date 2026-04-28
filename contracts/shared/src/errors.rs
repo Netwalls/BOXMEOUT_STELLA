@@ -1,8 +1,8 @@
-/// ============================================================
-/// BOXMEOUT — Contract Error Types
-/// Every contract function returns Result<T, ContractError>.
-/// No unwrap() allowed in contract code.
-/// ============================================================
+//! ============================================================
+//! BOXMEOUT — Contract Error Types
+//! Every contract function returns Result<T, ContractError>.
+//! No unwrap() allowed in contract code.
+//! ============================================================
 
 use soroban_sdk::contracterror;
 
