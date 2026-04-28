@@ -1,7 +1,7 @@
 #![no_std]
-/// ============================================================
-/// BOXMEOUT — MarketFactory Contract (Security-Audited)
-/// ============================================================
+//! ============================================================
+//! BOXMEOUT — MarketFactory Contract (Security-Audited)
+//! ============================================================
 
 use soroban_sdk::{contract, contractimpl, contractclient, Address, Env, Vec, Map, BytesN};
 
@@ -170,7 +170,7 @@ impl MarketFactory {
             &fight.clone(),
             &config,
             &treasury,
-        )?;
+        );
 
         let mut market_map: Map<u64, Address> =
             env.storage().persistent().get(&MARKET_MAP).unwrap_or_else(|| Map::new(&env));
@@ -204,9 +204,9 @@ impl MarketFactory {
         let mut fetched = 0u32;
         while i < count && fetched < cap {
             if let Some(addr) = map.get(i) {
-                if let Ok(state) = MarketClient::new(&env, &addr).get_state() {
-                    result.push_back((i, state.status));
-                    fetched += 1;
+                if let Ok(Ok(state)) = MarketClient::new(&env, &addr).try_get_state() {
+                        result.push_back((i, state.status));
+                        fetched += 1;
                 }
             }
             i += 1;

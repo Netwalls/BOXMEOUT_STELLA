@@ -1,7 +1,7 @@
-/// ============================================================
-/// BOXMEOUT — Shared Types and Errors
-/// All contracts import from this crate.
-/// ============================================================
+//! ============================================================
+//! BOXMEOUT — Shared Types and Errors
+//! All contracts import from this crate.
+//! ============================================================
 
 pub mod amm;
 pub mod errors;

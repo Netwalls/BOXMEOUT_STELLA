@@ -1,9 +1,9 @@
 #![no_std]
-/// ============================================================
-/// BOXMEOUT — Treasury Contract (Security-Audited)
-/// All fund-moving functions follow Checks-Effects-Interactions.
-/// require_auth() is always the first call.
-/// ============================================================
+//! ============================================================
+//! BOXMEOUT — Treasury Contract (Security-Audited)
+//! All fund-moving functions follow Checks-Effects-Interactions.
+//! require_auth() is always the first call.
+//! ============================================================
 
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Map, Vec};
 
@@ -403,6 +403,69 @@ mod tests {
 
         let result = client.try_emergency_drain(&non_admin, &token);
         assert!(result.is_err());
+    }
+}
+
+// ============================================================
+// ISSUE #23: deposit_fees() tests
+// ============================================================
+#[cfg(test)]
+mod deposit_fees_tests {
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        token::StellarAssetClient,
+        Address, Env, Symbol,
+    };
+    use super::{Treasury, TreasuryClient};
+
+    fn setup() -> (Env, TreasuryClient<'static>, Address, Address, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, Treasury);
+        let client = TreasuryClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        let market = Address::generate(&env);
+        client.initialize(&admin, &1_000_000_i128);
+        let token = env.register_stellar_asset_contract(admin.clone());
+        StellarAssetClient::new(&env, &token).mint(&market, &10_000_000_i128);
+        (env, client, admin, market, token)
+    }
+
+    #[test]
+    fn non_approved_caller_returns_market_not_approved() {
+        let (_env, client, _admin, market, token) = setup();
+        // market is NOT approved — must fail
+        let result = client.try_deposit_fees(&market, &token, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn balance_accumulates_across_multiple_deposits() {
+        let (_env, client, admin, market, token) = setup();
+        client.approve_market(&admin, &market);
+
+        client.deposit_fees(&market, &token, &300_000_i128);
+        client.deposit_fees(&market, &token, &700_000_i128);
+
+        assert_eq!(client.get_accumulated_fees(&token), 1_000_000_i128);
+    }
+
+    #[test]
+    fn fee_deposited_event_emitted_with_correct_payload() {
+        let (env, client, admin, market, token) = setup();
+        client.approve_market(&admin, &market);
+        client.deposit_fees(&market, &token, &500_000_i128);
+
+        let events = env.events().all();
+        let last = events.last().unwrap();
+        let topic_sym: Symbol =
+            soroban_sdk::TryFromVal::try_from_val(&env, &last.1.get(0).unwrap()).unwrap();
+        assert_eq!(topic_sym, Symbol::new(&env, "fee_deposited"));
+        let (ev_market, ev_token, ev_amount): (Address, Address, i128) =
+            soroban_sdk::TryFromVal::try_from_val(&env, &last.2).unwrap();
+        assert_eq!(ev_market, market);
+        assert_eq!(ev_token, token);
+        assert_eq!(ev_amount, 500_000_i128);
     }
 }
 
