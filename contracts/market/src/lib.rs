@@ -258,16 +258,23 @@ impl Market {
     /// Locks the market when the fight is about to start.
     ///
     /// # Errors
-    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
-    /// - `InvalidMarketStatus`: Market is not open
-    /// - `BettingClosed`: Betting window has not closed yet
+    /// - `Unauthorized`: Caller is not a whitelisted oracle or admin
+    /// - `InvalidMarketStatus`: Market is not open or already locked
+    /// - `BettingClosed`: Lock threshold has not been reached yet
     pub fn lock_market(env: Env, caller: Address) -> Result<(), ContractError> {
         // CHECKS
         caller.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &caller)? {
-            return Err(ContractError::OracleNotWhitelisted);
+        // Caller must be a whitelisted oracle OR the factory admin
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
+        let is_admin = caller == factory;
+        let is_oracle = Self::is_oracle_whitelisted(&env, &caller)?;
+        if !is_admin && !is_oracle {
+            return Err(ContractError::Unauthorized);
         }
 
         let mut state = Self::load_state(&env)?;
@@ -331,6 +338,7 @@ impl Market {
         // Verify Ed25519 signature over concat(match_id_bytes, outcome_byte, reported_at_be)
         {
             use soroban_sdk::Bytes;
+            use soroban_sdk::xdr::ToXdr;
             let outcome_byte: u8 = match report.outcome {
                 Outcome::FighterA  => 0,
                 Outcome::FighterB  => 1,
@@ -338,7 +346,8 @@ impl Market {
                 Outcome::NoContest => 3,
             };
             let mut msg = Bytes::new(&env);
-            msg.append(&report.match_id.to_bytes());
+            // Encode match_id as its XDR bytes for signing
+            msg.append(&report.match_id.clone().to_xdr(&env));
             msg.push_back(outcome_byte);
             for b in report.reported_at.to_be_bytes().iter() {
                 msg.push_back(*b);
@@ -453,16 +462,26 @@ impl Market {
             return Err(ContractError::AlreadyClaimed);
         }
 
-        // Parimutuel payout formula (integer arithmetic, always floors)
+        // Parimutuel payout formula (integer arithmetic with checked operations, always floors)
         let winning_pool = match &winning_side {
             BetSide::FighterA => state.pool_a,
             BetSide::FighterB => state.pool_b,
             BetSide::Draw     => state.pool_draw,
         };
-        let fee = state.total_pool * (state.config.fee_bps as i128) / 10_000;
-        let net_pool = state.total_pool - fee;
+        
+        // Use checked arithmetic to prevent overflow
+        let fee = state.total_pool
+            .checked_mul(state.config.fee_bps as i128)
+            .and_then(|v| v.checked_div(10_000))
+            .ok_or(ContractError::Unauthorized)?;
+        let net_pool = state.total_pool
+            .checked_sub(fee)
+            .ok_or(ContractError::Unauthorized)?;
         let payout = if winning_pool > 0 {
-            bettor_stake * net_pool / winning_pool
+            bettor_stake
+                .checked_mul(net_pool)
+                .and_then(|v| v.checked_div(winning_pool))
+                .ok_or(ContractError::Unauthorized)?
         } else {
             0
         };
@@ -591,8 +610,8 @@ impl Market {
     /// Cancels the market, making all bets eligible for refund.
     ///
     /// # Errors
-    /// - `OracleNotWhitelisted`: Caller is not a whitelisted oracle
-    /// - `InvalidMarketStatus`: Market is not open or locked
+    /// - `Unauthorized`: Caller is not a whitelisted oracle or admin
+    /// - `InvalidMarketStatus`: Market is not Open or Locked
     pub fn cancel_market(
         env: Env,
         caller: Address,
@@ -601,7 +620,14 @@ impl Market {
         caller.require_auth();
         Self::require_not_paused(&env)?;
 
-        if !Self::is_oracle_whitelisted(&env, &caller)? {
+        // Caller must be a whitelisted oracle OR the factory admin
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
+        let is_admin = caller == factory;
+        let is_oracle = Self::is_oracle_whitelisted(&env, &caller)?;
+        if !is_admin && !is_oracle {
             return Err(ContractError::Unauthorized);
         }
 
