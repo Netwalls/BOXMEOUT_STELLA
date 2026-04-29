@@ -44,7 +44,7 @@ out/
 # ─── Rust / Cargo (contracts) ────────────────────────────────
 target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock is intentionally tracked for the contracts workspace
 
 # ─── Soroban / Stellar tooling ───────────────────────────────
 .soroban/
