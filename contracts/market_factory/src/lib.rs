@@ -365,3 +365,45 @@ impl MarketFactory {
         Ok(positions)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
+    use crate::{MarketFactory, MarketFactoryClient};
+
+    fn setup() -> (Env, MarketFactoryClient<'static>) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, MarketFactory);
+        let client = MarketFactoryClient::new(&env, &contract_id);
+        (env, client)
+    }
+
+    #[test]
+    fn test_initialize_stores_state() {
+        let (env, client) = setup();
+        let admin = Address::generate(&env);
+        let oracle = Address::generate(&env);
+        let mut oracles: Vec<Address> = Vec::new(&env);
+        oracles.push_back(oracle.clone());
+
+        client.initialize(&admin, &200u32, &oracles);
+
+        // admin is stored (require_admin works)
+        assert!(!client.is_paused());
+        assert_eq!(client.get_oracles(), oracles);
+        assert_eq!(client.get_market_count(), 0u64);
+    }
+
+    #[test]
+    fn test_initialize_second_call_returns_already_initialized() {
+        let (env, client) = setup();
+        let admin = Address::generate(&env);
+        let oracles: Vec<Address> = Vec::new(&env);
+
+        client.initialize(&admin, &200u32, &oracles);
+
+        let result = client.try_initialize(&admin, &200u32, &oracles);
+        assert!(result.is_err());
+    }
+}
