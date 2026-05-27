@@ -37,6 +37,7 @@ async function apiFetch<T>(path: string): Promise<T> {
 export interface MarketFilters {
   status?: string;
   weight_class?: string;
+  search?: string;
 }
 
 export interface PaginationParams {
@@ -63,6 +64,7 @@ export async function fetchMarkets(
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.weight_class) params.set('weight_class', filters.weight_class);
+  if (filters?.search) params.set('search', filters.search);
   if (pagination?.page) params.set('page', pagination.page.toString());
   if (pagination?.limit) params.set('limit', pagination.limit.toString());
   const qs = params.toString();
