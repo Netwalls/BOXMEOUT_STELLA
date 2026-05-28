@@ -8,6 +8,7 @@ import { BetConfirmModal } from './BetConfirmModal';
 import { TxStatusToast } from '../ui/TxStatusToast';
 import { ConnectPrompt } from '../ui/ConnectPrompt';
 import { useAppStore } from '../../store';
+import { useToast } from '../ui/ToastProvider';
 
 interface BetPanelProps {
   market: Market;
@@ -24,6 +25,7 @@ export function BetPanel({ market }: BetPanelProps): JSX.Element {
   const { side, setSide, amount, setAmount, estimatedPayout, isSubmitting, txStatus, submitBet, reset } = useBet(market);
   const setTxStatus = useAppStore((s) => s.setTxStatus);
   const [showModal, setShowModal] = useState(false);
+  const toast = useToast();
 
   const amountNum = parseFloat(amount);
   const isAmountValid = !isNaN(amountNum) && amountNum > 0;
@@ -109,6 +111,14 @@ export function BetPanel({ market }: BetPanelProps): JSX.Element {
         onConfirm={async () => {
           setShowModal(false);
           await submitBet();
+          if (txStatus.status === 'success' && txStatus.hash) {
+            toast.success(
+              `Bet placed! TX: ${txStatus.hash.slice(0, 8)}… — ` +
+              `View on Explorer`,
+            );
+          } else if (txStatus.status === 'error') {
+            toast.error(txStatus.error ?? 'Transaction failed');
+          }
         }}
       />
 

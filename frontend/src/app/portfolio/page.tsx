@@ -5,38 +5,27 @@
 // Shows the connected user's betting history and pending claims.
 // ============================================================
 
-'use client';
-
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useWallet } from '../../hooks/useWallet';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import { ConnectPrompt } from '../../components/ui/ConnectPrompt';
 import { BetHistoryTable } from '../../components/bet/BetHistoryTable';
-import { TxStatusToast } from '../../components/ui/TxStatusToast';
+import { useToast } from '../../components/ui/ToastProvider';
 
 export default function PortfolioPage(): JSX.Element {
   const { isConnected } = useWallet();
   const { portfolio, isLoading, claimTxStatus, claimWinnings, claimRefund } = usePortfolio();
-  const [dismissedError, setDismissedError] = useState(false);
+  const toast = useToast();
 
-  // Reset dismissedError when status changes from error
+  // Toast feedback for claim/refund transactions
   useEffect(() => {
-    if (dismissedError && claimTxStatus.status !== 'error') {
-      setDismissedError(false);
+    if (claimTxStatus.status === 'success') {
+      toast.success('Winnings claimed successfully!');
+    } else if (claimTxStatus.status === 'error') {
+      toast.error(claimTxStatus.error ?? 'Claim failed. Please try again.');
     }
-  }, [claimTxStatus.status, dismissedError]);
-
-  // Show toast unless it's an error and user dismissed it
-  const displayStatus = dismissedError && claimTxStatus.status === 'error' 
-    ? { hash: null, status: 'idle' as const, error: null }
-    : claimTxStatus;
-
-  const handleDismiss = () => {
-    if (claimTxStatus.status === 'error') {
-      setDismissedError(true);
-    }
-  };
+  }, [claimTxStatus.status]);
 
   if (!isConnected) {
     return (
@@ -104,8 +93,6 @@ export default function PortfolioPage(): JSX.Element {
         <h2 className="text-white font-semibold mb-3">Bet History</h2>
         <BetHistoryTable bets={portfolio!.past_bets} onClaim={claimWinnings} onRefund={claimRefund} />
       </section>
-
-      <TxStatusToast txStatus={displayStatus} onDismiss={handleDismiss} />
     </main>
   );
 }

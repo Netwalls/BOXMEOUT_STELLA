@@ -70,6 +70,12 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# ─── Jest snapshots & cache ───────────────────────────────────
+__snapshots__/
+*.snap
+.jest-cache/
+jest_cache/
+
 # ─── Docker ──────────────────────────────────────────────────
 .docker/
 

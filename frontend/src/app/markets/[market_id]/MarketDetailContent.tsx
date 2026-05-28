@@ -6,19 +6,12 @@ import { MarketOddsBar } from '../../../components/market/MarketOddsBar';
 import { MarketStatusBadge } from '../../../components/market/MarketStatusBadge';
 import { CountdownTimer } from '../../../components/ui/CountdownTimer';
 import { BetPanel } from '../../../components/bet/BetPanel';
+import { BetList } from '../../../components/bet/BetList';
 import { stellarExplorerUrl } from '../../../services/wallet';
 import { fetchBetsByMarket, NotFoundError } from '../../../services/api';
+import { useToast } from '../../../components/ui/ToastProvider';
+import { useAppStore } from '../../../store';
 import type { Bet } from '../../../types';
-
-const SIDE_LABEL: Record<string, string> = {
-  fighter_a: 'Fighter A',
-  fighter_b: 'Fighter B',
-  draw: 'Draw',
-};
-
-function truncate(addr: string) {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
 
 function fmtXlm(stroops: string) {
   return (parseInt(stroops, 10) / 1e7).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -26,14 +19,22 @@ function fmtXlm(stroops: string) {
 
 export default function MarketDetailContent({ market_id }: { market_id: string }): JSX.Element {
   const { market, isLoading, error } = useMarket(market_id);
-  const [recentBets, setRecentBets] = useState<Bet[]>([]);
+  const [bets, setBets] = useState<Bet[]>([]);
+  const walletAddress = useAppStore((s) => s.walletAddress);
+  const toast = useToast();
 
   useEffect(() => {
     if (!market) return;
+
     fetchBetsByMarket(market_id)
-      .then((bets) => setRecentBets(bets.slice(0, 20)))
+      .then(setBets)
       .catch(() => {/* non-critical */});
-  }, [market_id, market]);
+
+    // Info toast when market is locked
+    if (market.status === 'locked') {
+      toast.info('Market is now locked — no new bets accepted.');
+    }
+  }, [market_id, market?.status]);
 
   if (isLoading) {
     return <main className="max-w-4xl mx-auto px-4 py-8 text-gray-400">Loading…</main>;
@@ -56,9 +57,6 @@ export default function MarketDetailContent({ market_id }: { market_id: string }
     );
   }
 
-  const sideLabel = (side: string) =>
-    side === 'fighter_a' ? market.fighter_a : side === 'fighter_b' ? market.fighter_b : 'Draw';
-
   return (
     <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       {/* Fight header */}
@@ -70,6 +68,7 @@ export default function MarketDetailContent({ market_id }: { market_id: string }
           )}
           <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded-full">{market.weight_class}</span>
         </div>
+        {/* #798: fighter names stack on mobile via flex-col sm:flex-row */}
         <h1 className="text-xl font-black text-white break-words">
           {market.fighter_a} <span className="text-gray-500">vs</span> {market.fighter_b}
         </h1>
@@ -77,7 +76,7 @@ export default function MarketDetailContent({ market_id }: { market_id: string }
         <CountdownTimer scheduled_at={market.scheduled_at} label="Starts in" />
       </div>
 
-      {/* Odds bar + pool sizes */}
+      {/* #798: OddsDisplay — wraps on narrow screens */}
       <div className="space-y-2">
         <MarketOddsBar
           pool_a={market.pool_a}
@@ -93,53 +92,36 @@ export default function MarketDetailContent({ market_id }: { market_id: string }
         </div>
       </div>
 
-      {/* Two-column on desktop */}
+      {/* #798: FighterCards stack vertically on mobile, side-by-side on lg */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-gray-900 rounded-xl p-4 text-center">
+          <p className="text-xs text-gray-500 mb-1">Fighter A</p>
+          <p className="text-white font-bold text-lg break-words">{market.fighter_a}</p>
+          <p className="text-amber-400 text-sm mt-1">{(market.odds_a / 100).toFixed(1)}%</p>
+        </div>
+        <div className="bg-gray-900 rounded-xl p-4 text-center">
+          <p className="text-xs text-gray-500 mb-1">Fighter B</p>
+          <p className="text-white font-bold text-lg break-words">{market.fighter_b}</p>
+          <p className="text-amber-400 text-sm mt-1">{(market.odds_b / 100).toFixed(1)}%</p>
+        </div>
+      </div>
+
+      {/* #798: Two-column on desktop, single column on mobile */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* BetPanel — right col on desktop */}
-        <div className="lg:col-start-3 lg:row-start-1">
+        {/* #798: BetForm full-width on mobile, right col on desktop */}
+        <div className="lg:col-start-3 lg:row-start-1 w-full">
           <BetPanel market={market} />
         </div>
 
-        {/* Recent bets — left 2 cols on desktop */}
+        {/* #796: BetList — left 2 cols on desktop */}
         <div className="lg:col-span-2 lg:row-start-1 space-y-3">
           <h2 className="text-white font-semibold">Recent Bets</h2>
-          {recentBets.length === 0 ? (
-            <p className="text-gray-500 text-sm">No bets yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm text-left text-gray-300">
-                <thead>
-                  <tr className="text-xs text-gray-500 border-b border-gray-800">
-                    <th className="pb-2 pr-4">Bettor</th>
-                    <th className="pb-2 pr-4">Side</th>
-                    <th className="pb-2 pr-4">Amount</th>
-                    <th className="pb-2">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentBets.map((bet) => (
-                    <tr key={bet.tx_hash} className="border-b border-gray-800/50">
-                      <td className="py-2 pr-4 font-mono text-xs">
-                        <a
-                          href={stellarExplorerUrl('tx', bet.tx_hash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-amber-400 hover:underline"
-                        >
-                          {truncate(bet.tx_hash)}
-                        </a>
-                      </td>
-                      <td className="py-2 pr-4 whitespace-nowrap">{sideLabel(bet.side)}</td>
-                      <td className="py-2 pr-4 whitespace-nowrap">{bet.amount_xlm} XLM</td>
-                      <td className="py-2 text-gray-500 whitespace-nowrap text-xs">
-                        {new Date(bet.placed_at).toLocaleTimeString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <BetList
+            bets={bets}
+            fighter_a={market.fighter_a}
+            fighter_b={market.fighter_b}
+            walletAddress={walletAddress}
+          />
         </div>
       </div>
 
@@ -152,6 +134,7 @@ export default function MarketDetailContent({ market_id }: { market_id: string }
           {market.oracle_address && (
             <p className="text-gray-400">
               Oracle:{' '}
+              {/* #797: Stellar Explorer link for oracle account */}
               <a
                 href={stellarExplorerUrl('account', market.oracle_address)}
                 target="_blank"
@@ -165,6 +148,7 @@ export default function MarketDetailContent({ market_id }: { market_id: string }
           {market.resolution_tx_hash && (
             <p className="text-gray-400">
               Resolution TX:{' '}
+              {/* #797: Stellar Explorer link for resolution tx */}
               <a
                 href={stellarExplorerUrl('tx', market.resolution_tx_hash)}
                 target="_blank"
