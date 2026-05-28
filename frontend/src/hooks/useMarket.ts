@@ -63,5 +63,22 @@ export function useMarket(market_id: string): UseMarketResult {
     };
   }, [market_id]);
 
+  // Refresh when a claim succeeds for this market
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.marketId === market_id) {
+        setMarket(null);
+        setIsLoading(true);
+        fetchMarketById(market_id)
+          .then(setMarket)
+          .catch(setError)
+          .finally(() => setIsLoading(false));
+      }
+    };
+    window.addEventListener('boxmeout:claim_success', handler);
+    return () => window.removeEventListener('boxmeout:claim_success', handler);
+  }, [market_id]);
+
   return { market, isLoading, error };
 }

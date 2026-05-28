@@ -69,7 +69,7 @@ export default function CreateMarketPage() {
       return;
     }
 
-    setTxStatus({ hash: null, status: 'pending', error: null });
+    setTxStatus({ hash: null, status: 'signing', error: null });
 
     try {
       const hash = await createMarket({
@@ -169,10 +169,10 @@ export default function CreateMarketPage() {
         </div>
         <button
           type="submit"
-          disabled={txStatus.status === 'pending'}
+          disabled={['signing','broadcasting','confirming'].includes(txStatus.status)}
           className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded font-semibold"
         >
-          {txStatus.status === 'pending' ? 'Creating...' : 'Create Market'}
+          {['signing','broadcasting','confirming'].includes(txStatus.status) ? 'Creating...' : 'Create Market'}
         </button>
       </form>
       <TxStatusToast txStatus={txStatus} onDismiss={() => setTxStatus({ hash: null, status: 'idle', error: null })} />

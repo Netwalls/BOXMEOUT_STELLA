@@ -21,7 +21,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }): JSX.Element {
   return (
     <html lang="en" className={inter.className}>
-      <body className="bg-gray-950 text-white min-h-screen">
+      {/* Inline script runs before paint to set dark/light class — prevents flash */}
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem('boxmeout_theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');})();`,
+          }}
+        />
+      </head>
+      <body className="bg-gray-950 dark:bg-gray-950 text-white dark:text-white min-h-screen">
         <Header />
         {children}
       </body>

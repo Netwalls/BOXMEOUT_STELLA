@@ -53,7 +53,7 @@ export default function ProposalDetail({ params }: { params: { id: string } }) {
 
   const handleVote = async (vote: VoteType) => {
     if (!connectedAddress) return;
-    setTxStatus({ hash: null, status: 'pending', error: null });
+    setTxStatus({ hash: null, status: 'signing', error: null });
     try {
       const hash = await voteProposal(proposal.id, vote);
       setTxStatus({ hash, status: 'success', error: null });
@@ -75,7 +75,7 @@ export default function ProposalDetail({ params }: { params: { id: string } }) {
   };
 
   const handleExecute = async () => {
-    setTxStatus({ hash: null, status: 'pending', error: null });
+    setTxStatus({ hash: null, status: 'signing', error: null });
     try {
       const hash = await executeProposal(proposal.id);
       setTxStatus({ hash, status: 'success', error: null });
@@ -121,7 +121,7 @@ export default function ProposalDetail({ params }: { params: { id: string } }) {
             {proposal.status === 'Passed' && (
               <button 
                 onClick={handleExecute}
-                disabled={txStatus.status === 'pending'}
+                disabled={['signing','broadcasting','confirming'].includes(txStatus.status)}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded font-medium transition-colors"
               >
                 Execute Proposal
@@ -198,21 +198,21 @@ export default function ProposalDetail({ params }: { params: { id: string } }) {
                   <div className="flex flex-col gap-3">
                     <button
                       onClick={() => handleVote('for')}
-                      disabled={proposal.status !== 'Active' || hasVoted || txStatus.status === 'pending'}
+                      disabled={proposal.status !== 'Active' || hasVoted || ['signing','broadcasting','confirming'].includes(txStatus.status)}
                       className="w-full py-2.5 bg-green-500/10 text-green-400 border border-green-500/50 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed rounded font-medium transition-colors"
                     >
                       Vote For
                     </button>
                     <button
                       onClick={() => handleVote('against')}
-                      disabled={proposal.status !== 'Active' || hasVoted || txStatus.status === 'pending'}
+                      disabled={proposal.status !== 'Active' || hasVoted || ['signing','broadcasting','confirming'].includes(txStatus.status)}
                       className="w-full py-2.5 bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed rounded font-medium transition-colors"
                     >
                       Vote Against
                     </button>
                     <button
                       onClick={() => handleVote('abstain')}
-                      disabled={proposal.status !== 'Active' || hasVoted || txStatus.status === 'pending'}
+                      disabled={proposal.status !== 'Active' || hasVoted || ['signing','broadcasting','confirming'].includes(txStatus.status)}
                       className="w-full py-2.5 bg-gray-500/10 text-gray-400 border border-gray-500/50 hover:bg-gray-500/20 disabled:opacity-50 disabled:cursor-not-allowed rounded font-medium transition-colors"
                     >
                       Abstain

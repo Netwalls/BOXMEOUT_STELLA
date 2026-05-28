@@ -54,7 +54,7 @@ export function useBet(market: Market): UseBetResult {
     if (!xlm || xlm <= 0) return;
     setError(null);
     setIsSubmitting(true);
-    setTxStatus({ hash: null, status: 'pending', error: null });
+    setTxStatus({ hash: null, status: 'signing', error: null });
     try {
       const hash = await submitBet(market.market_id, side, xlm);
       setTxStatus({ hash, status: 'success', error: null });

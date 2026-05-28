@@ -74,7 +74,7 @@ export default function PayerDashboard() {
   const handleSettleConfirm = async () => {
     if (!selectedInvoice) return;
     
-    setTxStatus({ hash: null, status: 'pending', error: null });
+    setTxStatus({ hash: null, status: 'signing', error: null });
     
     try {
       const hash = await markPaid(selectedInvoice.id);
@@ -216,17 +216,17 @@ export default function PayerDashboard() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setSelectedInvoice(null)}
-                  disabled={txStatus.status === 'pending'}
+                  disabled={['signing','broadcasting','confirming'].includes(txStatus.status)}
                   className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSettleConfirm}
-                  disabled={txStatus.status === 'pending'}
+                  disabled={['signing','broadcasting','confirming'].includes(txStatus.status)}
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded font-medium transition-colors flex justify-center items-center gap-2"
                 >
-                  {txStatus.status === 'pending' ? (
+                  {['signing','broadcasting','confirming'].includes(txStatus.status) ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Settling...

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { WalletButton } from './WalletButton';
+import { ThemeToggle } from './ThemeToggle';
 
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? 'testnet';
 const IS_MAINNET = NETWORK === 'mainnet';
@@ -41,7 +42,7 @@ export function Header(): JSX.Element {
           <button onClick={dismissBanner} className="ml-auto text-white/80 hover:text-white font-bold">✕</button>
         </div>
       )}
-      <header className="sticky top-0 z-40 bg-gray-950 border-b border-gray-800">
+      <header className="sticky top-0 z-40 bg-gray-950 dark:bg-gray-950 border-b border-gray-800 dark:border-gray-800">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-6">
           <Link href="/" className="font-black text-amber-500 text-xl tracking-tight">BOXMEOUT</Link>
 
@@ -58,6 +59,7 @@ export function Header(): JSX.Element {
               {IS_MAINNET ? 'MAINNET' : 'TESTNET'}
             </span>
 
+            <ThemeToggle />
             <WalletButton />
 
             {/* Mobile hamburger */}
