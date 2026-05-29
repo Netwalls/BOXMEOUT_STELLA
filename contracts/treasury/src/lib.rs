@@ -553,3 +553,136 @@ mod initialize_tests {
         assert_eq!(client.get_daily_withdrawal_amount(), 0);
     }
 }
+
+// ============================================================
+// ISSUE #709: Treasury unit tests
+// ============================================================
+#[cfg(test)]
+mod treasury_lifecycle_tests {
+    use soroban_sdk::{
+        testutils::Address as _,
+        token::StellarAssetClient,
+        Address, Env,
+    };
+    use super::{Treasury, TreasuryClient};
+
+    fn setup(env: &Env, limit: i128) -> (TreasuryClient<'static>, Address, Address, Address) {
+        env.mock_all_auths();
+        let id = env.register_contract(None, Treasury);
+        let client = TreasuryClient::new(env, &id);
+        let admin = Address::generate(env);
+        let market = Address::generate(env);
+        client.initialize(&admin, &limit);
+        let token = env.register_stellar_asset_contract(admin.clone());
+        (client, admin, market, token)
+    }
+
+    // ── Fee receipt from registered market ───────────────────────────────────
+
+    #[test]
+    fn test_fee_receipt_from_registered_market() {
+        let env = Env::default();
+        let (client, admin, market, token) = setup(&env, 1_000_000);
+        StellarAssetClient::new(&env, &token).mint(&market, &500_000i128);
+
+        client.approve_market(&admin, &market);
+        client.deposit_fees(&market, &token, &500_000i128);
+
+        assert_eq!(client.get_accumulated_fees(&token), 500_000);
+    }
+
+    // ── Rejection of fee from unregistered market ─────────────────────────────
+
+    #[test]
+    fn test_fee_rejected_from_unregistered_market() {
+        let env = Env::default();
+        let (client, _admin, market, token) = setup(&env, 1_000_000);
+        let result = client.try_deposit_fees(&market, &token, &100i128);
+        assert!(result.is_err());
+    }
+
+    // ── Withdrawal success ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_withdrawal_success() {
+        let env = Env::default();
+        let limit = 1_000_000i128;
+        let (client, admin, market, token) = setup(&env, limit);
+        StellarAssetClient::new(&env, &token).mint(&market, &limit);
+
+        client.approve_market(&admin, &market);
+        client.deposit_fees(&market, &token, &limit);
+
+        let dest = Address::generate(&env);
+        client.withdraw_fees(&admin, &token, &limit, &dest);
+
+        assert_eq!(client.get_accumulated_fees(&token), 0);
+        assert_eq!(soroban_sdk::token::Client::new(&env, &token).balance(&dest), limit);
+    }
+
+    // ── Insufficient balance error ────────────────────────────────────────────
+
+    #[test]
+    fn test_withdrawal_insufficient_balance() {
+        let env = Env::default();
+        let limit = 1_000_000i128;
+        let (client, admin, market, token) = setup(&env, limit);
+        StellarAssetClient::new(&env, &token).mint(&market, &100_000i128);
+
+        client.approve_market(&admin, &market);
+        client.deposit_fees(&market, &token, &100_000i128);
+
+        let dest = Address::generate(&env);
+        let result = client.try_withdraw_fees(&admin, &token, &limit, &dest);
+        assert!(result.is_err());
+    }
+
+    // ── Pause withdrawals by zeroing limit ────────────────────────────────────
+
+    #[test]
+    fn test_pause_withdrawals_by_zeroing_limit() {
+        let env = Env::default();
+        let limit = 1_000_000i128;
+        let (client, admin, market, token) = setup(&env, limit);
+        StellarAssetClient::new(&env, &token).mint(&market, &limit);
+
+        client.approve_market(&admin, &market);
+        client.deposit_fees(&market, &token, &limit);
+        client.update_withdrawal_limit(&admin, &0i128);
+
+        let dest = Address::generate(&env);
+        let result = client.try_withdraw_fees(&admin, &token, &1i128, &dest);
+        assert!(result.is_err());
+    }
+
+    // ── Unpause by restoring limit ────────────────────────────────────────────
+
+    #[test]
+    fn test_unpause_withdrawals_by_restoring_limit() {
+        let env = Env::default();
+        let limit = 1_000_000i128;
+        let (client, admin, market, token) = setup(&env, limit);
+        StellarAssetClient::new(&env, &token).mint(&market, &limit);
+
+        client.approve_market(&admin, &market);
+        client.deposit_fees(&market, &token, &limit);
+        client.update_withdrawal_limit(&admin, &0i128);
+        client.update_withdrawal_limit(&admin, &limit);
+
+        let dest = Address::generate(&env);
+        client.withdraw_fees(&admin, &token, &limit, &dest);
+        assert_eq!(client.get_accumulated_fees(&token), 0);
+    }
+
+    // ── Non-admin withdrawal rejected ────────────────────────────────────────
+
+    #[test]
+    fn test_non_admin_withdrawal_rejected() {
+        let env = Env::default();
+        let (client, _admin, _market, token) = setup(&env, 1_000_000);
+        let non_admin = Address::generate(&env);
+        let dest = Address::generate(&env);
+        let result = client.try_withdraw_fees(&non_admin, &token, &1i128, &dest);
+        assert!(result.is_err());
+    }
+}
