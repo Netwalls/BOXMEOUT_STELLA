@@ -17,6 +17,7 @@ const ORACLE_WHITELIST: &str = "ORACLE_WHITELIST";
 const PAUSED: &str          = "PAUSED";
 const DEFAULT_CONFIG: &str  = "DEFAULT_CONFIG";
 const MARKET_WASM_HASH: &str = "MARKET_WASM_HASH";
+const OPEN_MARKETS: &str    = "OPEN_MARKETS";
 
 #[contractclient(name = "MarketClient")]
 pub trait MarketInterface {
@@ -91,6 +92,7 @@ impl MarketFactory {
         // Initialize with zero hash; admin must call update_market_wasm to set it
         let zero_hash: BytesN<32> = BytesN::from_array(&env, &[0u8; 32]);
         env.storage().persistent().set(&MARKET_WASM_HASH, &zero_hash);
+        env.storage().persistent().set(&OPEN_MARKETS, &Vec::<u64>::new(&env));
         Ok(())
     }
 
@@ -122,6 +124,7 @@ impl MarketFactory {
         caller: Address,
         fight: FightDetails,
         config: MarketConfig,
+        fee_bps: Option<u32>,
     ) -> Result<u64, ContractError> {
         // CHECKS — auth and pause guard first
         caller.require_auth();
@@ -136,9 +139,25 @@ impl MarketFactory {
         if config.min_bet == 0 {
             return Err(ContractError::BetTooSmall);
         }
-        if config.fee_bps > 1000 {
-            return Err(ContractError::Unauthorized);
-        }
+
+        // Resolve effective fee: use override if provided (capped at 1000 bps), else config value
+        let effective_fee_bps = match fee_bps {
+            Some(f) => {
+                if f > 1000 {
+                    return Err(ContractError::Unauthorized);
+                }
+                f
+            }
+            None => {
+                if config.fee_bps > 1000 {
+                    return Err(ContractError::Unauthorized);
+                }
+                config.fee_bps
+            }
+        };
+
+        let mut effective_config = config;
+        effective_config.fee_bps = effective_fee_bps;
 
         // EFFECTS — read current count (this becomes the new market_id)
         let market_id: u64 = env.storage().persistent().get(&MARKET_COUNT).unwrap_or(0);
@@ -168,7 +187,7 @@ impl MarketFactory {
             &env.current_contract_address(),
             &market_id,
             &fight.clone(),
-            &config,
+            &effective_config,
             &treasury,
         );
 
@@ -177,6 +196,12 @@ impl MarketFactory {
         market_map.set(market_id, market_address.clone());
         env.storage().persistent().set(&MARKET_MAP, &market_map);
         env.storage().persistent().set(&MARKET_COUNT, &new_count);
+
+        // Track as open market
+        let mut open_markets: Vec<u64> =
+            env.storage().persistent().get(&OPEN_MARKETS).unwrap_or_else(|| Vec::new(&env));
+        open_markets.push_back(market_id);
+        env.storage().persistent().set(&OPEN_MARKETS, &open_markets);
 
         boxmeout_shared::emit_market_created(&env, market_id, market_address, fight.match_id);
         Ok(market_id)
@@ -217,6 +242,50 @@ impl MarketFactory {
     /// Returns the total number of markets created.
     pub fn get_market_count(env: Env) -> u64 {
         env.storage().persistent().get(&MARKET_COUNT).unwrap_or(0)
+    }
+
+    /// Returns the IDs of all currently Open markets.
+    pub fn get_open_market_ids(env: Env) -> Vec<u64> {
+        env.storage().persistent().get(&OPEN_MARKETS).unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Removes a market from the open list when it is no longer Open.
+    /// Callable by admin or a whitelisted oracle after locking/resolving/cancelling.
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not admin or whitelisted oracle
+    /// - `MarketNotFound`: Market ID does not exist
+    /// - `InvalidMarketStatus`: Market is still Open
+    pub fn remove_open_market(env: Env, caller: Address, market_id: u64) -> Result<(), ContractError> {
+        caller.require_auth();
+
+        let admin: Address = env.storage().persistent().get(&ADMIN).ok_or(ContractError::Unauthorized)?;
+        let oracles: Vec<Address> = env.storage().persistent().get(&ORACLE_WHITELIST).unwrap_or_else(|| Vec::new(&env));
+        if caller != admin && !oracles.contains(caller.clone()) {
+            return Err(ContractError::Unauthorized);
+        }
+
+        // Verify market is no longer Open
+        let market_map: Map<u64, Address> =
+            env.storage().persistent().get(&MARKET_MAP).unwrap_or_else(|| Map::new(&env));
+        let market_address = market_map.get(market_id).ok_or(ContractError::MarketNotFound)?;
+        let state = MarketClient::new(&env, &market_address)
+            .try_get_state()
+            .map_err(|_| ContractError::MarketNotFound)?
+            .map_err(|_| ContractError::MarketNotFound)?;
+        if state.status == MarketStatus::Open {
+            return Err(ContractError::InvalidMarketStatus);
+        }
+
+        let open: Vec<u64> = env.storage().persistent().get(&OPEN_MARKETS).unwrap_or_else(|| Vec::new(&env));
+        let mut updated: Vec<u64> = Vec::new(&env);
+        for id in open.iter() {
+            if id != market_id {
+                updated.push_back(id);
+            }
+        }
+        env.storage().persistent().set(&OPEN_MARKETS, &updated);
+        Ok(())
     }
 
     /// Adds an oracle to the whitelist.

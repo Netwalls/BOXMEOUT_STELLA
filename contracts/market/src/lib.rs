@@ -10,7 +10,7 @@
 mod tests;
 
 use soroban_sdk::{
-    contract, contractimpl, contractclient, token, Address, Env, Map, Vec,
+    contract, contractimpl, contractclient, token, Address, BytesN, Env, Map, Vec,
 };
 
 use boxmeout_shared::{
@@ -734,6 +734,15 @@ impl Market {
         Self::load_bets(&env, &bettor)
     }
 
+    /// Returns the bettor's first unclaimed bet position, or None if no bet exists.
+    pub fn get_bet(env: Env, bettor: Address) -> Option<BetRecord> {
+        let bets = Self::load_bets(&env, &bettor);
+        if bets.is_empty() {
+            return None;
+        }
+        Some(bets.get(0).unwrap())
+    }
+
     /// Returns the current odds for each outcome (in basis points).
     pub fn get_current_odds(env: Env) -> (u32, u32, u32) {
         let state = match Self::load_state(&env) {
@@ -892,6 +901,24 @@ impl Market {
             return Err(ContractError::Unauthorized);
         }
         env.storage().instance().set(&PAUSED, &false);
+        Ok(())
+    }
+
+    /// Upgrades the contract WASM. Only callable by the factory (admin).
+    ///
+    /// # Errors
+    /// - `Unauthorized`: Caller is not the factory admin
+    pub fn upgrade(env: Env, admin: Address, new_wasm_hash: BytesN<32>) -> Result<(), ContractError> {
+        admin.require_auth();
+        let factory: Address = env
+            .storage().persistent()
+            .get(&FACTORY)
+            .ok_or(ContractError::NotFactory)?;
+        if admin != factory {
+            return Err(ContractError::Unauthorized);
+        }
+        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        boxmeout_shared::emit_contract_upgraded(&env, new_wasm_hash);
         Ok(())
     }
 }
