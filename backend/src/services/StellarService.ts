@@ -197,11 +197,58 @@ export async function readContractState<T>(
  * Returns an unsubscribe function that stops the stream.
  */
 export function subscribeToContractEvents(
-  _contract_address: string,
-  _onEvent: (event: unknown) => void,
+  contract_address: string,
+  onEvent: (event: unknown) => void,
 ): () => void {
-  // TODO: implement
-  throw new Error('Not implemented');
+  const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  let eventSource: EventSource | null = null;
+  let reconnectAttempts = 0;
+  const maxReconnectAttempts = 10;
+  let backoffMs = 1000;
+  let isUnsubscribed = false;
+
+  const connect = () => {
+    if (isUnsubscribed) return;
+
+    const url = `${horizonUrl}/contract_events?contract_id=${contract_address}`;
+    eventSource = new EventSource(url);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onEvent(data);
+        reconnectAttempts = 0;
+        backoffMs = 1000;
+      } catch (err) {
+        console.error('[StellarService] Failed to parse event:', err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      if (isUnsubscribed) return;
+      eventSource?.close();
+      eventSource = null;
+
+      if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        const delay = Math.min(backoffMs * Math.pow(2, reconnectAttempts - 1), 30000);
+        console.log(`[StellarService] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+        setTimeout(connect, delay);
+      } else {
+        console.error('[StellarService] Max reconnection attempts exceeded');
+      }
+    };
+  };
+
+  connect();
+
+  return () => {
+    isUnsubscribed = true;
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+  };
 }
 
 /**
@@ -262,6 +309,125 @@ export function parseScVal(scval: xdr.ScVal): unknown {
  * Used to set appropriate transaction fees to avoid rejection.
  */
 export async function getCurrentBaseFee(): Promise<number> {
-  // TODO: implement
-  throw new Error('Not implemented');
+  const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  const server = new Server(horizonUrl);
+  const feeStats = await server.feeStats();
+  return parseInt(feeStats.p70_accepted_fee, 10);
+}
+
+/**
+ * Fetches historical events from Horizon for a given ledger range.
+ * Paginates through all pages automatically.
+ * Returns events in chronological order.
+ * Handles rate limiting with automatic retry.
+ */
+export async function fetchHistoricalEvents(
+  fromLedger: number,
+  toLedger?: number,
+): Promise<Array<{
+  contract_address: string;
+  event_type: string;
+  topics: string[];
+  data: string;
+  ledger_sequence: number;
+  ledger_close_time: string;
+  tx_hash: string;
+}>> {
+  const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  const factoryContract = process.env.FACTORY_CONTRACT_ADDRESS || '';
+  const treasuryContract = process.env.TREASURY_CONTRACT_ADDRESS || '';
+
+  const server = new Server(horizonUrl);
+  const events: Array<{
+    contract_address: string;
+    event_type: string;
+    topics: string[];
+    data: string;
+    ledger_sequence: number;
+    ledger_close_time: string;
+    tx_hash: string;
+  }> = [];
+  let cursor = '';
+  const limit = 200;
+  let retries = 0;
+  const maxRetries = 3;
+
+  while (retries < maxRetries) {
+    try {
+      const params: Record<string, unknown> = {
+        limit,
+        order: 'asc',
+        cursor,
+      };
+
+      if (toLedger) {
+        params.to_ledger = toLedger;
+      }
+
+      const response = await (server as any).transactions()
+        .forLedger(fromLedger)
+        .call(params);
+
+      if (!response.records || response.records.length === 0) {
+        break;
+      }
+
+      for (const tx of response.records) {
+        if (!tx.operations_url) continue;
+
+        try {
+          const opsResponse = await fetch(tx.operations_url);
+          const opsData = await opsResponse.json() as { records?: Array<{ type?: string; [key: string]: unknown }> };
+
+          if (!opsData.records) continue;
+
+          for (const op of opsData.records) {
+            if (op.type !== 'invoke_host_function') continue;
+
+            const event = {
+              contract_address: (op as any).contract_id || '',
+              event_type: (op as any).function || 'unknown',
+              topics: [],
+              data: JSON.stringify(op),
+              ledger_sequence: tx.ledger_attr || 0,
+              ledger_close_time: tx.created_at || new Date().toISOString(),
+              tx_hash: tx.hash || '',
+            };
+
+            if ([factoryContract, treasuryContract].includes(event.contract_address)) {
+              events.push(event);
+            }
+          }
+        } catch (err) {
+          console.error('[StellarService] Error fetching operations:', err);
+        }
+      }
+
+      cursor = response.records[response.records.length - 1]?.paging_token || '';
+      if (!cursor) break;
+
+      retries = 0;
+    } catch (err) {
+      retries++;
+      if (retries >= maxRetries) {
+        console.error('[StellarService] Max retries exceeded fetching historical events:', err);
+        throw err;
+      }
+      const delay = Math.pow(2, retries) * 1000;
+      console.log(`[StellarService] Rate limited, retrying in ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  return events;
+}
+
+export interface RawStellarEvent {
+  contract_address: string;
+  event_type: string;
+  topics: string[];
+  data: string;
+  ledger_sequence: number;
+  ledger_close_time: string;
+  tx_hash: string;
 }

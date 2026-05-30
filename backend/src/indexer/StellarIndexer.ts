@@ -11,6 +11,7 @@
 
 import { pool } from '../config/db';
 import { rpc } from '@stellar/stellar-sdk';
+import { subscribeToContractEvents, fetchHistoricalEvents } from '../services/StellarService';
 
 // Raw event shape returned by Stellar RPC / Horizon
 export interface RawStellarEvent {
@@ -35,9 +36,50 @@ export async function startIndexer(): Promise<void> {
 
   console.log(`[Indexer] Starting from ledger ${lastProcessed}`);
 
+  // Load checkpoint and backfill if needed
+  const checkpoint = await loadCheckpoint();
+  if (checkpoint && checkpoint > lastProcessed) {
+    console.log(`[Indexer] Backfilling from ledger ${lastProcessed + 1} to ${checkpoint}`);
+    await backfillFromLedger(lastProcessed + 1, checkpoint);
+    lastProcessed = checkpoint;
+  }
+
+  // Subscribe to real-time events
+  console.log(`[Indexer] Starting real-time subscription from ledger ${lastProcessed}`);
+  const unsubscribe = subscribeToContractEvents(FACTORY_CONTRACT, async (event: unknown) => {
+    try {
+      const eventData = event as Record<string, unknown>;
+      const rawEvent: RawStellarEvent = {
+        contract_address: (eventData.contract_address as string) || FACTORY_CONTRACT,
+        event_type: (eventData.type as string) || 'unknown',
+        topics: (eventData.topics as string[]) || [],
+        data: JSON.stringify(event),
+        ledger_sequence: (eventData.ledger as number) || 0,
+        ledger_close_time: (eventData.ledger_close_time as string) || new Date().toISOString(),
+        tx_hash: (eventData.tx_hash as string) || '',
+      };
+      await processEvent(rawEvent);
+    } catch (err) {
+      console.error('[Indexer] Error processing real-time event:', err);
+    }
+  });
+
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('[Indexer] SIGTERM received, shutting down gracefully');
+    unsubscribe();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', () => {
+    console.log('[Indexer] SIGINT received, shutting down gracefully');
+    unsubscribe();
+    process.exit(0);
+  });
+
+  // Keep polling for new ledgers as fallback
   while (true) {
     try {
-      // Get the latest ledger sequence from Stellar RPC
       const latestLedgerResponse = await server.getLatestLedger();
       const latestLedger = latestLedgerResponse.sequence;
 
@@ -48,7 +90,6 @@ export async function startIndexer(): Promise<void> {
           lastProcessed = seq;
         }
       } else {
-        // No new ledgers, sleep
         await new Promise(resolve => setTimeout(resolve, pollInterval));
       }
     } catch (err) {
@@ -156,27 +197,52 @@ function parsePayload(data: string): Record<string, unknown> {
 
 export async function handleMarketCreated(event: RawStellarEvent): Promise<void> {
   const p = parsePayload(event.data);
-  await pool.query(
-    `INSERT INTO markets
-       (market_id, contract_address, match_id, fighter_a, fighter_b,
-        weight_class, title_fight, venue, scheduled_at, fee_bps, status, ledger_sequence)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-     ON CONFLICT (market_id) DO NOTHING`,
-    [
-      p.market_id,
-      event.contract_address,
-      p.match_id ?? '',
-      p.fighter_a ?? '',
-      p.fighter_b ?? '',
-      p.weight_class ?? '',
-      p.title_fight ?? false,
-      p.venue ?? '',
-      p.scheduled_at ?? new Date(),
-      p.fee_bps ?? 200,
-      'open',
-      event.ledger_sequence,
-    ],
-  );
+  
+  try {
+    // Parse event payload into MarketCreatedEvent type
+    const marketData = {
+      market_id: p.market_id,
+      contract_address: event.contract_address,
+      match_id: p.match_id ?? '',
+      fighter_a: p.fighter_a ?? '',
+      fighter_b: p.fighter_b ?? '',
+      weight_class: p.weight_class ?? '',
+      title_fight: p.title_fight ?? false,
+      venue: p.venue ?? '',
+      scheduled_at: p.scheduled_at ?? new Date(),
+      fee_bps: p.fee_bps ?? 200,
+      status: 'open',
+      ledger_sequence: event.ledger_sequence,
+    };
+
+    // Idempotent: does not throw if market already exists
+    await pool.query(
+      `INSERT INTO markets
+         (market_id, contract_address, match_id, fighter_a, fighter_b,
+          weight_class, title_fight, venue, scheduled_at, fee_bps, status, ledger_sequence)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (market_id) DO NOTHING`,
+      [
+        marketData.market_id,
+        marketData.contract_address,
+        marketData.match_id,
+        marketData.fighter_a,
+        marketData.fighter_b,
+        marketData.weight_class,
+        marketData.title_fight,
+        marketData.venue,
+        marketData.scheduled_at,
+        marketData.fee_bps,
+        marketData.status,
+        marketData.ledger_sequence,
+      ],
+    );
+
+    console.log(`[Indexer] Market created: ${marketData.market_id}`);
+  } catch (err) {
+    console.error(`[Indexer] Error handling MarketCreated event:`, err);
+    throw err;
+  }
 }
 
 export async function handleBetPlaced(event: RawStellarEvent): Promise<void> {
@@ -342,4 +408,34 @@ export async function backfillLedgerRange(
   }
 
   console.log(`[Backfill] Complete — ${processed} ledgers processed.`);
+}
+
+/**
+ * Loads the checkpoint from the database.
+ * Returns the last processed ledger, or null if no checkpoint exists.
+ */
+export async function loadCheckpoint(): Promise<number | null> {
+  const { rows } = await pool.query(
+    `SELECT last_processed_ledger FROM indexer_checkpoints ORDER BY id DESC LIMIT 1`,
+  );
+  return rows[0]?.last_processed_ledger ?? null;
+}
+
+/**
+ * Backfills from a given ledger to the latest ledger.
+ * Uses fetchHistoricalEvents to get all events and processes them.
+ */
+export async function backfillFromLedger(fromLedger: number, toLedger?: number): Promise<void> {
+  console.log(`[Indexer] Backfilling from ledger ${fromLedger}${toLedger ? ` to ${toLedger}` : ''}`);
+  
+  const events = await fetchHistoricalEvents(fromLedger, toLedger);
+  console.log(`[Indexer] Fetched ${events.length} historical events`);
+
+  for (const event of events) {
+    await processEvent(event);
+  }
+
+  if (toLedger) {
+    await saveCheckpoint(toLedger);
+  }
 }
