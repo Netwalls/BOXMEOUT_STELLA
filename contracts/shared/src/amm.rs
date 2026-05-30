@@ -1,7 +1,7 @@
-/// ============================================================
-/// BOXMEOUT — AMM Math Module
-/// Automated Market Maker calculations for pool operations.
-/// ============================================================
+//! ============================================================
+//! BOXMEOUT — AMM Math Module
+//! Automated Market Maker calculations for pool operations.
+//! ============================================================
 
 /// Computes the maximum collateral a buyer can spend (or shares a seller can sell)
 /// without draining the target reserve to zero.

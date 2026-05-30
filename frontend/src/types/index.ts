@@ -78,9 +78,13 @@ export interface MarketStats {
 
 export interface TxStatus {
   hash: string | null;
-  status: 'idle' | 'pending' | 'success' | 'error';
+  status: 'idle' | 'signing' | 'broadcasting' | 'confirming' | 'success' | 'error';
   error: string | null;
 }
+
+/** Pending states that show a spinner */
+export const TX_PENDING_STATES = ['signing', 'broadcasting', 'confirming'] as const;
+export type TxPendingState = (typeof TX_PENDING_STATES)[number];
 
 // ─── Governance ──────────────────────────────────────────────────────────────
 

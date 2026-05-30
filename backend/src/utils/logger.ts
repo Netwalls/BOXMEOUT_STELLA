@@ -1,7 +1,10 @@
-import { createLogger, format, transports } from 'winston';
+import pino from 'pino';
 
-export const logger = createLogger({
-  level: 'info',
-  format: format.combine(format.timestamp(), format.json()),
-  transports: [new transports.Console()],
+const isDev = process.env.NODE_ENV !== 'production';
+
+export const logger = pino({
+  level: process.env.LOG_LEVEL ?? 'info',
+  ...(isDev && {
+    transport: { target: 'pino-pretty', options: { colorize: true } },
+  }),
 });

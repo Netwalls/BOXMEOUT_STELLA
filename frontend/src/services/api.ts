@@ -22,9 +22,22 @@ export class NetworkError extends Error {
   constructor(message = 'Network error') { super(message); this.name = 'NetworkError'; }
 }
 
+async function apiFetch<T>(path: string): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`);
+  } catch (e) {
+    throw new NetworkError((e as Error).message);
+  }
+  if (res.status === 404) throw new NotFoundError();
+  if (!res.ok) throw new NetworkError(`Unexpected response: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 export interface MarketFilters {
   status?: string;
   weight_class?: string;
+  search?: string;
 }
 
 export interface PaginationParams {
@@ -48,28 +61,14 @@ export async function fetchMarkets(
   filters?: MarketFilters,
   pagination?: PaginationParams,
 ): Promise<MarketListResponse> {
-  const url = new URL(`${API_BASE}/api/markets`);
-  
-  if (filters?.status) {
-    url.searchParams.append('status', filters.status);
-  }
-  if (filters?.weight_class) {
-    url.searchParams.append('weight_class', filters.weight_class);
-  }
-  if (pagination?.page) {
-    url.searchParams.append('page', pagination.page.toString());
-  }
-  if (pagination?.limit) {
-    url.searchParams.append('limit', pagination.limit.toString());
-  }
-
-  try {
-    const res = await fetch(url.toString());
-    if (!res.ok) throw new NetworkError(`Unexpected response: ${res.status}`);
-    return res.json();
-  } catch (e) {
-    throw new NetworkError((e as Error).message);
-  }
+  const params = new URLSearchParams();
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.weight_class) params.set('weight_class', filters.weight_class);
+  if (filters?.search) params.set('search', filters.search);
+  if (pagination?.page) params.set('page', pagination.page.toString());
+  if (pagination?.limit) params.set('limit', pagination.limit.toString());
+  const qs = params.toString();
+  return apiFetch<MarketListResponse>(`/api/markets${qs ? `?${qs}` : ''}`);
 }
 
 /**
@@ -78,15 +77,7 @@ export async function fetchMarkets(
  * Throws NotFoundError on 404.
  */
 export async function fetchMarketById(market_id: string): Promise<Market> {
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE}/api/markets/${market_id}`);
-  } catch (e) {
-    throw new NetworkError((e as Error).message);
-  }
-  if (res.status === 404) throw new NotFoundError(`Market ${market_id} not found`);
-  if (!res.ok) throw new NetworkError(`Unexpected response: ${res.status}`);
-  return res.json() as Promise<Market>;
+  return apiFetch<Market>(`/api/markets/${market_id}`);
 }
 
 /**
@@ -94,14 +85,7 @@ export async function fetchMarketById(market_id: string): Promise<Market> {
  * Returns all bets for the market.
  */
 export async function fetchBetsByMarket(market_id: string): Promise<Bet[]> {
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE}/api/markets/${market_id}/bets`);
-  } catch (e) {
-    throw new NetworkError((e as Error).message);
-  }
-  if (!res.ok) throw new NetworkError(`Unexpected response: ${res.status}`);
-  return res.json();
+  return apiFetch<Bet[]>(`/api/markets/${market_id}/bets`);
 }
 
 /**
@@ -109,17 +93,13 @@ export async function fetchBetsByMarket(market_id: string): Promise<Bet[]> {
  * Returns the full Portfolio object.
  */
 export async function fetchPortfolio(address: string): Promise<Portfolio> {
-  const res = await fetch(`${API_BASE}/api/portfolio/${address}`);
-  if (!res.ok) throw new Error(`fetchPortfolio failed: ${res.status}`);
-  return res.json();
+  return apiFetch<Portfolio>(`/api/portfolio/${address}`);
 }
 
 /**
  * Calls GET /api/markets/:market_id/stats.
  * Returns aggregate MarketStats.
  */
-export async function fetchMarketStats(
-  market_id: string,
-): Promise<MarketStats> {
-  // TODO: implement
+export async function fetchMarketStats(market_id: string): Promise<MarketStats> {
+  return apiFetch<MarketStats>(`/api/markets/${market_id}/stats`);
 }

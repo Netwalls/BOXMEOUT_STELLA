@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Create labels for the repo
+
+gh label create backend --color 0075ca --description "Backend / API work"
+gh label create auth --color ee0701 --description "Authentication & authorisation"
+gh label create markets --color e4e669 --description "Market management"
+gh label create trading --color f9d0c4 --description "Trading & share operations"
+gh label create predictions --color a2eeef --description "Prediction placement & settlement"
+gh label create disputes --color b60205 --description "Dispute resolution"
+gh label create oracle --color 5319e7 --description "Oracle integration"
+gh label create wallet --color 006b75 --description "Wallet & balance management"
+gh label create treasury --color 0e8a16 --description "Treasury operations"
+gh label create notifications --color fbca04 --description "Notification system"
+gh label create leaderboard --color 1d76db --description "Leaderboard & rankings"
+gh label create users --color bfd4f2 --description "User profile & management"
+gh label create referrals --color d93f0b --description "Referral system"
+gh label create achievements --color 0075ca --description "Achievement & reward system"
+gh label create websocket --color 5319e7 --description "Real-time WebSocket layer"
+gh label create middleware --color e4e669 --description "Express middleware"
+gh label create blockchain --color 0e8a16 --description "Stellar / Soroban blockchain layer"
+gh label create cron --color fbca04 --description "Scheduled / background jobs"
+gh label create repository --color bfd4f2 --description "Data access layer"
+gh label create feature --color a2eeef --description "New functionality"
+gh label create bug --color ee0701 --description "Bug fix"
+gh label create security --color ee0701 --description "Security-critical"
+gh label create testing --color 0075ca --description "Test coverage"
+gh label create "good first issue" --color 7057ff --description "Suitable for newcomers"

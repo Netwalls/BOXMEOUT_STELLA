@@ -106,7 +106,7 @@ export default function NewProposalPage() {
         return;
     }
 
-    setTxStatus({ hash: null, status: 'pending', error: null });
+    setTxStatus({ hash: null, status: 'signing', error: null });
 
     try {
       const hash = await createProposal({
@@ -245,10 +245,10 @@ export default function NewProposalPage() {
 
         <button
           type="submit"
-          disabled={txStatus.status === 'pending' || isLoadingBalance || balanceILN < MIN_ILN_REQUIRED}
+          disabled={['signing','broadcasting','confirming'].includes(txStatus.status) || isLoadingBalance || balanceILN < MIN_ILN_REQUIRED}
           className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded font-semibold transition-colors"
         >
-          {txStatus.status === 'pending' ? 'Submitting...' : 'Submit Proposal'}
+          {['signing','broadcasting','confirming'].includes(txStatus.status) ? 'Submitting...' : 'Submit Proposal'}
         </button>
       </form>
 

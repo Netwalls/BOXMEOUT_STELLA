@@ -29,6 +29,20 @@ const LS_KEY = 'boxmeout_wallet_address';
 
 // ─── Custom Errors ───────────────────────────────────────────────────────────
 
+export class WalletNotInstalledError extends Error {
+  constructor(message: string = 'No wallet extension found. Install Freighter at https://freighter.app') {
+    super(message);
+    this.name = 'WalletNotInstalledError';
+  }
+}
+
+export class WalletConnectionError extends Error {
+  constructor(message: string = 'User rejected wallet connection') {
+    super(message);
+    this.name = 'WalletConnectionError';
+  }
+}
+
 export class WalletSignError extends Error {
   constructor(message: string = 'User rejected transaction signing') {
     super(message);
@@ -121,17 +135,31 @@ export async function connectWallet(): Promise<string> {
   const freighter = (window as any).freighter;
   const albedo = (window as any).albedo;
   if (freighter) {
-    await freighter.requestAccess();
-    const { publicKey } = await freighter.getPublicKey();
-    localStorage.setItem(LS_KEY, publicKey);
-    return publicKey;
+    try {
+      await freighter.requestAccess();
+      const { publicKey } = await freighter.getPublicKey();
+      localStorage.setItem(LS_KEY, publicKey);
+      return publicKey;
+    } catch (err) {
+      throw new WalletConnectionError(
+        err instanceof Error ? err.message : 'User rejected wallet connection',
+      );
+    }
   }
   if (albedo) {
-    const { pubkey } = await albedo.publicKey({ token: 'boxmeout' });
-    localStorage.setItem(LS_KEY, pubkey);
-    return pubkey;
+    try {
+      const { pubkey } = await albedo.publicKey({ token: 'boxmeout' });
+      localStorage.setItem(LS_KEY, pubkey);
+      return pubkey;
+    } catch (err) {
+      throw new WalletConnectionError(
+        err instanceof Error ? err.message : 'User rejected wallet connection',
+      );
+    }
   }
-  throw new Error('WalletNotInstalledError: Install Freighter or Albedo');
+  throw new WalletNotInstalledError(
+    'No wallet extension found. Install Freighter at https://freighter.app',
+  );
 }
 
 export function disconnectWallet(): void {
@@ -165,6 +193,79 @@ export async function submitClaim(market_contract_address: string): Promise<stri
     new Address(bettor).toScVal(),
     new Address(token).toScVal(),
   ]);
+}
+
+export type TxStageCallback = (stage: 'signing' | 'broadcasting' | 'confirming') => void;
+
+/**
+ * Like submitClaim but calls onStage at each phase so the UI can show granular status.
+ */
+export async function submitClaimWithStages(
+  market_contract_address: string,
+  onStage: TxStageCallback,
+): Promise<string> {
+  const address = getConnectedAddress();
+  if (!address) throw new Error('WalletNotConnected');
+  const token = process.env.NEXT_PUBLIC_XLM_TOKEN_ADDRESS;
+  if (!token) throw new Error('NEXT_PUBLIC_XLM_TOKEN_ADDRESS not set');
+
+  const server = new SorobanRpc.Server(SOROBAN_RPC_URL);
+  const account = await server.getAccount(address);
+  const contract = new Contract(market_contract_address);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'claim_winnings',
+        new Address(address).toScVal(),
+        new Address(token).toScVal(),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const preparedTx = await server.prepareTransaction(tx);
+  const txXdr = preparedTx.toXDR();
+
+  const freighter = (window as any).freighter;
+  if (!freighter) throw new WalletNotInstalledError();
+
+  onStage('signing');
+  let signedTxXdr: string;
+  try {
+    const result = await freighter.signTransaction(txXdr, { networkPassphrase: NETWORK_PASSPHRASE });
+    signedTxXdr = result.signedTxXdr;
+  } catch (error) {
+    throw new WalletSignError(error instanceof Error ? error.message : 'User rejected transaction signing');
+  }
+
+  onStage('broadcasting');
+  const submitRes = await server.sendTransaction(
+    TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE),
+  );
+
+  if (submitRes.status === 'ERROR') {
+    throw new TxSubmissionError(
+      `Network rejected transaction: ${submitRes.errorResult?.toString() || 'Unknown error'}`,
+      submitRes.errorResult,
+    );
+  }
+
+  onStage('confirming');
+  let getRes = await server.getTransaction(submitRes.hash);
+  for (let i = 0; i < 20 && getRes.status === 'NOT_FOUND'; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    getRes = await server.getTransaction(submitRes.hash);
+  }
+
+  if (getRes.status !== 'SUCCESS') {
+    throw new TxSubmissionError(`Transaction failed with status: ${getRes.status}`, getRes);
+  }
+
+  return submitRes.hash;
 }
 
 export async function submitRefund(market_contract_address: string): Promise<string> {

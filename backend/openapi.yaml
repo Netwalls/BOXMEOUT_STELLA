@@ -1,0 +1,485 @@
+openapi: 3.0.3
+info:
+  title: BoxMeOut API
+  version: 0.1.0
+  description: REST API for the BoxMeOut decentralized boxing prediction market.
+
+servers:
+  - url: http://localhost:3001
+    description: Local development
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    oracleKey:
+      type: apiKey
+      in: header
+      name: X-Oracle-Key
+
+  schemas:
+    Market:
+      type: object
+      properties:
+        id:            { type: integer }
+        market_id:     { type: string }
+        contract_address: { type: string }
+        match_id:      { type: string }
+        fighter_a:     { type: string }
+        fighter_b:     { type: string }
+        weight_class:  { type: string }
+        title_fight:   { type: boolean }
+        venue:         { type: string }
+        scheduled_at:  { type: string, format: date-time }
+        status:
+          type: string
+          enum: [open, locked, resolved, cancelled, disputed]
+        outcome:
+          type: string
+          nullable: true
+          enum: [fighter_a, fighter_b, draw, no_contest]
+        pool_a:        { type: string }
+        pool_b:        { type: string }
+        pool_draw:     { type: string }
+        total_pool:    { type: string }
+        fee_bps:       { type: integer }
+        resolved_at:   { type: string, format: date-time, nullable: true }
+        oracle_used:
+          type: string
+          nullable: true
+          enum: [primary, fallback, admin]
+        created_at:    { type: string, format: date-time }
+        updated_at:    { type: string, format: date-time }
+        ledger_sequence: { type: integer }
+
+    MarketStats:
+      type: object
+      properties:
+        market_id:         { type: string }
+        total_bets:        { type: integer }
+        unique_bettors:    { type: integer }
+        largest_bet_xlm:   { type: number }
+        average_bet_xlm:   { type: number }
+        total_pooled_xlm:  { type: number }
+
+    PlatformStats:
+      type: object
+      properties:
+        totalMarkets:  { type: integer }
+        activeMarkets: { type: integer }
+        totalVolume:   { type: number }
+        totalBets:     { type: integer }
+
+    Bet:
+      type: object
+      properties:
+        id:              { type: integer }
+        market_id:       { type: string }
+        bettor_address:  { type: string }
+        side:
+          type: string
+          enum: [fighter_a, fighter_b, draw]
+        amount:          { type: string }
+        amount_xlm:      { type: number }
+        placed_at:       { type: string, format: date-time }
+        claimed:         { type: boolean }
+        claimed_at:      { type: string, format: date-time, nullable: true }
+        payout:          { type: string, nullable: true }
+        tx_hash:         { type: string }
+        ledger_sequence: { type: integer }
+
+    Portfolio:
+      type: object
+      properties:
+        address:          { type: string }
+        active_bets:
+          type: array
+          items: { $ref: '#/components/schemas/Bet' }
+        past_bets:
+          type: array
+          items: { $ref: '#/components/schemas/Bet' }
+        pending_claims:
+          type: array
+          items: { $ref: '#/components/schemas/Bet' }
+        total_staked_xlm: { type: number }
+        total_won_xlm:    { type: number }
+        total_lost_xlm:   { type: number }
+
+    OracleReport:
+      type: object
+      properties:
+        id:             { type: integer }
+        match_id:       { type: string }
+        oracle_address: { type: string }
+        outcome:        { type: string }
+        reported_at:    { type: string, format: date-time }
+        signature:      { type: string }
+        accepted:       { type: boolean }
+        tx_hash:        { type: string, nullable: true }
+        created_at:     { type: string, format: date-time }
+
+    Error:
+      type: object
+      properties:
+        status:  { type: string, example: error }
+        message: { type: string }
+
+paths:
+  /api/stats:
+    get:
+      summary: Get platform statistics
+      operationId: getPlatformStats
+      tags: [Platform]
+      description: Returns aggregate platform statistics for the home page banner. Cached for 60 seconds.
+      responses:
+        '200':
+          description: Platform statistics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformStats' }
+
+  /api/markets:
+    get:
+      summary: List markets
+      operationId: listMarkets
+      tags: [Markets]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, locked, resolved, cancelled, disputed]
+        - name: weight_class
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Paginated list of markets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  markets:
+                    type: array
+                    items: { $ref: '#/components/schemas/Market' }
+                  total: { type: integer }
+                  page:  { type: integer }
+                  limit: { type: integer }
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/markets/{market_id}:
+    get:
+      summary: Get market by ID
+      operationId: getMarket
+      tags: [Markets]
+      parameters:
+        - name: market_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Market detail with current odds
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Market' }
+        '404':
+          description: Market not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/markets/{market_id}/bets:
+    get:
+      summary: Get bets for a market
+      operationId: getMarketBets
+      tags: [Markets]
+      parameters:
+        - name: market_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: address
+          in: query
+          description: Filter to a single bettor's Stellar address
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of bets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Bet' }
+        '404':
+          description: Market not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/markets/{market_id}/stats:
+    get:
+      summary: Get aggregate stats for a market
+      operationId: getMarketStats
+      tags: [Markets]
+      parameters:
+        - name: market_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Market statistics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketStats' }
+        '404':
+          description: Market not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/bets/{bettor_address}:
+    get:
+      summary: Get all bets by a Stellar address
+      operationId: getBetsByAddress
+      tags: [Bets]
+      parameters:
+        - name: bettor_address
+          in: path
+          required: true
+          description: Stellar public key (G...)
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of bets across all markets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Bet' }
+        '400':
+          description: Invalid Stellar address
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/portfolio/{address}:
+    get:
+      summary: Get portfolio summary for a Stellar address
+      operationId: getPortfolio
+      tags: [Bets]
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Stellar public key (G...)
+          schema: { type: string }
+      responses:
+        '200':
+          description: Portfolio summary (empty portfolio returned if address has no bets)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Portfolio' }
+        '400':
+          description: Invalid Stellar address
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/oracle/submit:
+    post:
+      summary: Submit a signed oracle fight result
+      operationId: submitOracleResult
+      tags: [Oracle]
+      security:
+        - oracleKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [match_id, outcome, reported_at, signature, oracle_address]
+              properties:
+                match_id:       { type: string }
+                outcome:        { type: string, enum: [fighter_a, fighter_b, draw, no_contest] }
+                reported_at:    { type: string, format: date-time }
+                signature:      { type: string, description: Hex-encoded Ed25519 signature }
+                oracle_address: { type: string, description: Stellar public key of the oracle }
+      responses:
+        '200':
+          description: Report accepted and submitted on-chain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tx_hash:   { type: string }
+                  report_id: { type: integer }
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Missing or invalid oracle API key / signature verification failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/oracle/reports/{match_id}:
+    get:
+      summary: Get all oracle reports for a fight
+      operationId: getOracleReports
+      tags: [Oracle]
+      parameters:
+        - name: match_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: All oracle reports (accepted and rejected) for the fight
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OracleReport' }
+
+  /api/admin/dispute/{market_id}:
+    post:
+      summary: Flag a market as disputed
+      operationId: flagDispute
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: market_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Market flagged as disputed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tx_hash: { type: string }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Market not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/admin/resolve-dispute/{market_id}:
+    post:
+      summary: Resolve a disputed market with admin-verified outcome
+      operationId: resolveDispute
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: market_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome, totp_code]
+              properties:
+                outcome:   { type: string, enum: [fighter_a, fighter_b, draw, no_contest] }
+                totp_code: { type: string, description: 6-digit TOTP code for 2FA verification }
+      responses:
+        '200':
+          description: Dispute resolved on-chain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tx_hash: { type: string }
+        '401':
+          description: Unauthorized or invalid TOTP code
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Market not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/admin/cancel/{market_id}:
+    post:
+      summary: Cancel a market (fight postponed or called off)
+      operationId: cancelMarket
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: market_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Market cancelled on-chain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tx_hash: { type: string }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Market not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }

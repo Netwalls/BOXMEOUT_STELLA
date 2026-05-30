@@ -58,3 +58,10 @@ export interface MarketStats {
   average_bet_xlm: number;
   total_pooled_xlm: number;
 }
+
+export interface PlatformStats {
+  totalMarkets: number;
+  activeMarkets: number;
+  totalVolume: number;
+  totalBets: number;
+}

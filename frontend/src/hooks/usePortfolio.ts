@@ -50,8 +50,15 @@ export function usePortfolio(): UsePortfolioResult {
 
   useEffect(() => { load(); }, [load]);
 
+  // Refresh when useClaimWinnings hook fires a successful claim
+  useEffect(() => {
+    const handler = () => { load(); };
+    window.addEventListener('boxmeout:claim_success', handler);
+    return () => window.removeEventListener('boxmeout:claim_success', handler);
+  }, [load]);
+
   const runClaim = useCallback(async (fn: () => Promise<string>) => {
-    setClaimTxStatus({ hash: null, status: 'pending', error: null });
+    setClaimTxStatus({ hash: null, status: 'signing', error: null });
     try {
       const hash = await fn();
       setClaimTxStatus({ hash, status: 'success', error: null });

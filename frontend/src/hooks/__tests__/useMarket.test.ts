@@ -92,7 +92,7 @@ describe('useMarket', () => {
         http.get('http://localhost:3001/api/markets/market-1', () => {
           callCount++;
           return HttpResponse.json(openMarket);
-        })
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -119,7 +119,7 @@ describe('useMarket', () => {
         http.get('http://localhost:3001/api/markets/market-1', () => {
           callCount++;
           return HttpResponse.json(openMarket);
-        })
+        }),
       );
 
       renderHook(() => useMarket('market-1'));
@@ -161,7 +161,7 @@ describe('useMarket', () => {
           const market = marketVersions[Math.min(version, marketVersions.length - 1)];
           version++;
           return HttpResponse.json(market);
-        })
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -194,11 +194,8 @@ describe('useMarket', () => {
             return HttpResponse.json(openMarket);
           }
           // Subsequent calls fail
-          return HttpResponse.json(
-            { error: 'Server Error' },
-            { status: 500 }
-          );
-        })
+          return HttpResponse.json({ error: 'Server Error' }, { status: 500 });
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -227,7 +224,7 @@ describe('useMarket', () => {
       jest.useRealTimers();
     });
 
-    it('should stop polling when status changes from open to locked', async () => {
+    it('should keep polling when status changes from open to locked', async () => {
       let callCount = 0;
       let marketStatus: 'open' | 'locked' = 'open';
 
@@ -238,7 +235,7 @@ describe('useMarket', () => {
             ...openMarket,
             status: marketStatus,
           });
-        })
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -261,11 +258,16 @@ describe('useMarket', () => {
 
       const countAfterStatusChange = callCount;
 
-      // Advance another 10 seconds to check if polling continues
+      // Advance another 10 seconds; polling should continue while locked
       jest.advanceTimersByTime(10_000);
 
-      // Call count should not increase further (polling should have stopped)
-      expect(callCount).toBeLessThanOrEqual(countAfterStatusChange + 1);
+      await waitFor(() => {
+        expect(callCount).toBeGreaterThan(countAfterStatusChange);
+      });
+
+      expect(result.current.market?.status).toBe('locked');
+
+      expect(callCount).toBeGreaterThan(countBeforeStatusChange);
     });
 
     it('should not poll when market is initially locked', async () => {
@@ -275,7 +277,7 @@ describe('useMarket', () => {
         http.get('http://localhost:3001/api/markets/market-1', () => {
           callCount++;
           return HttpResponse.json(lockedMarket);
-        })
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -305,7 +307,7 @@ describe('useMarket', () => {
             status: marketStatus,
             outcome: marketStatus === 'resolved' ? 'fighter_a' : null,
           });
-        })
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -343,7 +345,7 @@ describe('useMarket', () => {
             ...openMarket,
             status: marketStatus,
           });
-        })
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -402,7 +404,7 @@ describe('useMarket', () => {
         http.get('http://localhost:3001/api/markets/market-1', () => {
           callCount++;
           return HttpResponse.json(openMarket);
-        })
+        }),
       );
 
       const { result, unmount } = renderHook(() => useMarket('market-1'));
@@ -433,10 +435,9 @@ describe('useMarket', () => {
     });
 
     it('should fetch new market when market_id changes', async () => {
-      const { result, rerender } = renderHook(
-        ({ marketId }) => useMarket(marketId),
-        { initialProps: { marketId: 'market-1' } }
-      );
+      const { result, rerender } = renderHook(({ marketId }) => useMarket(marketId), {
+        initialProps: { marketId: 'market-1' },
+      });
 
       await waitFor(() => {
         expect(result.current.market?.market_id).toBe('market-1');
@@ -465,13 +466,12 @@ describe('useMarket', () => {
             ...openMarket,
             market_id: 'market-2',
           });
-        })
+        }),
       );
 
-      const { result, rerender } = renderHook(
-        ({ marketId }) => useMarket(marketId),
-        { initialProps: { marketId: 'market-1' } }
-      );
+      const { result, rerender } = renderHook(({ marketId }) => useMarket(marketId), {
+        initialProps: { marketId: 'market-1' },
+      });
 
       await waitFor(() => {
         expect(result.current.market?.market_id).toBe('market-1');
@@ -506,7 +506,7 @@ describe('useMarket', () => {
       server.use(
         http.get('http://localhost:3001/api/markets/market-1', () => {
           return HttpResponse.json(marketWithoutOptional);
-        })
+        }),
       );
 
       const { result } = renderHook(() => useMarket('market-1'));
@@ -519,10 +519,9 @@ describe('useMarket', () => {
     });
 
     it('should handle rapid market_id changes', async () => {
-      const { result, rerender } = renderHook(
-        ({ marketId }) => useMarket(marketId),
-        { initialProps: { marketId: 'market-1' } }
-      );
+      const { result, rerender } = renderHook(({ marketId }) => useMarket(marketId), {
+        initialProps: { marketId: 'market-1' },
+      });
 
       await waitFor(() => {
         expect(result.current.market?.market_id).toBe('market-1');

@@ -12,19 +12,31 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U boxmeout']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
       - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file: ./backend/.env
     ports:
       - '3001:3001'
@@ -37,6 +49,18 @@ services:
     env_file: ./frontend/.env
     ports:
       - '3000:3000'
+
+  postgres-test:
+    image: postgres:15-alpine
+    profiles: [test]
+    environment:
+      POSTGRES_USER: boxmeout
+      POSTGRES_PASSWORD: boxmeout
+      POSTGRES_DB: boxmeout_test
+    ports:
+      - '5433:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
 
 volumes:
   postgres_data:

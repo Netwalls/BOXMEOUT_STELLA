@@ -15,7 +15,7 @@ interface MarketCardProps {
 }
 
 export function MarketCard({ market }: MarketCardProps): JSX.Element {
-  const totalXlm = (parseInt(market.total_pool, 10) / 1e7).toFixed(2);
+  const totalXlm = Math.floor(parseInt(market.total_pool, 10) / 1e7).toLocaleString();
 
   return (
     <Link
@@ -49,7 +49,7 @@ export function MarketCard({ market }: MarketCardProps): JSX.Element {
 
       {/* Footer */}
       <div className="flex items-center justify-between text-xs text-gray-400">
-        <CountdownTimer scheduled_at={market.scheduled_at} label="Starts in" />
+        <CountdownTimer targetDate={market.scheduled_at} label="Starts in" />
         <span>{totalXlm} XLM pooled</span>
       </div>
     </Link>

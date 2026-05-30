@@ -1,46 +1,49 @@
+'use client';
+
 // ============================================================
 // BOXMEOUT — CountdownTimer Component
 // ============================================================
 
-import { useMarketCountdown } from '@/hooks/useMarketCountdown';
+import { useState, useEffect } from 'react';
 
 interface CountdownTimerProps {
-  /** ISO 8601 timestamp of fight start */
-  scheduled_at: string;
-  /** Optional label prefix (e.g. "Starts in") */
+  /** ISO 8601 timestamp of target time */
+  targetDate: string;
+  /** Optional label for context (e.g. "Betting closes in") */
   label?: string;
 }
 
-/**
- * Renders a live countdown to the fight start time.
- * Uses the useMarketCountdown hook internally.
- *
- * Display:
- *   "Starts in 2h 14m 32s"   → while countdown is running
- *   "LIVE"                    → when fight has started (red pulsing badge)
- *   "ENDED"                   → after resolution window passed
- */
-export function CountdownTimer({
-  scheduled_at,
-  label = 'Starts in',
-}: CountdownTimerProps): JSX.Element {
-  const state = useMarketCountdown(scheduled_at);
+function formatDDHHMMSS(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const dd = Math.floor(totalSec / 86400);
+  const hh = Math.floor((totalSec % 86400) / 3600);
+  const mm = Math.floor((totalSec % 3600) / 60);
+  const ss = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(dd)}:${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+}
 
-  if (state === 'LIVE') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white animate-pulse">
-        LIVE
-      </span>
-    );
-  }
+export function CountdownTimer({ targetDate, label }: CountdownTimerProps): JSX.Element {
+  const targetMs = new Date(targetDate).getTime();
+  const [remaining, setRemaining] = useState(() => targetMs - Date.now());
 
-  if (state === 'ENDED') {
-    return <span className="text-sm text-gray-400">ENDED</span>;
+  useEffect(() => {
+    const id = setInterval(() => {
+      const r = targetMs - Date.now();
+      setRemaining(r);
+      if (r <= 0) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [targetMs]);
+
+  if (remaining <= 0) {
+    return <span className="text-sm text-gray-400">Betting Closed</span>;
   }
 
   return (
     <span className="text-sm text-gray-200">
-      {label} {state}
+      {label && <span className="text-gray-400 mr-1">{label}</span>}
+      <span className="font-mono text-amber-400">{formatDDHHMMSS(remaining)}</span>
     </span>
   );
 }

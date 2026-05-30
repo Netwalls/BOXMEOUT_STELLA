@@ -1,21 +1,31 @@
 [workspace]
 members = [
     "shared",
+    "treasury",
     "market_factory",
     "market",
-    "treasury",
 ]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
 
 [workspace.dependencies]
 soroban-sdk = { version = "20.0.0" }
 
+# Used by `cargo build --workspace` and `soroban contract build`
 [profile.release]
-opt-level     = "z"
-overflow-checks = true
-debug         = false
-strip         = "symbols"
+opt-level        = "z"
+overflow-checks  = true
+debug            = false
+strip            = "symbols"
 debug-assertions = false
-panic         = "abort"
-codegen-units = 1
-lto           = true
+panic            = "abort"
+codegen-units    = 1
+lto              = true
+
+# Used by `soroban contract build --profile release-with-logs`
+[profile.release-with-logs]
+inherits         = "release"
+debug-assertions = true

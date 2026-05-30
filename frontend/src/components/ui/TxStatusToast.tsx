@@ -18,12 +18,19 @@ export function TxStatusToast({ txStatus, onDismiss }: TxStatusToastProps): JSX.
 
   if (txStatus.status === 'idle') return <></>;
 
+  const isPending = ['signing', 'broadcasting', 'confirming'].includes(txStatus.status);
+  const pendingLabel = txStatus.status === 'signing'
+    ? 'Waiting for signature…'
+    : txStatus.status === 'broadcasting'
+    ? 'Broadcasting…'
+    : 'Confirming on Stellar…';
+
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm w-full bg-gray-900 text-white rounded-xl shadow-xl p-4 flex items-start gap-3">
-      {txStatus.status === 'pending' && (
+      {isPending && (
         <>
           <span className="animate-spin text-xl">⏳</span>
-          <p className="text-sm">Transaction pending…</p>
+          <p className="text-sm">{pendingLabel}</p>
         </>
       )}
       {txStatus.status === 'success' && (

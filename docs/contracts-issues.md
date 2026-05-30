@@ -135,10 +135,10 @@ Implement `transfer_admin()` in `contracts/market_factory/src/lib.rs`.
 - Emit `AdminTransferred` event
 
 **Acceptance Criteria**
-- [ ] Old admin loses rights after transfer
-- [ ] New admin can call admin-only functions
-- [ ] Non-admin call returns `Unauthorized`
-- [ ] Event emitted with both addresses
+- [x] Old admin loses rights after transfer
+- [x] New admin can call admin-only functions
+- [x] Non-admin call returns `Unauthorized`
+- [x] Event emitted with both addresses
 
 ---
 
@@ -155,9 +155,9 @@ Implement the circuit breaker functions in `contracts/market_factory/src/lib.rs`
 - `is_paused()`: read and return `PAUSED`
 
 **Acceptance Criteria**
-- [ ] Paused factory rejects `create_market()` with `FactoryPaused`
-- [ ] `unpause_factory()` restores normal operation
-- [ ] Only admin can pause/unpause
+- [x] Paused factory rejects `create_market()` with `FactoryPaused`
+- [x] `unpause_factory()` restores normal operation
+- [x] Only admin can pause/unpause
 
 ---
 
@@ -176,9 +176,9 @@ Implement `initialize()` in `contracts/market/src/lib.rs`.
 - Return `AlreadyInitialized` on second call
 
 **Acceptance Criteria**
-- [ ] State stored correctly with all zero pools
-- [ ] Second call returns `AlreadyInitialized`
-- [ ] Non-factory caller returns `NotFactory`
+- [x] State stored correctly with all zero pools
+- [x] Second call returns `AlreadyInitialized`
+- [x] Non-factory caller returns `NotFactory`
 
 ---
 
@@ -201,10 +201,10 @@ Implement `place_bet()` in `contracts/market/src/lib.rs`.
 - Return the BetRecord
 
 **Acceptance Criteria**
-- [ ] Correct pool incremented on each side
-- [ ] BetPlaced event emitted with correct payload
-- [ ] All invalid calls return correct ContractError
-- [ ] Token transfer executed before state mutation
+- [x] Correct pool incremented on each side
+- [x] BetPlaced event emitted with correct payload
+- [x] All invalid calls return correct ContractError
+- [x] Token transfer executed before state mutation
 
 ---
 

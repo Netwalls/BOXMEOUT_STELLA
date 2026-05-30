@@ -31,11 +31,11 @@ jobs:
 
       - name: Clippy
         working-directory: contracts
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Tests
         working-directory: contracts
-        run: cargo test --all
+        run: cargo test --all --all-features
 
       - name: Build wasm
         working-directory: contracts

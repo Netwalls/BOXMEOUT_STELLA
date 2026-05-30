@@ -6,8 +6,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Market } from '../types';
-import type { MarketFilters } from '../services/api';
+import type { MarketFilters, PaginationParams } from '../services/api';
 import { fetchMarkets } from '../services/api';
+
+const POLL_INTERVAL = 30_000;
 
 export interface UseMarketsResult {
   markets: Market[];
@@ -26,42 +28,36 @@ export interface UseMarketsResult {
  * Returns stale data during a background refresh (isLoading stays false
  * to avoid layout flash — use a subtle spinner instead).
  */
-export function useMarkets(filters?: MarketFilters): UseMarketsResult {
+export function useMarkets(filters?: MarketFilters, pagination?: PaginationParams): UseMarketsResult {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [tick, setTick] = useState(0);
 
   const fetchAndUpdate = useCallback(async () => {
     try {
-      const response = await fetchMarkets(filters);
+      const response = await fetchMarkets(filters, pagination);
       setMarkets(response.markets);
       setTotal(response.total);
       setError(null);
-      setIsLoading(false);
     } catch (e) {
       setError(e as Error);
+    } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, [filters, pagination]);
 
+  // Reset interval and trigger immediate fetch
   const refetch = useCallback(() => {
-    fetchAndUpdate();
-  }, [fetchAndUpdate]);
+    setTick((t) => t + 1);
+  }, []);
 
   useEffect(() => {
-    // Initial fetch
     fetchAndUpdate();
-
-    // Set up polling interval every 30 seconds
-    const intervalId = setInterval(() => {
-      fetchAndUpdate();
-    }, 30_000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [fetchAndUpdate]);
+    const id = setInterval(fetchAndUpdate, POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [fetchAndUpdate, tick]);
 
   return { markets, total, isLoading, error, refetch };
 }

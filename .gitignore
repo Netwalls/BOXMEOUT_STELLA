@@ -44,7 +44,7 @@ out/
 # ─── Rust / Cargo (contracts) ────────────────────────────────
 target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock is intentionally tracked for the contracts workspace
 
 # ─── Soroban / Stellar tooling ───────────────────────────────
 .soroban/
@@ -70,6 +70,20 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# ─── Test snapshots ──────────────────────────────────────────
+**/__snapshots__/
+*.snap
+frontend/e2e/snapshots/
+frontend/e2e/test-results/
+
+# ─── Playwright artifacts ────────────────────────────────────
+blob-report/
+playwright/.auth/
+
+# ─── Jest cache ──────────────────────────────────────────────
+.jest-cache/
+jest_cache/
+
 # ─── Docker ──────────────────────────────────────────────────
 .docker/
 
@@ -93,6 +107,12 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+# ─── AI / IDE workspace files ────────────────────────────────
+.claude/
+.kiro/
+.cursor/
+.aider*
 
 # ─── Misc ────────────────────────────────────────────────────
 *.cache

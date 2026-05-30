@@ -1,0 +1,7 @@
+{
+  "migrationsTable": "pgmigrations",
+  "schema": "public",
+  "dir": "migrations",
+  "ignorePattern": "^\\.",
+  "createMigrationsFolder": true
+}
