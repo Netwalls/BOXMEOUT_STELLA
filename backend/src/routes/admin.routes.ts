@@ -1,3 +1,119 @@
+/**
+ * @swagger
+ * tags:
+ *   name: Admin
+ *   description: Admin-only market and dispute management
+ */
+
+/**
+ * @swagger
+ * /admin/disputes:
+ *   get:
+ *     summary: List all disputes
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of disputes
+ *       401:
+ *         description: Unauthorized
+ *
+ * /admin/dispute/{market_id}:
+ *   post:
+ *     summary: Flag a market for dispute
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: market_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Market flagged
+ *       404:
+ *         description: Market not found
+ *
+ * /admin/dispute/{market_id}/investigate:
+ *   post:
+ *     summary: Mark a dispute as under investigation
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: market_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Dispute under investigation
+ *
+ * /admin/cancel/{market_id}/refunds:
+ *   post:
+ *     summary: Process refunds for a cancelled market
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: market_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Refunds processed
+ *
+ * /admin/resolve-dispute/{market_id}:
+ *   post:
+ *     summary: Resolve a dispute with a final ruling
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: market_id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [DISMISS, RESOLVE_NEW_OUTCOME]
+ *               newWinningOutcome:
+ *                 type: integer
+ *                 enum: [0, 1]
+ *               resolution:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Dispute resolved
+ *
+ * /admin/cancel/{market_id}:
+ *   post:
+ *     summary: Cancel a market
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: market_id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Market cancelled
+ *       404:
+ *         description: Market not found
+ */
 import { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../utils/AppError';

@@ -20,6 +20,7 @@ const envSchema = z.object({
   GENESIS_LEDGER: z.coerce.number().int().positive().default(100000),
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
   BOXING_API_URL: z.string().url().optional(),
+  ENABLE_SWAGGER: z.coerce.boolean().default(false),
 });
 
 export type Env = z.infer<typeof envSchema>;

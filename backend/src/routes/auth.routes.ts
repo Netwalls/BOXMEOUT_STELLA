@@ -54,6 +54,40 @@ const verifySchema = z.object({
   otp: z.string().min(1),
 });
 
+/**
+ * @swagger
+ * tags:
+ *   name: Auth
+ *   description: Authentication and 2FA
+ */
+
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Log in with email and password
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Access token (or tempToken if 2FA enabled)
+ *       400:
+ *         description: Missing credentials
+ *       401:
+ *         description: Invalid credentials
+ */
 // ---------------------------------------------------------------------------
 // POST /auth/login
 // ---------------------------------------------------------------------------
@@ -68,6 +102,29 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
   }
 });
 
+/**
+ * @swagger
+ * /auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Reset link sent (always, to avoid enumeration)
+ *       400:
+ *         description: Email required
+ */
 // ---------------------------------------------------------------------------
 // POST /auth/forgot-password
 // Stricter rate limit: 5 requests per 15 minutes per IP
@@ -92,6 +149,33 @@ router.post(
   },
 );
 
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: Reset password using a reset token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, newPassword]
+ *             properties:
+ *               token:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password updated
+ *       400:
+ *         description: Invalid or missing fields
+ *       401:
+ *         description: Invalid or expired token
+ */
 // ---------------------------------------------------------------------------
 // POST /auth/reset-password
 // Stricter rate limit: 10 attempts per 15 minutes per IP
@@ -122,6 +206,86 @@ router.post(
   },
 );
 
+/**
+ * @swagger
+ * /auth/2fa/setup:
+ *   post:
+ *     summary: Generate a TOTP secret and QR code
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: TOTP secret and QR code URI
+ *       401:
+ *         description: Unauthorized
+ *
+ * /auth/2fa/enable:
+ *   post:
+ *     summary: Enable 2FA after verifying the TOTP code
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [otp]
+ *             properties:
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 2FA enabled
+ *       401:
+ *         description: Unauthorized or invalid OTP
+ *
+ * /auth/2fa/disable:
+ *   post:
+ *     summary: Disable 2FA
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [otp]
+ *             properties:
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 2FA disabled
+ *       401:
+ *         description: Unauthorized or invalid OTP
+ *
+ * /auth/2fa/verify:
+ *   post:
+ *     summary: Complete login by verifying 2FA OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [tempToken, otp]
+ *             properties:
+ *               tempToken:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Access token
+ *       401:
+ *         description: Invalid temp token or OTP
+ */
 // ---------------------------------------------------------------------------
 // 2FA routes (unchanged, kept here for completeness)
 // ---------------------------------------------------------------------------
