@@ -68,6 +68,18 @@ CREATE TABLE IF NOT EXISTS oracle_reports (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS disputes (
+  id               SERIAL PRIMARY KEY,
+  market_id        TEXT        NOT NULL REFERENCES markets(market_id),
+  reason           TEXT        NOT NULL,
+  status           TEXT        NOT NULL DEFAULT 'open',
+  admin_notes      TEXT,
+  final_outcome    TEXT,
+  raised_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_at      TIMESTAMPTZ,
+  resolved_at      TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS notification_jobs (
   id               SERIAL PRIMARY KEY,
   bettor_address   TEXT        NOT NULL,

@@ -4,25 +4,30 @@
 // ============================================================
 
 import type { Request, Response } from 'express';
-import { Keypair } from '@stellar/stellar-sdk';
+import { Keypair, nativeToScVal } from '@stellar/stellar-sdk';
 import { AppError } from '../../utils/AppError';
 import * as StellarService from '../../services/StellarService';
 import * as OracleService from '../../oracle/OracleService';
-import { verifyToken } from '../../services/totp.service';
 import { db } from '../../services/MarketService';
 import { pool } from '../../config/db';
+
+const VALID_OUTCOMES = ['fighter_a', 'fighter_b', 'draw', 'no_contest'] as const;
 
 /**
  * POST /api/admin/dispute/:market_id
  * Body: { reason: string }
  *
- * Flags a market as disputed.
+ * Phase 1 of the two-phase dispute flow.
+ * Flags a resolved market as disputed and creates a dispute record.
+ *
  * Steps:
  *   1. Require admin JWT (middleware)
  *   2. Validate market exists and is in "resolved" status
- *   3. Call StellarService.invokeContract("dispute_market", [admin, reason])
- *   4. Update market status to 'disputed' in DB after tx confirmed
- *   5. Respond 200 with { tx_hash }
+ *   3. Ensure no open or reviewing dispute already exists for this market
+ *   4. Call StellarService.invokeContract("dispute_market", [admin, reason])
+ *   5. Insert dispute record with status 'open'
+ *   6. Update market status to 'disputed'
+ *   7. Respond 200 with { tx_hash, dispute }
  */
 export async function flagDispute(
   req: Request,
@@ -35,7 +40,6 @@ export async function flagDispute(
     throw new AppError(400, 'Reason is required');
   }
 
-  // Validate market exists and status
   const market = await db().findMarketById(market_id);
   if (!market) {
     throw new AppError(404, `Market not found: ${market_id}`);
@@ -44,33 +48,105 @@ export async function flagDispute(
     throw new AppError(400, 'Market must be resolved to dispute');
   }
 
-  // Assume admin address from env or user
-  const adminAddress = process.env.ADMIN_ADDRESS ?? 'G...'; // TODO: get from user
+  // Ensure no active dispute already exists
+  const existing = await pool.query(
+    `SELECT id FROM disputes WHERE market_id = $1 AND status IN ('open', 'reviewing') LIMIT 1`,
+    [market_id],
+  );
+  if (existing.rows.length > 0) {
+    throw new AppError(409, 'An active dispute already exists for this market');
+  }
 
-  // Call StellarService
+  const adminAddress = process.env.ADMIN_ADDRESS ?? 'G...';
+
   const txHash = await StellarService.invokeContract(
     market.contract_address,
     'dispute_market',
-    [adminAddress, reason]
+    [nativeToScVal(adminAddress), nativeToScVal(reason)],
   );
 
-  // Update DB
+  // Insert dispute record
+  const disputeResult = await pool.query(
+    `INSERT INTO disputes (market_id, reason, status, raised_at)
+     VALUES ($1, $2, 'open', NOW())
+     RETURNING *`,
+    [market_id, reason],
+  );
+
   await db().updateMarketStatus(market_id, 'disputed');
 
-  res.json({ tx_hash: txHash });
+  res.status(201).json({
+    tx_hash: txHash,
+    dispute: disputeResult.rows[0],
+  });
+}
+
+/**
+ * POST /api/admin/dispute/:market_id/investigate
+ * Body: { admin_notes: string }
+ *
+ * Phase 2 of the two-phase dispute flow.
+ * Admin reviews the disputed market and records investigation notes.
+ * Moves the dispute from 'open' to 'reviewing'.
+ *
+ * Steps:
+ *   1. Require admin JWT (middleware)
+ *   2. Validate market exists and is in 'disputed' status
+ *   3. Validate there's an open dispute record for this market
+ *   4. Update dispute status to 'reviewing' with admin_notes
+ *   5. Respond 200 with updated dispute
+ */
+export async function investigateDispute(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const { market_id } = req.params;
+  const { admin_notes } = req.body;
+
+  if (!admin_notes || typeof admin_notes !== 'string') {
+    throw new AppError(400, 'admin_notes is required');
+  }
+
+  const market = await db().findMarketById(market_id);
+  if (!market) {
+    throw new AppError(404, `Market not found: ${market_id}`);
+  }
+  if (market.status !== 'disputed') {
+    throw new AppError(400, 'Market must be in disputed status to investigate');
+  }
+
+  const disputeResult = await pool.query(
+    `UPDATE disputes
+     SET status = 'reviewing', admin_notes = $1, reviewed_at = NOW()
+     WHERE market_id = $2 AND status = 'open'
+     RETURNING *`,
+    [admin_notes, market_id],
+  );
+
+  if (disputeResult.rowCount === 0) {
+    throw new AppError(404, `No open dispute found for market: ${market_id}`);
+  }
+
+  res.status(200).json({ dispute: disputeResult.rows[0] });
 }
 
 /**
  * POST /api/admin/resolve-dispute/:market_id
  * Body: { final_outcome: string }
  *
- * Resolves a disputed market with the admin-verified outcome.
+ * Phase 3 of the two-phase dispute flow.
+ * Admin sets the final outcome for the disputed market.
+ *
  * Steps:
  *   1. Require admin JWT (middleware)
  *   2. Validate final_outcome in request body
- *   3. Call OracleService.raiseDispute() to broadcast on-chain
- *   4. Update Dispute.status to 'resolved' and set final_outcome
- *   5. Return updated market and dispute records
+ *   3. Validate market exists and is in 'disputed' status
+ *   4. Validate dispute is in 'reviewing' status
+ *   5. Build admin_signature from ADMIN_PRIVATE_KEY
+ *   6. Call OracleService.raiseDispute() to broadcast on-chain
+ *   7. Update dispute status to 'resolved' and set final_outcome
+ *   8. Update market outcome and set status back to 'resolved'
+ *   9. Return updated dispute and market
  */
 export async function resolveDispute(
   req: Request,
@@ -79,23 +155,35 @@ export async function resolveDispute(
   const { market_id } = req.params;
   const { final_outcome } = req.body;
 
-  // Validate required body fields
   if (!final_outcome || typeof final_outcome !== 'string') {
     throw new AppError(400, 'final_outcome is required');
   }
 
-  const validOutcomes = ['fighter_a', 'fighter_b', 'draw', 'no_contest'];
-  if (!validOutcomes.includes(final_outcome)) {
-    throw new AppError(400, `final_outcome must be one of: ${validOutcomes.join(', ')}`);
+  if (!VALID_OUTCOMES.includes(final_outcome as typeof VALID_OUTCOMES[number])) {
+    throw new AppError(400, `final_outcome must be one of: ${VALID_OUTCOMES.join(', ')}`);
   }
 
-  // Retrieve market to get match_id
   const market = await db().findMarketById(market_id);
   if (!market) {
     throw new AppError(404, `Market not found: ${market_id}`);
   }
+  if (market.status !== 'disputed') {
+    throw new AppError(400, 'Market must be in disputed status to resolve');
+  }
 
-  // Build admin_signature from ADMIN_PRIVATE_KEY
+  // Validate dispute is in 'reviewing' state
+  const disputeCheck = await pool.query(
+    `SELECT id, status FROM disputes WHERE market_id = $1 ORDER BY raised_at DESC LIMIT 1`,
+    [market_id],
+  );
+  if (disputeCheck.rows.length === 0) {
+    throw new AppError(404, `No dispute found for market: ${market_id}`);
+  }
+  if (disputeCheck.rows[0].status !== 'reviewing') {
+    throw new AppError(400, 'Dispute must be in reviewing status. Call investigate first.');
+  }
+
+  // Build admin_signature
   const adminPrivateKey = process.env.ADMIN_PRIVATE_KEY;
   if (!adminPrivateKey) {
     throw new AppError(500, 'ADMIN_PRIVATE_KEY is not configured on this server');
@@ -104,31 +192,40 @@ export async function resolveDispute(
   const signaturePayload = Buffer.from(`${market_id}:${final_outcome}`, 'utf8');
   const admin_signature = Buffer.from(adminKeypair.sign(signaturePayload)).toString('hex');
 
-  // Call OracleService.raiseDispute() to broadcast on-chain
+  // Broadcast on-chain
   const tx_hash = await OracleService.raiseDispute(
     market.match_id,
     final_outcome as OracleService.FightOutcome,
     admin_signature,
   );
 
-  // Update Dispute.status to 'resolved' and set final_outcome
+  // Update dispute record to resolved
   const disputeResult = await pool.query(
-    `UPDATE disputes 
+    `UPDATE disputes
      SET status = 'resolved', final_outcome = $1, resolved_at = NOW()
-     WHERE market_id = $2 AND status = 'open'
+     WHERE market_id = $2 AND status = 'reviewing'
      RETURNING *`,
     [final_outcome, market_id],
   );
 
   if (disputeResult.rowCount === 0) {
-    throw new AppError(404, `No open dispute found for market: ${market_id}`);
+    throw new AppError(500, 'Failed to update dispute record');
   }
 
-  // Return updated market and dispute records
+  // Update market outcome and set status back to resolved
+  await pool.query(
+    `UPDATE markets
+     SET outcome = $1, status = 'resolved', resolved_at = NOW(), updated_at = NOW()
+     WHERE market_id = $2`,
+    [final_outcome, market_id],
+  );
+
+  const updatedMarket = await db().findMarketById(market_id);
+
   res.status(200).json({
     tx_hash,
     dispute: disputeResult.rows[0],
-    market: { ...market, outcome: final_outcome, status: 'resolved' },
+    market: updatedMarket,
   });
 }
 
@@ -154,7 +251,6 @@ export async function cancelMarket(
     throw new AppError(400, 'Reason is required');
   }
 
-  // Validate market exists and status
   const market = await db().findMarketById(market_id);
   if (!market) {
     throw new AppError(404, `Market not found: ${market_id}`);
@@ -163,17 +259,14 @@ export async function cancelMarket(
     throw new AppError(400, 'Market must be open or locked to cancel');
   }
 
-  // Assume admin address from env or user
-  const adminAddress = process.env.ADMIN_ADDRESS ?? 'G...'; // TODO: get from user
+  const adminAddress = process.env.ADMIN_ADDRESS ?? 'G...';
 
-  // Call StellarService
   const txHash = await StellarService.invokeContract(
     market.contract_address,
     'cancel_market',
-    [adminAddress, reason]
+    [nativeToScVal(adminAddress), nativeToScVal(reason)],
   );
 
-  // Update DB
   await db().updateMarketStatus(market_id, 'cancelled');
 
   res.json({ tx_hash: txHash });
@@ -181,39 +274,57 @@ export async function cancelMarket(
 
 /**
  * GET /api/admin/disputes
+ * Query: ?status=open|reviewing|resolved (default: open)
  *
- * Returns all open disputes with market and oracle report details.
+ * Returns disputes with market and oracle report details.
  * Steps:
  *   1. Require admin JWT (middleware)
- *   2. Query disputes with status = 'open'
+ *   2. Query disputes with optional status filter
  *   3. JOIN with markets and oracle_reports tables
  *   4. Sort by raised_at DESC
  *   5. Respond 200 with disputes array
  */
 export async function listDisputes(
-  _req: Request,
+  req: Request,
   res: Response,
 ): Promise<void> {
+  const status = (req.query.status as string) || 'open';
+  const validStatuses = ['open', 'reviewing', 'resolved'];
+  if (!validStatuses.includes(status)) {
+    throw new AppError(400, `status must be one of: ${validStatuses.join(', ')}`);
+  }
+
   const result = await pool.query(
-    `SELECT 
+    `SELECT
        d.id,
        d.market_id,
        d.status,
-       d.raised_at,
        d.reason,
+       d.admin_notes,
+       d.final_outcome,
+       d.raised_at,
+       d.reviewed_at,
+       d.resolved_at,
        m.match_id,
        m.fighter_a,
        m.fighter_b,
-       m.outcome,
+       m.outcome as market_outcome,
        m.status as market_status,
-       or.oracle_address,
-       or.outcome as oracle_outcome,
-       or.reported_at
+       orr.oracle_address,
+       orr.outcome as oracle_outcome,
+       orr.reported_at
      FROM disputes d
      JOIN markets m ON d.market_id = m.market_id
-     LEFT JOIN oracle_reports or ON m.match_id = or.match_id
-     WHERE d.status = 'open'
+     LEFT JOIN LATERAL (
+       SELECT oracle_address, outcome, reported_at
+       FROM oracle_reports
+       WHERE match_id = m.match_id
+       ORDER BY reported_at DESC
+       LIMIT 1
+     ) orr ON true
+     WHERE d.status = $1
      ORDER BY d.raised_at DESC`,
+    [status],
   );
 
   res.status(200).json(result.rows);

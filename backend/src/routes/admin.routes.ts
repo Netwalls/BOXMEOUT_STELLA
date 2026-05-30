@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../utils/AppError';
-import { flagDispute, cancelMarket, resolveDispute, listDisputes } from '../api/controllers/AdminController';
+import { flagDispute, investigateDispute, cancelMarket, resolveDispute, listDisputes } from '../api/controllers/AdminController';
 
 const router = Router();
 
@@ -27,11 +27,6 @@ async function requireAdmin(req: Request, _res: Response, next: NextFunction): P
     const userId = payload.sub as string;
     const sessionVersion: number = payload.sv ?? 0;
 
-    // TODO: Check if user is admin — for now assume authenticated user is admin
-    // Check Redis tombstone — set on password reset
-    // const revoked = await authService.isSessionRevoked(userId, sessionVersion);
-    // if (revoked) throw new AppError(401, 'Session has been invalidated');
-
     (req as unknown as Record<string, unknown>).userId = userId;
     (req as unknown as Record<string, unknown>).sessionVersion = sessionVersion;
     next();
@@ -56,9 +51,9 @@ router.post('/dispute/:market_id', requireAdmin, async (req: Request, res: Respo
   }
 });
 
-router.post('/cancel/:market_id', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/dispute/:market_id/investigate', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await cancelMarket(req, res);
+    await investigateDispute(req, res);
   } catch (err) {
     next(err);
   }
@@ -67,6 +62,14 @@ router.post('/cancel/:market_id', requireAdmin, async (req: Request, res: Respon
 router.post('/resolve-dispute/:market_id', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     await resolveDispute(req, res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/cancel/:market_id', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await cancelMarket(req, res);
   } catch (err) {
     next(err);
   }
