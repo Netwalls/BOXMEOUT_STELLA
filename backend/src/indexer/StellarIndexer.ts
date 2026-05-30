@@ -211,6 +211,7 @@ export async function handleMarketCreated(event: RawStellarEvent): Promise<void>
       venue: p.venue ?? '',
       scheduled_at: p.scheduled_at ?? new Date(),
       fee_bps: p.fee_bps ?? 200,
+      lock_before_secs: p.lock_before_secs ?? 3600,
       status: 'open',
       ledger_sequence: event.ledger_sequence,
     };
@@ -219,8 +220,8 @@ export async function handleMarketCreated(event: RawStellarEvent): Promise<void>
     await pool.query(
       `INSERT INTO markets
          (market_id, contract_address, match_id, fighter_a, fighter_b,
-          weight_class, title_fight, venue, scheduled_at, fee_bps, status, ledger_sequence)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+          weight_class, title_fight, venue, scheduled_at, fee_bps, lock_before_secs, status, ledger_sequence)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        ON CONFLICT (market_id) DO NOTHING`,
       [
         marketData.market_id,
@@ -233,6 +234,7 @@ export async function handleMarketCreated(event: RawStellarEvent): Promise<void>
         marketData.venue,
         marketData.scheduled_at,
         marketData.fee_bps,
+        marketData.lock_before_secs,
         marketData.status,
         marketData.ledger_sequence,
       ],

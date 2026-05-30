@@ -33,6 +33,7 @@ export const markets = pgTable(
     fee_bps: integer('fee_bps').default(200),
     resolved_at: timestamp('resolved_at', { withTimezone: true }),
     oracle_used: text('oracle_used'),
+    lock_before_secs: integer('lock_before_secs').default(3600),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
     ledger_sequence: integer('ledger_sequence').default(0),

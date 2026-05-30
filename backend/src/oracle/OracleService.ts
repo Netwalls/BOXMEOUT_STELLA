@@ -226,6 +226,60 @@ export async function runAutoResolutionJob(): Promise<{ resolved: number; skippe
 }
 
 /**
+ * Auto-lock job: locks open markets that have passed their lock threshold.
+ *
+ * Steps:
+ *   1. Query all markets with `status = 'open'` AND `scheduled_at - lock_before_secs <= NOW()`
+ *   2. For each: update DB status to 'locked'
+ *   3. Returns `{ locked: number, failed: number }`
+ *
+ * Note: The on-chain `place_bet` function independently enforces the time
+ * threshold, so even if the contract status remains `Open`, no new bets
+ * can be placed past the lock time. The DB status update ensures the
+ * frontend UI reflects the locked state immediately.
+ */
+export async function runAutoLockMarketsJob(): Promise<{ locked: number; failed: number }> {
+  const stats = { locked: 0, failed: 0 };
+
+  try {
+    const { rows } = await pool.query<{ market_id: string; contract_address: string }>(
+      `SELECT market_id, contract_address
+         FROM markets
+        WHERE status = 'open'
+          AND EXTRACT(EPOCH FROM scheduled_at) - COALESCE(lock_before_secs, 3600) <= EXTRACT(EPOCH FROM NOW())
+        ORDER BY scheduled_at ASC`,
+    );
+
+    if (rows.length === 0) {
+      logger.debug('runAutoLockMarketsJob: no markets to lock');
+      return stats;
+    }
+
+    logger.info({ count: rows.length }, 'runAutoLockMarketsJob: locking markets');
+
+    for (const market of rows) {
+      try {
+        await pool.query(
+          `UPDATE markets SET status = 'locked', updated_at = NOW() WHERE market_id = $1 AND status = 'open'`,
+          [market.market_id],
+        );
+
+        stats.locked++;
+        logger.info({ market_id: market.market_id }, 'runAutoLockMarketsJob: market locked');
+      } catch (err) {
+        logger.error({ err, market_id: market.market_id }, 'runAutoLockMarketsJob: error locking market');
+        stats.failed++;
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'runAutoLockMarketsJob: failed to query markets for locking');
+  }
+
+  logger.info(stats, 'runAutoLockMarketsJob: completed');
+  return stats;
+}
+
+/**
  * Constructs and submits a resolve_market transaction to Stellar.
  *
  * Steps:

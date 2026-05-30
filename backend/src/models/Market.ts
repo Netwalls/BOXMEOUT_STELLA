@@ -29,6 +29,8 @@ export interface Market {
   total_pool: string;
   /** Platform fee in basis points */
   fee_bps: number;
+  /** Seconds before scheduled_at to stop accepting bets (default 3600) */
+  lock_before_secs: number;
   resolved_at: Date | null;
   oracle_used: 'primary' | 'fallback' | 'admin' | null;
   created_at: Date;
