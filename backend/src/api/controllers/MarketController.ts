@@ -46,7 +46,8 @@ export const listMarketsValidation = validateQuery(listMarketsQuerySchema);
  */
 export async function listMarkets(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { status, weight_class, fighter, dateFrom, dateTo, page, limit } = req.query as z.infer<typeof listMarketsQuerySchema>;
+    const query = req.query as unknown as z.infer<typeof listMarketsQuerySchema>;
+    const { status, weight_class, fighter, dateFrom, dateTo, page, limit } = query;
     const { markets, total } = await MarketService.getMarkets(
       { status, weight_class, fighter, dateFrom, dateTo },
       { page, limit },
@@ -290,12 +291,10 @@ export async function getPlatformStats(req: Request, res: Response, next: NextFu
 // Issue #745 — resolveMarket (admin)
 // ---------------------------------------------------------------------------
 
-const VALID_OUTCOMES = ['fighter_a', 'fighter_b', 'draw', 'no_contest'] as const;
+const VALID_RESOLVE_OUTCOMES = ['fighter_a', 'fighter_b', 'draw', 'no_contest'] as const;
 
 const resolveMarketBodySchema = z.object({
-  winning_outcome: z.enum(VALID_OUTCOMES, {
-    errorMap: () => ({ message: `winning_outcome must be one of: ${VALID_OUTCOMES.join(', ')}` }),
-  }),
+  winning_outcome: z.enum(VALID_RESOLVE_OUTCOMES),
 });
 
 /**

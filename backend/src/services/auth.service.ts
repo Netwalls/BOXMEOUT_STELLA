@@ -324,3 +324,8 @@ export async function verify2FA(
     refreshToken: signRefresh(userId, user.sessionVersion),
   };
 }
+
+export function isEmailVerified(userId: string): boolean {
+  const user = users.get(userId);
+  return user?.emailVerified ?? false;
+}

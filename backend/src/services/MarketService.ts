@@ -89,6 +89,14 @@ export interface Portfolio {
   pending_claims: Bet[];
 }
 
+export interface BettorStats {
+  total_wagered_xlm: number;
+  total_winnings_xlm: number;
+  total_bets: number;
+  win_rate: number;
+  favorite_fighter: string | null;
+}
+
 export interface ProjectedPayout {
   amount: string;
   formatted_xlm: number;
@@ -402,6 +410,39 @@ export async function getBetsByAddress(bettor_address: string): Promise<Bet[]> {
     placed_at: new Date(row.placed_at),
     claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
   } as Bet));
+}
+
+/**
+ * Returns aggregate statistics for a bettor address.
+ * Totals are computed in XLM. Returns zeroed stats when no bets exist.
+ */
+export async function getBettorStats(bettor_address: string): Promise<BettorStats> {
+  const bets = await getBetsByAddress(bettor_address);
+  const total_bets = bets.length;
+  const total_wagered_xlm = bets.reduce((sum, bet) => sum + Number(bet.amount) / 10_000_000, 0);
+  const total_winnings_xlm = bets
+    .filter((bet) => bet.claimed && bet.payout)
+    .reduce((sum, bet) => sum + Number(bet.payout ?? '0') / 10_000_000, 0);
+
+  const outcomeCounts = bets.reduce<Record<string, number>>((counts, bet) => {
+    counts[bet.side] = (counts[bet.side] ?? 0) + 1;
+    return counts;
+  }, {});
+
+  const favorite_fighter = Object.entries(outcomeCounts).reduce<string | null>((best, [side, count]) => {
+    if (best === null) return side;
+    return count > (outcomeCounts[best] ?? 0) ? side : best;
+  }, null);
+
+  const win_rate = total_bets === 0 ? 0 : Math.round((bets.filter((bet) => bet.claimed && bet.payout).length * 10000) / total_bets) / 100;
+
+  return {
+    total_wagered_xlm,
+    total_winnings_xlm,
+    total_bets,
+    win_rate,
+    favorite_fighter,
+  };
 }
 
 /**

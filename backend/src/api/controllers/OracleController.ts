@@ -12,13 +12,11 @@ import * as OracleService from '../../oracle/OracleService';
 // ---------------------------------------------------------------------------
 // Zod schema for POST /api/oracle/submit body
 // ---------------------------------------------------------------------------
+const ORACLE_OUTCOMES = ['fighter_a', 'fighter_b', 'draw', 'no_contest'] as const;
+
 const submitOracleResultSchema = z.object({
   match_id: z.string().min(1, 'match_id is required'),
-  outcome: z.enum(['fighter_a', 'fighter_b', 'draw', 'no_contest'], {
-    errorMap: () => ({
-      message: "outcome must be one of: fighter_a, fighter_b, draw, no_contest",
-    }),
-  }),
+  outcome: z.enum(ORACLE_OUTCOMES),
   reported_at: z
     .string()
     .datetime({ message: 'reported_at must be a valid ISO 8601 datetime string' }),
