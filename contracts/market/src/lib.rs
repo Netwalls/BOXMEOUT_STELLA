@@ -57,6 +57,8 @@ impl MarketContract {
             total_pool: 0,
             protocol_fee_bp,
             oracle_address: oracle,
+            outcome: None,
+            fee_collector_address: fee_collector,
         };
 
         env.storage().persistent().set(&DataKey::MarketInfo, &market);
@@ -181,7 +183,94 @@ impl MarketContract {
     /// Marks bet as claimed. Emits WinningsClaimed event.
     /// Returns payout amount in stroops.
     pub fn claim_winnings(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
-        todo!("implement: require_auth(bettor), validate eligibility, mark claimed BEFORE transfer (re-entrancy guard), compute payout, transfer XLM, emit event")
+        // 1. CHECKS: Validate state
+        bettor.require_auth();
+
+        // Load bet
+        let bet: Bet = env.storage().persistent().get(&DataKey::Bet(bet_id.clone()))
+            .expect("bet not found");
+
+        // Verify bettor owns this bet
+        if bet.bettor != bettor {
+            panic!("not your bet");
+        }
+
+        // Load market
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo)
+            .expect("market not initialized");
+
+        // Validate market is resolved
+        if market.status != MarketStatus::Resolved {
+            panic!("market not resolved");
+        }
+
+        // Validate outcome exists
+        let outcome = market.outcome.expect("no outcome set");
+
+        // Validate bettor's side matches outcome
+        let is_winner = match (bet.side, outcome) {
+            (BetSide::FighterA, Outcome::FighterA) => true,
+            (BetSide::FighterB, Outcome::FighterB) => true,
+            (BetSide::FighterA, Outcome::Draw) => true,
+            (BetSide::FighterB, Outcome::Draw) => true,
+            (BetSide::FighterA, Outcome::NoContest) => true,
+            (BetSide::FighterB, Outcome::NoContest) => true,
+            _ => false,
+        };
+
+        if !is_winner {
+            panic!("bet did not win");
+        }
+
+        // Check if already claimed using CLAIMED storage
+        let already_claimed: bool = env.storage().persistent()
+            .get(&DataKey::Claimed(bet_id.clone()))
+            .unwrap_or(false);
+
+        if already_claimed {
+            panic!("already claimed");
+        }
+
+        // Compute payout
+        let winning_pool = match outcome {
+            Outcome::FighterA => market.pool_a,
+            Outcome::FighterB => market.pool_b,
+            Outcome::Draw => market.pool_a + market.pool_b,
+            Outcome::NoContest => market.pool_a + market.pool_b,
+        };
+
+        let payout = if winning_pool > 0 {
+            (bet.amount * market.total_pool * (10000 - market.protocol_fee_bp as i128)) / (winning_pool * 10000)
+        } else {
+            0
+        };
+
+        let protocol_fee = payout - (payout * (10000 - market.protocol_fee_bp as i128)) / 10000;
+
+        // 2. EFFECTS: Mark as claimed BEFORE any transfer (re-entrancy guard)
+        env.storage().persistent().set(&DataKey::Claimed(bet_id.clone()), &true);
+
+        // 3. INTERACTIONS: Transfer XLM
+        let native = env.ledger().native_contract_address();
+        let token_client = token::Client::new(&env, &native);
+
+        // Transfer payout to bettor
+        if payout > 0 {
+            token_client.transfer(&env.current_contract_address(), &bettor, &payout);
+        }
+
+        // Transfer protocol fee to fee collector
+        if protocol_fee > 0 {
+            token_client.transfer(&env.current_contract_address(), &market.fee_collector_address, &protocol_fee);
+        }
+
+        // Emit event
+        env.events().publish(
+            ("WinningsClaimed", bettor, bet_id),
+            payout,
+        );
+
+        payout
     }
 
     /// Issues a full refund for a bet when market is Cancelled or outcome is NoContest.
@@ -189,7 +278,66 @@ impl MarketContract {
     /// Validates: status==Cancelled or outcome==NoContest, bettor owns bet, not claimed.
     /// Emits RefundClaimed event. Returns refund amount.
     pub fn claim_refund(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
-        todo!("implement: require_auth(bettor), validate market state, mark claimed BEFORE transfer, return full bet.amount, emit event")
+        // 1. CHECKS: Validate state
+        bettor.require_auth();
+
+        // Load bet
+        let bet: Bet = env.storage().persistent().get(&DataKey::Bet(bet_id.clone()))
+            .expect("bet not found");
+
+        // Verify bettor owns this bet
+        if bet.bettor != bettor {
+            panic!("not your bet");
+        }
+
+        // Load market
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo)
+            .expect("market not initialized");
+
+        // Validate market is cancelled or no contest
+        let is_refundable = match market.status {
+            MarketStatus::Cancelled => true,
+            _ => {
+                if let Some(Outcome::NoContest) = market.outcome {
+                    true
+                } else {
+                    false
+                }
+            }
+        };
+
+        if !is_refundable {
+            panic!("market not eligible for refund");
+        }
+
+        // Check if already claimed using CLAIMED storage
+        let already_claimed: bool = env.storage().persistent()
+            .get(&DataKey::Claimed(bet_id.clone()))
+            .unwrap_or(false);
+
+        if already_claimed {
+            panic!("already claimed");
+        }
+
+        let refund_amount = bet.amount;
+
+        // 2. EFFECTS: Mark as claimed BEFORE any transfer (re-entrancy guard)
+        env.storage().persistent().set(&DataKey::Claimed(bet_id.clone()), &true);
+
+        // 3. INTERACTIONS: Transfer XLM
+        let native = env.ledger().native_contract_address();
+        let token_client = token::Client::new(&env, &native);
+
+        // Transfer full refund to bettor
+        token_client.transfer(&env.current_contract_address(), &bettor, &refund_amount);
+
+        // Emit event
+        env.events().publish(
+            ("RefundClaimed", bettor, bet_id),
+            refund_amount,
+        );
+
+        refund_amount
     }
 
     /// Allows any bettor in this market to raise a dispute after resolution.
@@ -397,5 +545,331 @@ mod tests {
         let market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
         assert_eq!(market.pool_b, TEST_MAX_BET);
         assert_eq!(market.total_pool, TEST_MAX_BET);
+    }
+
+    /// Helper to resolve a market with a specific outcome for testing
+    fn resolve_market_for_test(env: Env, oracle: Address, outcome: Outcome) {
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo)
+            .expect("market not initialized");
+        market.status = MarketStatus::Resolved;
+        market.outcome = Some(outcome);
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+    }
+
+    /// Helper to cancel a market for refund testing
+    fn cancel_market_for_test(env: Env) {
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo)
+            .expect("market not initialized");
+        market.status = MarketStatus::Cancelled;
+        market.outcome = Some(Outcome::NoContest);
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+    }
+
+    #[test]
+    fn test_claim_winnings_succeeds_once() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Resolve market with Fighter A winning
+        resolve_market_for_test(env.clone(), Address::new(&env, &[3u8; 32]), Outcome::FighterA);
+        
+        // First claim should succeed
+        let payout = MarketContract::claim_winnings(
+            env.clone(),
+            bettor.clone(),
+            bet_id.clone(),
+        );
+        
+        assert!(payout > 0, "Payout should be positive");
+        
+        // Verify CLAIMED flag is set
+        let claimed: bool = env.storage().persistent()
+            .get(&DataKey::Claimed(bet_id.clone()))
+            .unwrap_or(false);
+        assert!(claimed, "CLAIMED flag should be true after first claim");
+        
+        // Second claim should panic
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_winnings(
+                env.clone(),
+                bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(result.is_err(), "Second claim should panic");
+    }
+
+    #[test]
+    fn test_claim_refund_succeeds_once() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Cancel market
+        cancel_market_for_test(env.clone());
+        
+        // First refund should succeed
+        let refund = MarketContract::claim_refund(
+            env.clone(),
+            bettor.clone(),
+            bet_id.clone(),
+        );
+        
+        assert_eq!(refund, TEST_MIN_BET, "Refund should equal bet amount");
+        
+        // Verify CLAIMED flag is set
+        let claimed: bool = env.storage().persistent()
+            .get(&DataKey::Claimed(bet_id.clone()))
+            .unwrap_or(false);
+        assert!(claimed, "CLAIMED flag should be true after first refund");
+        
+        // Second refund should panic
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_refund(
+                env.clone(),
+                bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(result.is_err(), "Second refund should panic");
+    }
+
+    #[test]
+    fn test_claim_winnings_re_entrancy_guard() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet on Fighter A
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Resolve market with Fighter A winning
+        resolve_market_for_test(env.clone(), Address::new(&env, &[3u8; 32]), Outcome::FighterA);
+        
+        // First claim succeeds
+        let payout1 = MarketContract::claim_winnings(
+            env.clone(),
+            bettor.clone(),
+            bet_id.clone(),
+        );
+        
+        assert!(payout1 > 0, "First claim should succeed");
+        
+        // Verify the CLAIMED flag was set BEFORE any transfer could occur
+        // by checking that a second call panics immediately
+        let second_call_result = std::panic::catch_unwind(|| {
+            MarketContract::claim_winnings(
+                env.clone(),
+                bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(second_call_result.is_err(), "Second call must panic before any transfer");
+        
+        // The panic message should indicate "already claimed"
+        if let Err(err) = second_call_result {
+            let err_msg = err.downcast_ref::<&str>().unwrap_or(&"unknown");
+            assert!(
+                err_msg.contains(&"already claimed"),
+                "Error should be 'already claimed', got: {:?}",
+                err_msg
+            );
+        }
+    }
+
+    #[test]
+    fn test_claim_refund_re_entrancy_guard() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Cancel market
+        cancel_market_for_test(env.clone());
+        
+        // First refund succeeds
+        let refund1 = MarketContract::claim_refund(
+            env.clone(),
+            bettor.clone(),
+            bet_id.clone(),
+        );
+        
+        assert_eq!(refund1, TEST_MIN_BET, "First refund should succeed");
+        
+        // Verify the CLAIMED flag was set BEFORE any transfer could occur
+        let second_call_result = std::panic::catch_unwind(|| {
+            MarketContract::claim_refund(
+                env.clone(),
+                bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(second_call_result.is_err(), "Second call must panic before any transfer");
+        
+        // The panic message should indicate "already claimed"
+        if let Err(err) = second_call_result {
+            let err_msg = err.downcast_ref::<&str>().unwrap_or(&"unknown");
+            assert!(
+                err_msg.contains(&"already claimed"),
+                "Error should be 'already claimed', got: {:?}",
+                err_msg
+            );
+        }
+    }
+
+    #[test]
+    fn test_claim_winnings_wrong_bettor_panics() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Resolve market
+        resolve_market_for_test(env.clone(), Address::new(&env, &[3u8; 32]), Outcome::FighterA);
+        
+        // Try to claim with different bettor
+        let wrong_bettor = Address::new(&env, &[5u8; 32]);
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_winnings(
+                env.clone(),
+                wrong_bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(result.is_err(), "Wrong bettor should panic");
+    }
+
+    #[test]
+    fn test_claim_refund_wrong_bettor_panics() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Cancel market
+        cancel_market_for_test(env.clone());
+        
+        // Try to refund with different bettor
+        let wrong_bettor = Address::new(&env, &[5u8; 32]);
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_refund(
+                env.clone(),
+                wrong_bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(result.is_err(), "Wrong bettor should panic");
+    }
+
+    #[test]
+    fn test_claim_winnings_losing_bet_panics() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet on Fighter A
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Resolve market with Fighter B winning
+        resolve_market_for_test(env.clone(), Address::new(&env, &[3u8; 32]), Outcome::FighterB);
+        
+        // Try to claim winnings on losing bet
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_winnings(
+                env.clone(),
+                bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(result.is_err(), "Losing bet should not be able to claim winnings");
+    }
+
+    #[test]
+    fn test_claim_winnings_market_not_resolved_panics() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Market is still Open, not resolved
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_winnings(
+                env.clone(),
+                bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(result.is_err(), "Cannot claim on unresolved market");
+    }
+
+    #[test]
+    fn test_claim_refund_market_not_cancelled_panics() {
+        let (env, bettor, _) = setup_test_env();
+        
+        // Place a bet
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Market is still Open, not cancelled
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_refund(
+                env.clone(),
+                bettor,
+                bet_id,
+            );
+        });
+        
+        assert!(result.is_err(), "Cannot refund on non-cancelled market");
     }
 }

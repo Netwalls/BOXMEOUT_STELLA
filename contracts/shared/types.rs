@@ -42,19 +42,21 @@ pub struct Fighter {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Market {
-    pub market_id:       Bytes,
-    pub fighter_a:       Fighter,
-    pub fighter_b:       Fighter,
-    pub scheduled_at:    u64,
-    pub betting_ends_at: u64,
-    pub created_at:      u64,
-    pub created_by:      Address,
-    pub status:          MarketStatus,
-    pub pool_a:          i128,         // Total XLM staked on Fighter A (stroops)
-    pub pool_b:          i128,         // Total XLM staked on Fighter B (stroops)
-    pub total_pool:      i128,
-    pub protocol_fee_bp: u32,          // Fee in basis points — 200 = 2%
-    pub oracle_address:  Address,
+    pub market_id:           Bytes,
+    pub fighter_a:           Fighter,
+    pub fighter_b:           Fighter,
+    pub scheduled_at:        u64,
+    pub betting_ends_at:     u64,
+    pub created_at:          u64,
+    pub created_by:          Address,
+    pub status:              MarketStatus,
+    pub pool_a:              i128,         // Total XLM staked on Fighter A (stroops)
+    pub pool_b:              i128,         // Total XLM staked on Fighter B (stroops)
+    pub total_pool:          i128,
+    pub protocol_fee_bp:     u32,          // Fee in basis points — 200 = 2%
+    pub oracle_address:      Address,
+    pub outcome:             Option<Outcome>,
+    pub fee_collector_address: Address,
 }
 
 #[contracttype]
