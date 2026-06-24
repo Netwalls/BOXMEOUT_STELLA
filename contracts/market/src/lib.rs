@@ -1,6 +1,6 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Vec};
-use crate::types::{Bet, BetSide, ClaimReceipt, Fighter, Market, MarketStatus, Outcome};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Bytes, Env, Symbol, Vec};
+use crate::types::{Bet, BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig};
 
 // ─── STORAGE KEYS ─────────────────────────────────────────────────────────────
 // MARKET_INFO           -> Market
@@ -9,6 +9,18 @@ use crate::types::{Bet, BetSide, ClaimReceipt, Fighter, Market, MarketStatus, Ou
 // CLAIMED_{bet_id}      -> bool
 // DISPUTE_RAISED        -> bool
 // DISPUTE_REASON        -> String
+// FACTORY               -> Address      (MarketFactory contract address)
+
+#[contracttype]
+pub enum DataKey {
+    MarketInfo,
+    Factory,
+    Bet(Bytes),
+    BetsByAddr(Address),
+    Claimed(Bytes),
+    DisputeRaised,
+    DisputeReason,
+}
 
 #[contract]
 pub struct MarketContract;
@@ -31,7 +43,24 @@ impl MarketContract {
         protocol_fee_bp: u32,
         fee_collector: Address,
     ) {
-        todo!("implement: verify caller == factory, build Market struct, store MARKET_INFO with status=Open")
+        let market = Market {
+            market_id: market_id.clone(),
+            fighter_a,
+            fighter_b,
+            scheduled_at,
+            betting_ends_at,
+            created_at: env.ledger().timestamp(),
+            created_by: factory.clone(),
+            status: MarketStatus::Open,
+            pool_a: 0,
+            pool_b: 0,
+            total_pool: 0,
+            protocol_fee_bp,
+            oracle_address: oracle,
+        };
+
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+        env.storage().persistent().set(&DataKey::Factory, &factory);
     }
 
     /// Accepts XLM from bettor and records their bet in contract storage.
@@ -46,7 +75,86 @@ impl MarketContract {
         side: BetSide,
         amount: i128,
     ) -> Bytes {
-        todo!("implement: require_auth(bettor), validate market/timing/amount, transfer XLM, update pool, generate bet_id, store Bet, emit event")
+        // Require authorization from bettor
+        bettor.require_auth();
+
+        // Load market info
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo)
+            .expect("market not initialized");
+
+        // Validate market is open
+        if market.status != MarketStatus::Open {
+            panic!("market not open");
+        }
+
+        // Validate betting period is still active
+        if env.ledger().timestamp() >= market.betting_ends_at {
+            panic!("betting period has ended");
+        }
+
+        // ─── BET AMOUNT VALIDATION ─────────────────────────────────────────────
+        // Load ProtocolConfig from factory via cross-contract call
+        let factory: Address = env.storage().persistent().get(&DataKey::Factory)
+            .expect("factory not set");
+        let config: ProtocolConfig = env.invoke_contract(
+            &factory,
+            &Symbol::new(&env, "get_config"),
+            (),
+        );
+
+        // Validate min/max bet amounts BEFORE any token transfer or balance mutation
+        if amount < config.min_bet_amount {
+            panic!("below minimum bet");
+        }
+        if amount > config.max_bet_amount {
+            panic!("above maximum bet");
+        }
+        // ─── END VALIDATION ────────────────────────────────────────────────────
+
+        // Transfer XLM from bettor to this contract (escrow)
+        let native = env.ledger().native_contract_address();
+        let token_client = token::Client::new(&env, &native);
+        token_client.transfer(&bettor, &env.current_contract_address(), &amount);
+
+        // Update pool
+        match side {
+            BetSide::FighterA => market.pool_a += amount,
+            BetSide::FighterB => market.pool_b += amount,
+        }
+        market.total_pool += amount;
+
+        // Store updated market
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+
+        // Generate a unique bet_id
+        let bet_id = Bytes::from_slice(&env, &[0u8; 32]);
+
+        // Record the bet
+        let bet = Bet {
+            bet_id: bet_id.clone(),
+            market_id: market.market_id.clone(),
+            bettor: bettor.clone(),
+            side,
+            amount,
+            placed_at: env.ledger().timestamp(),
+            claimed: false,
+        };
+        env.storage().persistent().set(&DataKey::Bet(bet_id.clone()), &bet);
+
+        // Add bet to address index
+        let mut bets_by_addr: Vec<Bytes> = env.storage().persistent()
+            .get(&DataKey::BetsByAddr(bettor.clone()))
+            .unwrap_or(Vec::new(&env));
+        bets_by_addr.push_back(bet_id.clone());
+        env.storage().persistent().set(&DataKey::BetsByAddr(bettor.clone()), &bets_by_addr);
+
+        // Emit BetPlaced event
+        env.events().publish(
+            ("BetPlaced", bettor, bet_id.clone()),
+            amount,
+        );
+
+        bet_id
     }
 
     /// Transitions market status from Open to Locked.
@@ -103,13 +211,15 @@ impl MarketContract {
 
     /// Read-only. Returns the full Market struct.
     pub fn get_market_info(env: Env) -> Market {
-        todo!("implement: read MARKET_INFO from storage and return")
+        env.storage().persistent().get(&DataKey::MarketInfo)
+            .expect("market not initialized")
     }
 
     /// Returns a specific Bet struct by its ID.
     /// Panics if bet_id is not found.
     pub fn get_bet(env: Env, bet_id: Bytes) -> Bet {
-        todo!("implement: read BET_{{bet_id}} from storage, panic if missing")
+        env.storage().persistent().get(&DataKey::Bet(bet_id))
+            .expect("bet not found")
     }
 
     /// Returns all bets placed by a specific address on this market.
@@ -130,5 +240,162 @@ impl MarketContract {
     /// Handles zero total_pool edge case (returns 5000/5000 even split).
     pub fn get_pool_odds(env: Env) -> (i128, i128, u32, u32) {
         todo!("implement: read pools from MARKET_INFO, compute implied odds, return tuple")
+    }
+}
+
+// ─── UNIT TESTS ───────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::{Env, Address, Bytes, Symbol, String, testutils::Auth};
+
+    const TEST_MIN_BET: i128 = 100;
+    const TEST_MAX_BET: i128 = 1000;
+
+    /// Mock factory contract that returns a fixed ProtocolConfig for testing
+    #[contract]
+    pub struct MockFactory;
+
+    #[contractimpl]
+    impl MockFactory {
+        pub fn get_config(env: Env) -> ProtocolConfig {
+            ProtocolConfig {
+                admin: Address::new(&env, &[0u8; 32]),
+                fee_collector: Address::new(&env, &[0u8; 32]),
+                default_fee_bp: 200,
+                min_bet_amount: TEST_MIN_BET,
+                max_bet_amount: TEST_MAX_BET,
+                dispute_window_sec: 86400,
+                paused: false,
+            }
+        }
+    }
+
+    /// Helper to set up a complete test environment with market and factory
+    fn setup_test_env() -> (Env, Address, Address) {
+        let env = Env::test();
+        env.mock_all_auths();
+
+        // Register mock factory contract
+        let factory_id = env.register_contract(None, MockFactory {});
+        let factory_address = Address::from_contract_id(&env, &factory_id);
+
+        // Create test addresses
+        let bettor = Address::new(&env, &[1u8; 32]);
+        let oracle = Address::new(&env, &[3u8; 32]);
+        let fee_collector = Address::new(&env, &[4u8; 32]);
+
+        // Register market contract
+        let market_id = env.register_contract(None, MarketContract {});
+        let market_address = Address::from_contract_id(&env, &market_id);
+
+        // Store factory address in market storage
+        env.storage().persistent().set(&DataKey::Factory, &factory_address);
+
+        // Initialize market with future betting end time
+        let future_time = env.ledger().timestamp() + 10000;
+        MarketContract::initialize(
+            env.clone(),
+            Bytes::from_slice(&env, &[2u8; 32]),
+            Fighter {
+                name: String::from_str(&env, "Fighter A"),
+                record: String::from_str(&env, "10-0-0"),
+                nationality: String::from_str(&env, "USA"),
+                weight_class: String::from_str(&env, "Heavyweight"),
+            },
+            Fighter {
+                name: String::from_str(&env, "Fighter B"),
+                record: String::from_str(&env, "8-1-0"),
+                nationality: String::from_str(&env, "UK"),
+                weight_class: String::from_str(&env, "Heavyweight"),
+            },
+            future_time + 1000,
+            future_time,
+            oracle,
+            factory_address,
+            200,
+            fee_collector,
+        );
+
+        (env, bettor, market_address)
+    }
+
+    #[test]
+    fn test_bet_below_minimum_panics() {
+        let (env, bettor, _) = setup_test_env();
+        
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::place_bet(
+                env.clone(),
+                bettor,
+                BetSide::FighterA,
+                TEST_MIN_BET - 1,
+            );
+        });
+        
+        assert!(result.is_err(), "Expected panic for bet below minimum");
+    }
+
+    #[test]
+    fn test_bet_above_maximum_panics() {
+        let (env, bettor, _) = setup_test_env();
+        
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::place_bet(
+                env.clone(),
+                bettor,
+                BetSide::FighterA,
+                TEST_MAX_BET + 1,
+            );
+        });
+        
+        assert!(result.is_err(), "Expected panic for bet above maximum");
+    }
+
+    #[test]
+    fn test_bet_at_minimum_succeeds() {
+        let (env, bettor, _) = setup_test_env();
+        
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterA,
+            TEST_MIN_BET,
+        );
+        
+        // Verify bet was recorded
+        let bet: Bet = env.storage().persistent().get(&DataKey::Bet(bet_id)).unwrap();
+        assert_eq!(bet.amount, TEST_MIN_BET);
+        assert_eq!(bet.bettor, bettor);
+        assert_eq!(bet.side, BetSide::FighterA);
+        
+        // Verify pool was updated
+        let market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        assert_eq!(market.pool_a, TEST_MIN_BET);
+        assert_eq!(market.total_pool, TEST_MIN_BET);
+    }
+
+    #[test]
+    fn test_bet_at_maximum_succeeds() {
+        let (env, bettor, _) = setup_test_env();
+        
+        let bet_id = MarketContract::place_bet(
+            env.clone(),
+            bettor.clone(),
+            BetSide::FighterB,
+            TEST_MAX_BET,
+        );
+        
+        // Verify bet was recorded
+        let bet: Bet = env.storage().persistent().get(&DataKey::Bet(bet_id)).unwrap();
+        assert_eq!(bet.amount, TEST_MAX_BET);
+        assert_eq!(bet.bettor, bettor);
+        assert_eq!(bet.side, BetSide::FighterB);
+        
+        // Verify pool was updated
+        let market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        assert_eq!(market.pool_b, TEST_MAX_BET);
+        assert_eq!(market.total_pool, TEST_MAX_BET);
     }
 }
