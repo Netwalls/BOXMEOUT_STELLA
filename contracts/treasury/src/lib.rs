@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Bytes, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Bytes, Env, Vec, Symbol, BytesN};
 
 // ─── STORAGE KEYS ─────────────────────────────────────────────────────────────
 // ADMIN              -> Address
@@ -29,7 +29,23 @@ impl Treasury {
     /// Sets up the Treasury with admin and authorized factory address.
     /// Called once after deployment. Panics if already initialized.
     pub fn initialize(env: Env, admin: Address, factory: Address) {
-        todo!("implement: panic if already initialized, store ADMIN + FACTORY, set BALANCE=0, TOTAL_FEES_EARNED=0")
+        // Check if already initialized
+        let admin_key = Symbol::short("ADMIN");
+        if env.storage().has(&admin_key) {
+            panic!("Treasury contract is already initialized");
+        }
+
+        // Persist admin and factory
+        env.storage().set(&admin_key, &admin);
+        env.storage().set(&Symbol::short("FACTORY"), &factory);
+
+        // Initialize numeric metrics
+        env.storage().set(&Symbol::short("BALANCE"), &0i128);
+        env.storage().set(&Symbol::short("TOTAL_FEES_EARNED"), &0i128);
+
+        // Initialize empty withdrawal log
+        let log: Vec<(Address, i128, u64)> = Vec::new(&env);
+        env.storage().set(&Symbol::short("WITHDRAWAL_LOG"), &log);
     }
 
     /// Called by Market contracts when distributing protocol fees on claim.
@@ -54,17 +70,14 @@ impl Treasury {
     /// Logs the drain. Emits EmergencyDrain event.
     /// Returns total amount drained in stroops.
     pub fn emergency_drain(env: Env, admin: Address, recipient: Address) -> i128 {
-        // 1. Authentication
         admin.require_auth();
 
-        // 2. State Check — protocol must be paused
         let factory: Address = env.storage().persistent().get(&symbol_short!("FACTORY")).unwrap();
         let config: ProtocolConfig = env.invoke_contract(&factory, &symbol_short!("get_config"), soroban_sdk::vec![&env]);
         if !config.paused {
             panic!("protocol is not paused");
         }
 
-        // 3. Funds Transfer — drain full balance
         let amount: i128 = env.storage().persistent().get(&symbol_short!("BALANCE")).unwrap_or(0);
         let token: Address = env.storage().persistent().get(&symbol_short!("TOKEN")).unwrap();
         soroban_sdk::token::Client::new(&env, &token).transfer(
@@ -74,7 +87,6 @@ impl Treasury {
         );
         env.storage().persistent().set(&symbol_short!("BALANCE"), &0_i128);
 
-        // 4. Logging & Events
         let mut log: Vec<(Address, i128, u64)> = env
             .storage()
             .persistent()
@@ -88,23 +100,24 @@ impl Treasury {
             amount,
         );
 
-        // 5. Return drained amount
         amount
     }
 
     /// Returns current treasury XLM balance in stroops.
     pub fn get_balance(env: Env) -> i128 {
-        todo!("implement: read BALANCE from storage and return")
+        env.storage().get(&Symbol::short("BALANCE")).unwrap_or(0i128)
     }
 
     /// Returns lifetime cumulative fees collected (never decremented on withdrawals).
     pub fn get_total_fees_earned(env: Env) -> i128 {
-        todo!("implement: read TOTAL_FEES_EARNED from storage and return")
+        env.storage().get(&Symbol::short("TOTAL_FEES_EARNED")).unwrap_or(0i128)
     }
 
     /// Returns log of all past withdrawals: (recipient, amount, timestamp).
     pub fn get_withdrawal_log(env: Env) -> Vec<(Address, i128, u64)> {
-        todo!("implement: read WITHDRAWAL_LOG from storage and return")
+        env.storage()
+            .get(&Symbol::short("WITHDRAWAL_LOG"))
+            .unwrap_or(Vec::new(&env))
     }
 }
 
@@ -118,9 +131,11 @@ mod tests {
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    /// Registers a Treasury contract and pre-seeds its storage so that
-    /// `emergency_drain` has the data it needs without calling `initialize`
-    /// (which is still a `todo!`).
+    fn addr_from_u8(env: &Env, v: u8) -> Address {
+        let b = BytesN::from_array(env, &[v; 32]);
+        Address::from_account_id(env, &b)
+    }
+
     fn setup(
         env: &Env,
         paused: bool,
@@ -129,15 +144,12 @@ mod tests {
         let admin = Address::generate(env);
         let recipient = Address::generate(env);
 
-        // Deploy a mock token
         let token_admin = Address::generate(env);
         let token_id = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
         let token = soroban_sdk::token::StellarAssetClient::new(env, &token_id);
 
-        // Deploy a mock factory whose `get_config` returns a ProtocolConfig
         let factory_id = env.register(MockFactory, (admin.clone(), paused));
 
-        // Deploy Treasury and seed its storage
         let treasury_id = env.register(Treasury, ());
         env.as_contract(&treasury_id, || {
             env.storage().persistent().set(&symbol_short!("FACTORY"), &factory_id);
@@ -146,7 +158,6 @@ mod tests {
             env.storage().persistent().set(&symbol_short!("BALANCE"), &balance);
         });
 
-        // Mint `balance` tokens into the treasury contract
         token.mint(&treasury_id, &balance);
 
         let client = TreasuryClient::new(env, &treasury_id);
@@ -180,7 +191,33 @@ mod tests {
         }
     }
 
-    // ── tests ─────────────────────────────────────────────────────────────────
+    // ── initialize tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_initialize_happy_path() {
+        let env = Env::default();
+        let admin = addr_from_u8(&env, 1u8);
+        let factory = addr_from_u8(&env, 2u8);
+        Treasury::initialize(env.clone(), admin.clone(), factory.clone());
+        assert_eq!(Treasury::get_balance(env.clone()), 0i128);
+        assert_eq!(Treasury::get_total_fees_earned(env.clone()), 0i128);
+        let log = Treasury::get_withdrawal_log(env.clone());
+        assert_eq!(log.len(), 0);
+    }
+
+    #[test]
+    fn test_double_initialize_panics() {
+        let env = Env::default();
+        let admin = addr_from_u8(&env, 3u8);
+        let factory = addr_from_u8(&env, 4u8);
+        Treasury::initialize(env.clone(), admin.clone(), factory.clone());
+        let res = std::panic::catch_unwind(|| {
+            Treasury::initialize(env.clone(), admin.clone(), factory.clone())
+        });
+        assert!(res.is_err());
+    }
+
+    // ── emergency_drain tests ────────────────────────────────────────────────
 
     #[test]
     fn test_emergency_drain_success() {
@@ -192,21 +229,17 @@ mod tests {
 
         let drained = client.emergency_drain(&admin, &recipient);
 
-        // Return value
         assert_eq!(drained, balance);
 
-        // BALANCE set to 0
         let stored_balance: i128 = env.as_contract(&client.address, || {
             env.storage().persistent().get(&symbol_short!("BALANCE")).unwrap()
         });
         assert_eq!(stored_balance, 0);
 
-        // Token actually transferred
         let token = soroban_sdk::token::Client::new(&env, &token_id);
         assert_eq!(token.balance(&recipient), balance);
         assert_eq!(token.balance(&client.address), 0);
 
-        // Withdrawal log updated
         let log: Vec<(Address, i128, u64)> = env.as_contract(&client.address, || {
             env.storage().persistent().get(&symbol_short!("WLOG")).unwrap()
         });
@@ -215,7 +248,6 @@ mod tests {
         assert_eq!(log_recipient, recipient);
         assert_eq!(log_amount, balance);
 
-        // EmergencyDrain event emitted
         let events = env.events().all();
         let found = events.iter().any(|(_, topics, data)| {
             topics.contains(&symbol_short!("EmrgDrain").into_val(&env))
@@ -238,7 +270,6 @@ mod tests {
     #[should_panic]
     fn test_emergency_drain_fails_when_unauthorized() {
         let env = Env::default();
-        // Do NOT mock auths — a non-admin call must fail auth check.
 
         let (client, _admin, recipient, _) = setup(&env, true, 10_000_000);
         let attacker = Address::generate(&env);
