@@ -65,9 +65,12 @@ export interface PortfolioSummary {
   roi: number;
 }
 
-export interface MarketQueryParams {
+export interface MarketFilters {
   status?: MarketStatus;
   weightClass?: string;
+}
+
+export interface MarketQueryParams extends MarketFilters {
   page?: number;
   limit?: number;
 }
