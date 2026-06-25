@@ -4,31 +4,25 @@ export interface FighterCardProps {
   fighter: Fighter;
   side: "A" | "B";
   poolAmount: bigint;
-  impliedOdds: number; // 0–100 percentage
+  impliedOdds: number;
 }
 
-/**
- * Displays one fighter's info: name, record, weight class, nationality.
- * Shows current pool size in XLM and implied win probability as a percentage.
- */
 export function FighterCard({ fighter, side, poolAmount, impliedOdds }: FighterCardProps): JSX.Element {
-  const formattedPool = poolAmount === 0n ? "0" : poolAmount.toString();
+  const accent = side === "A" ? "border-blue-500 text-blue-400" : "border-red-500 text-red-400";
+  const xlm = (Number(poolAmount) / 1e7).toFixed(2);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-base font-semibold text-slate-900">{fighter.name}</div>
-          <div className="mt-1 text-sm text-slate-500">{fighter.record}</div>
-          <div className="text-sm text-slate-500">{fighter.nationality}</div>
-          <div className="text-sm text-slate-500">{fighter.weightClass}</div>
-        </div>
-        <div className="text-right">
-          <div className="text-sm font-medium text-slate-700">{`Side ${side}`}</div>
-          <div className="mt-1 text-sm text-slate-500">{`Pool: ${formattedPool} XLM`}</div>
-          <div className="text-sm font-semibold text-slate-900">{`${impliedOdds.toFixed(1)}%`}</div>
-        </div>
+    <div className={`bg-gray-800 rounded-xl p-4 border-l-4 ${accent} flex-1 min-w-0`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-xs font-bold uppercase tracking-wider ${accent}`}>
+          Fighter {side}
+        </span>
+        <span className="text-xs text-gray-400">{impliedOdds.toFixed(1)}%</span>
       </div>
+      <h3 className="text-lg font-bold text-white truncate">{fighter.name}</h3>
+      <p className="text-sm text-gray-400">{fighter.record} · {fighter.weightClass}</p>
+      <p className="text-sm text-gray-400">{fighter.nationality}</p>
+      <p className="mt-2 text-sm text-gray-300">Pool: <span className="text-white font-semibold">{xlm} XLM</span></p>
     </div>
   );
 }

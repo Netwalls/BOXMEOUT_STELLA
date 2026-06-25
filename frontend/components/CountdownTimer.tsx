@@ -1,33 +1,41 @@
 "use client";
-
 import { useEffect, useState } from "react";
 
 export interface CountdownTimerProps {
-  targetTimestamp: number; // Unix seconds
-  label: string;           // e.g. "Betting closes in"
+  targetTimestamp: number;
+  label: string;
 }
 
-/**
- * Live countdown to a Unix timestamp, updated every second.
- * Displays HH:MM:SS format with the label prefix.
- * Switches to "LIVE" text once targetTimestamp is reached.
- */
+function formatRemaining(seconds: number): string {
+  if (seconds <= 0) return "LIVE";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 export function CountdownTimer({ targetTimestamp, label }: CountdownTimerProps): JSX.Element {
-  const [now, setNow] = useState(() => Date.now() / 1000);
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, targetTimestamp - Math.floor(Date.now() / 1000))
+  );
 
   useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now() / 1000), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
+    if (remaining <= 0) return;
+    const id = setInterval(() => {
+      setRemaining(Math.max(0, targetTimestamp - Math.floor(Date.now() / 1000)));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [targetTimestamp, remaining]);
 
-  const remaining = Math.max(0, targetTimestamp - Math.floor(now));
-  const hours = String(Math.floor(remaining / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((remaining % 3600) / 60)).padStart(2, "0");
-  const seconds = String(remaining % 60).padStart(2, "0");
+  const display = formatRemaining(remaining);
 
   return (
-    <div className="text-sm text-slate-600">
-      {label}: {remaining <= 0 ? "LIVE" : `${hours}:${minutes}:${seconds}`}
-    </div>
+    <span className="text-sm text-gray-400">
+      {display === "LIVE" ? (
+        <span className="text-green-400 font-semibold">LIVE</span>
+      ) : (
+        <>{label}: <span className="font-mono text-white">{display}</span></>
+      )}
+    </span>
   );
 }

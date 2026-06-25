@@ -3,19 +3,29 @@ export interface LoadingSkeletonProps {
   count?: number;
 }
 
-/**
- * Animated placeholder rendered while data loads.
- * Each variant matches the dimensions of its real counterpart
- * (MarketCard, PortfolioTable row, MarketOddsChart) to prevent layout shift.
- */
 export function LoadingSkeleton({ variant, count = 1 }: LoadingSkeletonProps): JSX.Element {
-  const base = Array.from({ length: count }, (_, index) => index);
+  const items = Array.from({ length: count });
 
-  return (
-    <div className="space-y-3">
-      {base.map((item) => (
-        <div key={`${variant}-${item}`} className={`animate-pulse rounded-xl border border-slate-200 bg-slate-100 ${variant === "chart" ? "h-24" : variant === "table" ? "h-12" : "h-24"}`} />
-      ))}
-    </div>
-  );
+  if (variant === "card") {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {items.map((_, i) => (
+          <div key={i} className="bg-gray-800 rounded-xl p-4 animate-pulse h-40" />
+        ))}
+      </div>
+    );
+  }
+
+  if (variant === "table") {
+    return (
+      <div className="space-y-2 animate-pulse">
+        {items.map((_, i) => (
+          <div key={i} className="bg-gray-800 rounded h-10" />
+        ))}
+      </div>
+    );
+  }
+
+  // chart
+  return <div className="bg-gray-800 rounded-xl h-48 animate-pulse w-full" />;
 }
