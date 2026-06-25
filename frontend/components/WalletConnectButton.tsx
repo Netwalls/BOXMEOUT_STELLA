@@ -1,39 +1,51 @@
 "use client";
-import { useState } from "react";
+
+import { useEffect } from "react";
+import { useWallet } from "../hooks/useWallet";
+
+const FREIGHTER_INSTALL_URL = "https://www.freighter.app/";
 
 export interface WalletConnectButtonProps {
   onConnected: (address: string) => void;
 }
 
-function truncate(addr: string) {
-  return `${addr.slice(0, 5)}…${addr.slice(-3)}`;
-}
-
 export function WalletConnectButton({ onConnected }: WalletConnectButtonProps): JSX.Element {
-  const [address, setAddress] = useState<string | null>(null);
+  const { address, isConnected, walletNotInstalled, connect, disconnect } = useWallet();
 
-  async function connect() {
-    // Freighter API integration point
-    const addr = "GABCDEFGHIJKLMNOPQRSTUVWXYZ"; // placeholder
-    setAddress(addr);
-    onConnected(addr);
+  useEffect(() => {
+    if (address) {
+      onConnected(address);
+    }
+  }, [address, onConnected]);
+
+  if (walletNotInstalled) {
+    return (
+      <a
+        href={FREIGHTER_INSTALL_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+      >
+        Install Freighter
+      </a>
+    );
   }
 
-  function disconnect() {
-    setAddress(null);
+  if (isConnected && address) {
+    return (
+      <button
+        onClick={disconnect}
+        className="inline-flex items-center px-4 py-2 rounded-md bg-gray-800 text-white text-sm font-medium hover:bg-gray-700"
+      >
+        {address.slice(0, 5)}…{address.slice(-4)}
+      </button>
+    );
   }
 
-  return address ? (
-    <button
-      onClick={disconnect}
-      className="h-11 px-4 bg-gray-700 hover:bg-gray-600 text-sm text-white rounded-lg transition-colors"
-    >
-      {truncate(address)}
-    </button>
-  ) : (
+  return (
     <button
       onClick={connect}
-      className="h-11 px-4 bg-amber-500 hover:bg-amber-400 text-black text-sm font-semibold rounded-lg transition-colors"
+      className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
     >
       Connect Wallet
     </button>

@@ -1,70 +1,71 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import * as Freighter from '@stellar/freighter-api';
+import { useState, useCallback } from "react";
+import { isConnected, getPublicKey, setAllowed } from "@stellar/freighter-api";
+
+// Freighter v2 API returns objects with optional error fields rather than throwing.
+type ConnectedResult = { isConnected: boolean } | { error: string };
+type AllowedResult = { isAllowed: boolean } | { error: string };
+type PublicKeyResult = { publicKey: string } | { error: string };
 
 export interface UseWalletResult {
   address: string | null;
   isConnected: boolean;
+  walletNotInstalled: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
   signTransaction: (xdr: string) => Promise<string>;
 }
 
-const STORAGE_KEY = 'boxmeout_wallet_address';
-
-/**
- * Manages Stellar wallet state using Freighter or compatible wallet APIs.
- * Abstracts Freighter/Albedo/xBull behind a common interface.
- * connect() throws a descriptive error if no wallet extension is installed.
- */
 export function useWallet(): UseWalletResult {
   const [address, setAddress] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [walletNotInstalled, setWalletNotInstalled] = useState(false);
 
-  // Restore connected state from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      setAddress(stored);
+  const connect = useCallback(async () => {
+    try {
+      const connResult: ConnectedResult = await isConnected();
+
+      if ("error" in connResult) {
+        setWalletNotInstalled(true);
+        return;
+      }
+
+      if (!connResult.isConnected) {
+        const allowResult: AllowedResult = await setAllowed();
+        if ("error" in allowResult || !allowResult.isAllowed) {
+          setWalletNotInstalled(true);
+          return;
+        }
+      }
+
+      const pkResult: PublicKeyResult = await getPublicKey();
+      if ("error" in pkResult) {
+        setWalletNotInstalled(true);
+        return;
+      }
+
+      setAddress(pkResult.publicKey);
+      setConnected(true);
+      setWalletNotInstalled(false);
+    } catch {
+      setWalletNotInstalled(true);
     }
   }, []);
 
-  const connect = async () => {
-    try {
-      const isAllowed = await Freighter.isAllowed();
-      if (!isAllowed) {
-        throw new Error(
-          'Freighter wallet not installed. Please install the Freighter extension to continue.'
-        );
-      }
-
-      const userAddress = await Freighter.requestAccess();
-      setAddress(userAddress);
-      localStorage.setItem(STORAGE_KEY, userAddress);
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('Freighter')) {
-        throw err;
-      }
-      throw new Error(
-        'Freighter wallet not installed. Please install the Freighter extension to continue.'
-      );
-    }
-  };
-
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
     setAddress(null);
-    localStorage.removeItem(STORAGE_KEY);
-  };
+    setConnected(false);
+  }, []);
 
-  const signTransaction = async (xdr: string): Promise<string> => {
-    if (!address) throw new Error('Wallet not connected');
-    const signed = await Freighter.signTransaction(xdr);
-    return signed;
-  };
+  const signTransaction = useCallback(async (_xdr: string): Promise<string> => {
+    throw new Error("signTransaction not implemented");
+  }, []);
 
   return {
     address,
-    isConnected: address !== null,
+    isConnected: connected,
+    walletNotInstalled,
     connect,
     disconnect,
     signTransaction,
