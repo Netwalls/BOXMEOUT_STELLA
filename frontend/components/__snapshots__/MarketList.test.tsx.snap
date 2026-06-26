@@ -1,0 +1,47 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`MarketList matches snapshot for empty state 1`] = `
+<div
+  class="text-center py-16 text-gray-500"
+>
+  <p
+    class="text-4xl mb-3"
+  >
+    🥊
+  </p>
+  <p>
+    No 
+     markets yet.
+  </p>
+</div>
+`;
+
+exports[`MarketList matches snapshot for loading state 1`] = `
+<div
+  data-testid="loading-skeleton"
+>
+  Loading card x6
+</div>
+`;
+
+exports[`MarketList matches snapshot with data 1`] = `
+<div
+  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+>
+  <div
+    data-testid="market-card-1"
+  >
+    Fighter A 1
+  </div>
+  <div
+    data-testid="market-card-2"
+  >
+    Fighter A 2
+  </div>
+  <div
+    data-testid="market-card-3"
+  >
+    Fighter A 3
+  </div>
+</div>
+`;
