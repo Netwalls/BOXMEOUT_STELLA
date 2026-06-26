@@ -16,8 +16,29 @@ export interface MarketStats {
   poolA: bigint;
   poolB: bigint;
   totalVolume: bigint;
-  impliedOddsA: number; // 0-100 percentage
-  impliedOddsB: number;
+  impliedOddsA: number; // payout multiplier: (total_pool - fee) / pool_a
+  impliedOddsB: number; // payout multiplier: (total_pool - fee) / pool_b
+}
+
+const PROTOCOL_FEE_RATE = 0.02; // 2% protocol fee
+
+/**
+ * Calculates the implied odds (payout multiplier) for each side.
+ * Formula: (total_pool - fee) / pool_side
+ * Returns 0 if pool_side is zero to avoid division by zero.
+ */
+export function calculateImpliedOdds(
+  poolA: bigint,
+  poolB: bigint
+): { impliedOddsA: number; impliedOddsB: number } {
+  const total = poolA + poolB;
+  if (total === 0n) return { impliedOddsA: 0, impliedOddsB: 0 };
+
+  const netPool = Number(total) * (1 - PROTOCOL_FEE_RATE);
+  const impliedOddsA = poolA > 0n ? netPool / Number(poolA) : 0;
+  const impliedOddsB = poolB > 0n ? netPool / Number(poolB) : 0;
+
+  return { impliedOddsA, impliedOddsB };
 }
 
 export interface LeaderboardEntry {
