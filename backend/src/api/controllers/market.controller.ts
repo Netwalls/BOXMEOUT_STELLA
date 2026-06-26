@@ -1,8 +1,22 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import * as marketService from "../../services/market.service";
+import { searchMarkets } from "../../repositories/market.repository";
 
 const prisma = new PrismaClient();
+
+/**
+ * GET /api/markets/search?q=&page=&limit=
+ * Full-text search across question + description. Returns paginated { data, total }.
+ */
+export async function searchMarketsHandler(req: Request, res: Response): Promise<void> {
+  const q = String(req.query.q ?? "").trim();
+  if (!q) { res.status(400).json({ error: "q is required" }); return; }
+  const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+  const result = await searchMarkets(q, page, limit);
+  res.json(result);
+}
 
 /**
  * GET /api/markets

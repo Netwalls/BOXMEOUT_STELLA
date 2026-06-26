@@ -35,6 +35,8 @@ model Market {
   contractAddress String       @unique
   fighterA        Json
   fighterB        Json
+  question        String       @default("")
+  description     String       @default("")
   scheduledAt     DateTime
   bettingEndsAt   DateTime
   createdAt       DateTime
@@ -50,6 +52,8 @@ model Market {
   bets            Bet[]
   disputes        Dispute[]
   oracleResult    OracleResult?
+  /// @db.Unsupported("tsvector")
+  tsVector        Unsupported("tsvector")?
 }
 
 model Bet {
