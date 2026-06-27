@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Get-ChildItem -Recurse \"c:\\\\Users\\\\BlankDev\\\\Desktop\\\\Backup\\\\Desktop\\\\drips\\\\BOXMEOUT_STELLA\" | Where-Object { !$_.PSIsContainer } | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"c:\\\\Users\\\\BlankDev\\\\Desktop\\\\Backup\\\\Desktop\\\\drips\\\\BOXMEOUT_STELLA\\\\\", \"\"\\) })"
+      "PowerShell(Get-ChildItem -Recurse \"c:\\\\Users\\\\BlankDev\\\\Desktop\\\\Backup\\\\Desktop\\\\drips\\\\BOXMEOUT_STELLA\" | Where-Object { !$_.PSIsContainer } | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"c:\\\\Users\\\\BlankDev\\\\Desktop\\\\Backup\\\\Desktop\\\\drips\\\\BOXMEOUT_STELLA\\\\\", \"\"\\) })",
+      "Bash(gh pr *)",
+      "Bash(git checkout *)",
+      "Bash(git clean *)",
+      "Bash(git reset *)",
+      "Bash(git restore *)",
+      "Bash(git stash *)",
+      "Bash(git rebase *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"REBASE EXIT: $?\")",
+      "Bash(git add *)",
+      "Bash(GIT_EDITOR=true git rebase --continue)",
+      "Bash(git commit *)",
+      "Bash(GIT_EDITOR=\"sed -i ''\" git rebase --continue)",
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(git rev-parse *)",
+      "Bash(gh api *)",
+      "Bash(git pull *)",
+      "Bash(git merge *)"
     ]
   }
 }
