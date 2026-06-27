@@ -1,6 +1,8 @@
 import { Market, MarketStatus, Outcome, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+import { Market, MarketStatus, Outcome } from "@prisma/client";
+import prisma from "../lib/prisma";
 
 export interface MarketFilters {
   status?: MarketStatus;
@@ -69,7 +71,7 @@ export async function getAllMarkets(
  * Returns null if not found — does NOT throw.
  */
 export async function getMarketById(market_id: string): Promise<Market | null> {
-  throw new Error("Not implemented");
+  return prisma.market.findUnique({ where: { id: market_id } });
 }
 
 /**

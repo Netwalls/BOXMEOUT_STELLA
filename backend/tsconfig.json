@@ -21,4 +21,11 @@
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "__tests__"]
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
 }

@@ -4,4 +4,5 @@ module.exports = {
   testEnvironment: "node",
   testMatch: ["**/*.test.ts"],
   globals: { "ts-jest": { tsconfig: { strict: false } } },
+  testMatch: ["**/__tests__/**/*.test.ts"],
 };
