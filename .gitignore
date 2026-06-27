@@ -34,3 +34,6 @@ backend/src/generated/
 # Temp files
 *.tmp
 *.swp
+
+# Soroban deploy output — contains contract IDs and must not be committed
+contracts/scripts/.env.testnet

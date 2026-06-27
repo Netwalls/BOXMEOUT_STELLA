@@ -34,8 +34,8 @@ Shared types (structs, enums) live in `contracts/shared/types.rs`.
 |---|---|
 | `FighterA` | Fighter A wins |
 | `FighterB` | Fighter B wins |
-| `Draw` | Match ends in a draw |
-| `NoContest` | No contest — DQ, injury, or ruling |
+| `Draw` | Match ends in a draw — sets status to `Cancelled`; full refunds, no fee |
+| `NoContest` | No contest — DQ, injury, or ruling — sets status to `Cancelled` |
 
 **`BetSide`**
 | Variant | Meaning |
@@ -176,7 +176,7 @@ All events are emitted via `env.events().publish()`.
 winning_pool   = pool_a  (if outcome == FighterA)
                = pool_b  (if outcome == FighterB)
 
-fee_amount     = total_pool * protocol_fee_bp / 10_000
+fee_amount     = total_pool * protocol_fee_bp / 10_000   (see calculate_fee)
 
 net_pool       = total_pool - fee_amount
 
@@ -185,6 +185,23 @@ payout         = (bettor_stake / winning_pool) * net_pool
 
 All values in stroops (1 XLM = 10,000,000 stroops). Use `i128` throughout.
 Use checked arithmetic — `i128::checked_mul`, `i128::checked_div` — to prevent overflow.
+
+### Draw outcome — full refunds, no fee
+
+When `resolve_market` is called with `Outcome::Draw`:
+
+1. `market.status` is set to `Cancelled` (not `Resolved`).
+2. `claim_winnings` rejects all callers because it requires `status == Resolved`.
+3. Both sides (`FighterA` and `FighterB` bettors) call `claim_refund` to receive
+   their original stake back in full.
+4. **No protocol fee is deducted** — `claim_refund` returns `bet.amount` unchanged.
+
+This reuses the same `Cancelled` refund path used by `NoContest`, keeping the
+resolution logic simple and consistent.
+
+```
+Outcome::Draw → status = Cancelled → claim_refund() (full bet.amount, no fee)
+```
 
 ---
 

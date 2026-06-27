@@ -4,4 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+soroban-sdk = "27.0.0-rc.1"
+shared = { path = "../shared" }
+
+[dev-dependencies]
 soroban-sdk = { version = "27.0.0-rc.1", features = ["testutils"] }
+shared = { path = "../shared", features = ["testutils"] }
