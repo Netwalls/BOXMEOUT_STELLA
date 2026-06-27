@@ -20,12 +20,13 @@ export function CountdownTimer({ targetTimestamp, label }: CountdownTimerProps):
   );
 
   useEffect(() => {
-    if (remaining <= 0) return;
     const id = setInterval(() => {
-      setRemaining(Math.max(0, targetTimestamp - Math.floor(Date.now() / 1000)));
+      const secs = Math.max(0, targetTimestamp - Math.floor(Date.now() / 1000));
+      setRemaining(secs);
+      if (secs <= 0) clearInterval(id);
     }, 1000);
     return () => clearInterval(id);
-  }, [targetTimestamp, remaining]);
+  }, [targetTimestamp]);
 
   const display = formatRemaining(remaining);
 

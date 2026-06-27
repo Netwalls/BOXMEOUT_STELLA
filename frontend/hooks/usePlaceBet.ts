@@ -40,9 +40,6 @@ export function usePlaceBet(market_id: string): UsePlaceBetResult {
 
       const result = await submitTransaction(signedXdr);
 
-      // Return confirmed bet object
-      const result = await submitTransaction(signedXdr);
-
       return {
         id: result.txHash,
         marketId: market_id,
