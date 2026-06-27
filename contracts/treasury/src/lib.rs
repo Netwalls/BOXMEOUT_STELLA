@@ -68,6 +68,22 @@ pub struct Treasury;
 impl Treasury {
     /// Sets up the Treasury with admin, authorized factory, and XLM token address.
     /// Called once after deployment. Panics if already initialized.
+
+    /// Sets up the Treasury with an admin and an authorized factory address.
+    ///
+    /// Must be called once immediately after deployment. Initializes `BALANCE` and
+    /// `TOTAL_FEES_EARNED` to zero and sets up an empty `WITHDRAWAL_LOG`.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban execution environment.
+    /// * `admin` - Address of the treasury administrator, authorized to withdraw funds.
+    /// * `factory` - Address of the `MarketFactory` contract whose markets are permitted
+    ///   to call [`deposit_fees`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the treasury has already been initialized.
     pub fn initialize(env: Env, admin: Address, factory: Address) {
         if env.storage().persistent().has(&DataKey::Admin) {
             panic!("already initialized");
@@ -93,6 +109,24 @@ impl Treasury {
 
     /// Called by Market contracts when distributing protocol fees.
     /// Validates caller is a Market contract registered in the factory.
+    /// Receives protocol fees from a registered `Market` contract.
+    ///
+    /// Verifies the caller is the `Market` contract registered under `market_id`
+    /// in the factory via a cross-contract call. Adds `amount` to both `BALANCE`
+    /// and `TOTAL_FEES_EARNED`. Emits a `FeesDeposited` event.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban execution environment.
+    /// * `market_id` - Identifier of the market depositing fees, used to verify
+    ///   the caller against the factory registry.
+    /// * `amount` - Amount of XLM fees to deposit, in stroops.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// - The invoking contract address does not match the address registered for `market_id` in the factory.
+    /// - The factory address has not been configured.
     pub fn deposit_fees(env: Env, market_id: Bytes, amount: i128) {
         let factory: Address = env.storage().persistent()
             .get(&DataKey::Factory)
@@ -121,6 +155,23 @@ impl Treasury {
     }
 
     /// Transfers collected fees to a recipient. Validates caller is admin.
+    /// Transfers collected fees from the treasury to a recipient address.
+    ///
+    /// Validates that `amount ≤ BALANCE` and deducts it before transferring XLM.
+    /// Appends an entry to `WITHDRAWAL_LOG`. Emits a `FeesWithdrawn` event.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban execution environment.
+    /// * `admin` - Admin address. Must authorize this call.
+    /// * `recipient` - Address that will receive the withdrawn XLM.
+    /// * `amount` - Amount to withdraw in stroops. Must not exceed current `BALANCE`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// - `admin` has not authorized the call.
+    /// - `amount` exceeds the current `BALANCE`.
     pub fn withdraw_fees(env: Env, admin: Address, recipient: Address, amount: i128) {
         admin.require_auth();
 
@@ -213,6 +264,27 @@ impl Treasury {
 
     /// Emergency drain — moves ALL funds to recipient.
     /// Only callable when the protocol is paused. Requires admin authorization.
+    /// Drains all treasury funds to `recipient` in an emergency.
+    ///
+    /// Only callable while the protocol is paused (verified via cross-contract call
+    /// to the factory's `get_config`). Resets `BALANCE` to zero, logs the drain,
+    /// and emits an `EmergencyDrain` event.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban execution environment.
+    /// * `admin` - Admin address. Must authorize this call.
+    /// * `recipient` - Address that receives all drained XLM.
+    ///
+    /// # Returns
+    ///
+    /// Returns the total amount drained in stroops.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// - `admin` has not authorized the call.
+    /// - The protocol is not currently paused.
     pub fn emergency_drain(env: Env, admin: Address, recipient: Address) -> i128 {
         admin.require_auth();
 
@@ -339,11 +411,34 @@ impl Treasury {
         amount
     }
 
+    /// Returns the current treasury XLM balance.
+    ///
+    /// Read-only — does not modify state.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban execution environment.
+    ///
+    /// # Returns
+    ///
+    /// Returns the current `BALANCE` in stroops. Returns `0` if never set.
     pub fn get_balance(env: Env) -> i128 {
         env.storage().persistent().get(&DataKey::Balance).unwrap_or(0)
     }
 
     /// Returns lifetime cumulative fees collected.
+    /// Returns the lifetime cumulative fees deposited into the treasury.
+    ///
+    /// This value is never decremented by withdrawals — it is a running total of
+    /// all fees ever received. Read-only — does not modify state.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban execution environment.
+    ///
+    /// # Returns
+    ///
+    /// Returns the cumulative `TOTAL_FEES_EARNED` in stroops. Returns `0` if never set.
     pub fn get_total_fees_earned(env: Env) -> i128 {
         env.storage().persistent().get(&DataKey::TotalFeesEarned).unwrap_or(0)
         env.storage()
@@ -353,6 +448,20 @@ impl Treasury {
     }
 
     pub fn get_total_fees_earned(env: Env) -> i128 {
+    /// Returns the complete log of all past withdrawals from the treasury.
+    ///
+    /// Each entry is a tuple of `(recipient, amount, timestamp)`. Read-only —
+    /// does not modify state.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban execution environment.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`Vec`] of `(Address, i128, u64)` tuples, one per withdrawal,
+    /// in the order they occurred. Returns an empty `Vec` if no withdrawals have occurred.
+    pub fn get_withdrawal_log(env: Env) -> Vec<(Address, i128, u64)> {
         env.storage()
             .persistent()
             .get(&key_total_fees(&env))
