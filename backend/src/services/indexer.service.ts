@@ -13,6 +13,7 @@ const logger = pino({ name: "indexer" });
 import { SorobanRpc } from "@stellar/stellar-sdk";
 
 const prisma = new PrismaClient();
+import { markBetClaimed } from "./bet.service";
 
 export interface SorobanEvent {
   type: string;
@@ -268,6 +269,8 @@ export async function handleWinnersClaimedEvent(event: SorobanEvent): Promise<vo
   const b = event.body;
   await betService.markBetClaimed(b.bet_id as string, toBigInt(b.payout));
   logger.info({ betId: b.bet_id, type: event.type }, "Claim processed");
+  const { bet_id, payout } = event.body as { bet_id: string; bettor: string; payout: string };
+  await markBetClaimed(bet_id, BigInt(payout));
 }
 
 /**
@@ -328,7 +331,23 @@ export async function recoverMissedEvents(
   fromLedger: number,
   toLedger: number
 ): Promise<void> {
-  throw new Error("Not implemented");
+  const latest = await getLastIndexedLedger();
+  if (fromLedger > latest) return;
+
+  const rpcUrl = process.env.SOROBAN_RPC_URL;
+  for (let seq = fromLedger; seq <= toLedger; seq++) {
+    const res = await fetch(rpcUrl!, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: seq, method: "getLedgers", params: { startLedger: seq, limit: 1 } }),
+    });
+    const json = await res.json() as { result: { ledgers: LedgerData[] } };
+    const ledger = json.result.ledgers[0];
+    if (ledger) await processLedger(ledger);
+    if ((seq - fromLedger + 1) % 100 === 0) {
+      console.log(`recoverMissedEvents: processed ${seq - fromLedger + 1} ledgers (${seq}/${toLedger})`);
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
