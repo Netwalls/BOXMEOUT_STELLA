@@ -134,7 +134,7 @@ export async function updateMarketPools(
 }
 
 export async function getMarketStats(market_id: string): Promise<MarketStats> {
-  const market = await db.market.findUnique({
+  const market = await prisma.market.findUnique({
     where: { id: market_id },
     include: { bets: true },
   });
