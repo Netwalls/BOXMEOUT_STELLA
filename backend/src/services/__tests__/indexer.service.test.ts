@@ -55,6 +55,7 @@ import {
   processLedger,
   handleMarketCreatedEvent,
   handleBetPlacedEvent,
+  handleMarketResolvedEvent,
   SorobanEvent,
   LedgerData,
 } from "../indexer.service";
@@ -474,5 +475,71 @@ describe("Issue 4 — handleBetPlacedEvent", () => {
 
     const dto = mockRecordBet.mock.calls[0][0];
     expect(dto.side).toBe("FighterA");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Issue 5 — handleMarketResolvedEvent
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Issue 5 — handleMarketResolvedEvent", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUpdateMarketStatus.mockResolvedValue({});
+  });
+
+  const makeResolvedEvent = (outcome: string): SorobanEvent => ({
+    type: "MarketResolved",
+    contractId: "CONTRACT_ADDR",
+    ledger: 4000,
+    ledgerClosedAt: "2025-05-15T18:45:00Z",
+    txHash: "0xRESO1VED",
+    body: {
+      market_id: "MARKET_123",
+      outcome,
+      resolved_at: "2025-05-15T18:45:00Z",
+    },
+  });
+
+  it("decodes event body and calls updateMarketStatus with FighterA outcome", async () => {
+    await handleMarketResolvedEvent(makeResolvedEvent("FighterA"));
+
+    expect(mockUpdateMarketStatus).toHaveBeenCalledTimes(1);
+    expect(mockUpdateMarketStatus).toHaveBeenCalledWith("MARKET_123", "Resolved", "FighterA");
+  });
+
+  it("handles FighterB outcome correctly", async () => {
+    await handleMarketResolvedEvent(makeResolvedEvent("FighterB"));
+
+    expect(mockUpdateMarketStatus).toHaveBeenCalledWith("MARKET_123", "Resolved", "FighterB");
+  });
+
+  it("handles Draw outcome correctly", async () => {
+    await handleMarketResolvedEvent(makeResolvedEvent("Draw"));
+
+    expect(mockUpdateMarketStatus).toHaveBeenCalledWith("MARKET_123", "Resolved", "Draw");
+  });
+
+  it("handles NoContest outcome correctly", async () => {
+    await handleMarketResolvedEvent(makeResolvedEvent("NoContest"));
+
+    expect(mockUpdateMarketStatus).toHaveBeenCalledWith("MARKET_123", "Resolved", "NoContest");
+  });
+
+  it("is idempotent — replaying the same event calls updateMarketStatus twice", async () => {
+    const event = makeResolvedEvent("FighterA");
+
+    await handleMarketResolvedEvent(event);
+    await handleMarketResolvedEvent(event);
+
+    // updateMarketStatus is idempotent because it's an update operation
+    expect(mockUpdateMarketStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("correctly sets market status to Resolved", async () => {
+    await handleMarketResolvedEvent(makeResolvedEvent("FighterA"));
+
+    const call = mockUpdateMarketStatus.mock.calls[0];
+    expect(call[1]).toBe("Resolved");
   });
 });
