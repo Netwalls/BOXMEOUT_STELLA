@@ -127,7 +127,7 @@ export async function updateMarketPools(
   pool_a: bigint,
   pool_b: bigint
 ): Promise<void> {
-  await db.market.update({
+  await prisma.market.update({
     where: { id: market_id },
     data: { poolA: pool_a, poolB: pool_b, totalPool: pool_a + pool_b },
   });
@@ -144,7 +144,7 @@ export async function getMarketStats(market_id: string): Promise<MarketStats> {
   }
 
   const totalBets = market.bets.length;
-  const uniqueBettors = new Set(market.bets.map((b) => b.bettor)).size;
+  const uniqueBettors = new Set(market.bets.map((b: any) => b.bettor)).size;
   const poolA = market.poolA;
   const poolB = market.poolB;
   const totalVolume = market.totalPool;

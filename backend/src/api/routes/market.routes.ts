@@ -5,6 +5,9 @@ import {
   getMarketByIdHandler,
   getMarketStatsHandler,
   getMarketBetsHandler,
+  resolveMarketHandler,
+  resolveDisputeHandler,
+  getPendingResolutionsHandler,
 } from "../controllers/market.controller";
 import { adminAuth } from "../middleware/adminAuth";
 import { requireAdmin } from "../middleware/auth";

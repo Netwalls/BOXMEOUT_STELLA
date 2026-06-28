@@ -102,7 +102,7 @@ export function auditLogMiddleware(
           ipAddress,
           method,
           path,
-          requestBody: Object.keys(requestBody as object).length > 0 ? requestBody : null,
+          requestBody: Object.keys(requestBody as object).length > 0 ? (requestBody as any) : null,
           statusCode,
           timestamp: new Date(),
         },
