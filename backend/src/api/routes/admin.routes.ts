@@ -10,6 +10,7 @@ import {
   updateOracleHandler,
   deleteOracleHandler,
 } from "../controllers/oracle.controller";
+import { getAuditLogsHandler } from "../controllers/audit.controller";
 
 const router = Router();
 
@@ -23,5 +24,8 @@ router.get("/oracles", getAllOraclesHandler);
 router.post("/oracles", createOracleHandler);
 router.patch("/oracles/:id", updateOracleHandler);
 router.delete("/oracles/:id", deleteOracleHandler);
+
+// Audit logging (Issue #456)
+router.get("/audit-logs", getAuditLogsHandler);
 
 export default router;
