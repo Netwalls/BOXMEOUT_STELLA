@@ -480,7 +480,6 @@ impl MarketContract {
 
     /// Issues a full refund when market is Cancelled (includes Draw and NoContest outcomes).
     /// No protocol fee deducted on refunds.
-    /// Issues a full refund of a bettor's stake when the market is cancelled.
     ///
     /// Applicable when market status is `Cancelled` or outcome is `NoContest`.
     /// No protocol fee is deducted on refunds. The `CLAIMED` flag is set before
@@ -507,16 +506,6 @@ impl MarketContract {
     pub fn claim_refund(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
         bettor.require_auth();
 
-        let bet: Bet = env.storage().persistent()
-    pub fn resolve_market(env: Env, oracle: Address, outcome: Outcome) {
-        let _ = (env, oracle, outcome);
-        todo!("implement: require_auth(oracle), validate status==Locked, store outcome, set status=Resolved or Cancelled, emit event")
-    }
-
-    /// Full refund for a bet when market is Cancelled. No protocol fee.
-    pub fn claim_refund(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
-        bettor.require_auth();
-
         let bet: Bet = env
             .storage()
             .persistent()
@@ -526,17 +515,17 @@ impl MarketContract {
             panic!("not your bet");
         }
 
-        let market: Market = env.storage().persistent()
-            .get(&DataKey::MarketInfo)
-            .expect("market not initialized");
-        if market.status != MarketStatus::Cancelled {
-            panic!("market not eligible for refund");
-        }
-
-        let already_claimed: bool = env.storage().persistent()
         let market = Self::read_market(&env);
-        if market.status != MarketStatus::Cancelled {
-            panic!("market not cancelled");
+        // Check market is Cancelled or has NoContest outcome
+        let is_eligible = match market.status {
+            MarketStatus::Cancelled => true,
+            MarketStatus::Resolved => {
+                market.outcome.clone().map(|o| matches!(o, Outcome::NoContest)).unwrap_or(false)
+            }
+            _ => false,
+        };
+        if !is_eligible {
+            panic!("market not eligible for refund");
         }
 
         let already_claimed: bool = env
@@ -553,24 +542,14 @@ impl MarketContract {
             .persistent()
             .set(&DataKey::Claimed(bet_id.clone()), &true);
 
-        // Mark claimed BEFORE any transfer (re-entrancy guard).
-        env.storage().persistent().set(&DataKey::Claimed(bet_id.clone()), &true);
-
-        env.events().publish(
-            (symbol_short!("refunded"),),
-            (bettor, bet_id, refund_amount),
         env.events().publish(
             (Symbol::new(&env, "RefundClaimed"),),
-            (bettor, bet_id, bet.amount),
+            (bettor.clone(), bet_id, bet.amount),
         );
 
         bet.amount
     }
 
-    pub fn claim_winnings(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
-        let _ = (env, bettor, bet_id);
-        todo!("implement: require_auth(bettor), validate eligibility, mark claimed BEFORE transfer, compute payout, transfer XLM, emit event")
-    }
 
     /// Raises a dispute against the market resolution.
     ///
@@ -1652,5 +1631,137 @@ mod test {
         let market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
         assert_eq!(market.pool_a, TEST_MIN_BET + TEST_MIN_BET * 3);
         assert_eq!(market.pool_b, TEST_MIN_BET * 2);
+    }
+
+    // ─── claim_refund() Tests (Issue #859) ─────────────────────────────────────
+
+    #[test]
+    fn test_claim_refund_cancelled_market_returns_full_amount() {
+        let (env, bettor, _) = setup_test_env();
+
+        // Place a bet
+        let bet_id = MarketContract::place_bet(env.clone(), bettor.clone(), BetSide::FighterA, TEST_MIN_BET);
+
+        // Cancel the market
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        market.status = MarketStatus::Cancelled;
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+
+        // Claim refund
+        let refund = MarketContract::claim_refund(env.clone(), bettor.clone(), bet_id.clone());
+
+        // Verify full amount returned
+        assert_eq!(refund, TEST_MIN_BET);
+
+        // Verify claimed flag is set
+        let claimed: bool = env.storage().persistent()
+            .get(&DataKey::Claimed(bet_id))
+            .unwrap_or(false);
+        assert!(claimed);
+    }
+
+    #[test]
+    fn test_claim_refund_nocontest_outcome_returns_full_amount() {
+        let (env, bettor, _) = setup_test_env();
+
+        // Place a bet
+        let bet_id = MarketContract::place_bet(env.clone(), bettor.clone(), BetSide::FighterB, TEST_MIN_BET * 2);
+
+        // Resolve market with NoContest (which transitions to Cancelled)
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        market.status = MarketStatus::Resolved;
+        market.outcome = Some(Outcome::NoContest);
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+
+        // Claim refund
+        let refund = MarketContract::claim_refund(env.clone(), bettor.clone(), bet_id.clone());
+
+        // Verify full amount returned (no fee deduction)
+        assert_eq!(refund, TEST_MIN_BET * 2);
+    }
+
+    #[test]
+    fn test_claim_refund_panic_on_duplicate_claim() {
+        let (env, bettor, _) = setup_test_env();
+
+        // Place a bet and cancel market
+        let bet_id = MarketContract::place_bet(env.clone(), bettor.clone(), BetSide::FighterA, TEST_MIN_BET);
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        market.status = MarketStatus::Cancelled;
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+
+        // First claim succeeds
+        let _ = MarketContract::claim_refund(env.clone(), bettor.clone(), bet_id.clone());
+
+        // Second claim should panic
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_refund(env.clone(), bettor.clone(), bet_id);
+        });
+        assert!(result.is_err(), "second claim should panic");
+    }
+
+    #[test]
+    fn test_claim_refund_panic_if_market_resolved() {
+        let (env, bettor, _) = setup_test_env();
+
+        // Place a bet
+        let bet_id = MarketContract::place_bet(env.clone(), bettor.clone(), BetSide::FighterA, TEST_MIN_BET);
+
+        // Resolve market (not Cancelled, not NoContest)
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        market.status = MarketStatus::Resolved;
+        market.outcome = Some(Outcome::FighterA);
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+
+        // Claim refund should panic
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_refund(env.clone(), bettor.clone(), bet_id);
+        });
+        assert!(result.is_err(), "claim_refund should panic for resolved market without NoContest");
+    }
+
+    #[test]
+    fn test_claim_refund_panic_if_not_bettor() {
+        let (env, bettor, _) = setup_test_env();
+        let other = Address::generate(&env);
+
+        // Place a bet
+        let bet_id = MarketContract::place_bet(env.clone(), bettor.clone(), BetSide::FighterA, TEST_MIN_BET);
+
+        // Cancel market
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        market.status = MarketStatus::Cancelled;
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+
+        // Claim refund as different address should panic
+        let result = std::panic::catch_unwind(|| {
+            MarketContract::claim_refund(env.clone(), other, bet_id);
+        });
+        assert!(result.is_err(), "claim_refund should panic if not bet owner");
+    }
+
+    #[test]
+    fn test_claim_refund_emits_event() {
+        let (env, bettor, _) = setup_test_env();
+
+        // Place a bet
+        let bet_id = MarketContract::place_bet(env.clone(), bettor.clone(), BetSide::FighterA, TEST_MIN_BET);
+
+        // Cancel market
+        let mut market: Market = env.storage().persistent().get(&DataKey::MarketInfo).unwrap();
+        market.status = MarketStatus::Cancelled;
+        env.storage().persistent().set(&DataKey::MarketInfo, &market);
+
+        // Clear previous events
+        let _ = env.events().all();
+
+        // Claim refund
+        MarketContract::claim_refund(env.clone(), bettor.clone(), bet_id.clone());
+
+        // Verify event was emitted
+        let events = env.events().all();
+        assert!(events.len() > 0, "RefundClaimed event should be emitted");
+        let (topic, _) = &events[events.len() - 1];
+        assert_eq!(*topic, vec![&env, &Symbol::new(&env, "RefundClaimed")]);
     }
 }
