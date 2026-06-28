@@ -1,24 +1,6 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { BetSide } from "@prisma/client";
 import { logger } from "../../logger";
-import { Request, Response, NextFunction } from "express";
-import * as betService from "../../services/bet.service";
-
-export async function getBetsByAddressHandler(req: Request, res: Response): Promise<void> {
-  try {
-    const { address } = req.params;
-    const { status, marketId } = req.query as {
-      status?: betService.BetFilters["status"];
-      marketId?: string;
-    };
-    const bets = await betService.getBetsByAddress(address, { status, marketId });
-    res.json({ data: bets });
-  } catch (err) {
-    logger.error({ err }, "getBetsByAddressHandler failed");
-    res.status(500).json({ error: "Internal server error" });
-  }
-}
-
 import { z } from "zod";
 import * as betService from "../../services/bet.service";
 
@@ -55,17 +37,6 @@ export async function getBetsByAddressHandler(req: Request, res: Response): Prom
   res.status(200).json(bets);
 }
 
-/**
- * GET /api/bets/:address/portfolio
- */
-export async function getPortfolioHandler(req: Request, res: Response): Promise<void> {
-  try {
-    const { address } = req.params;
-    const portfolio = await betService.getPortfolioSummary(address);
-    res.json({ data: portfolio });
-  } catch (err) {
-    logger.error({ err }, "getPortfolioHandler failed");
-    res.status(500).json({ error: "Internal server error" });
 /**
  * GET /api/bets/:address/portfolio (issue #907)
  * Returns portfolio summary (total staked, winnings, ROI) for an address.

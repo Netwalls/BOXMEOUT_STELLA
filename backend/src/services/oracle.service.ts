@@ -8,18 +8,10 @@ import {
   Keypair,
   BASE_FEE,
   nativeToScVal,
-} from "@stellar/stellar-sdk";
-
-const prisma = new PrismaClient();
-const RPC_URL = process.env.STELLAR_RPC_URL!;
-const NETWORK = process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
-const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
-const DISPUTE_CONTRACT_ID = process.env.DISPUTE_CONTRACT_ID!;
   xdr,
 } from "@stellar/stellar-sdk";
 
 const prisma = new PrismaClient();
-
 const RPC_URL = process.env.STELLAR_RPC_URL!;
 const NETWORK = process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
