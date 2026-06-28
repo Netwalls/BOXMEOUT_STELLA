@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { submitOracleResultHandler, listOracleResultsHandler } from "../controllers/oracle.controller";
+import {
+  submitOracleResultHandler,
+  listOracleResultsHandler,
+  getAllOraclesHandler,
+  createOracleHandler,
+  updateOracleHandler,
+  deleteOracleHandler,
+} from "../controllers/oracle.controller";
 
 const router = Router();
 

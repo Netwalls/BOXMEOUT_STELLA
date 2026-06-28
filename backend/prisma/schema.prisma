@@ -106,3 +106,22 @@ model AdminLog {
   metadata  Json?
   createdAt DateTime @default(now())
 }
+
+model Oracle {
+  id        String   @id @default(uuid())
+  address   String   @unique
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  userId        String
+  ipAddress     String
+  method        String
+  path          String
+  requestBody   Json?
+  statusCode    Int
+  timestamp     DateTime @default(now())
+}

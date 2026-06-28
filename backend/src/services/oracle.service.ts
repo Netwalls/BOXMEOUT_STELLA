@@ -255,3 +255,56 @@ export async function resolveDispute(
     }),
   ]);
 }
+
+// ─── Oracle Address Management (Issue #455) ────────────────────────────────
+
+/**
+ * Get all registered oracles with their details.
+ */
+export async function getAllOracles() {
+  return prisma.oracle.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+/**
+ * Get a single oracle by ID.
+ */
+export async function getOracleById(id: string) {
+  return prisma.oracle.findUnique({
+    where: { id },
+  });
+}
+
+/**
+ * Create a new oracle entry.
+ */
+export async function createOracle(address: string, name: string) {
+  return prisma.oracle.create({
+    data: {
+      address,
+      name,
+      active: true,
+    },
+  });
+}
+
+/**
+ * Update oracle name or active status.
+ */
+export async function updateOracle(id: string, data: { name?: string; active?: boolean }) {
+  return prisma.oracle.update({
+    where: { id },
+    data,
+  });
+}
+
+/**
+ * Deactivate an oracle (soft delete by setting active to false).
+ */
+export async function deleteOracle(id: string) {
+  return prisma.oracle.update({
+    where: { id },
+    data: { active: false },
+  });
+}

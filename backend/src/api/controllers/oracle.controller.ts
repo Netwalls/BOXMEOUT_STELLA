@@ -71,3 +71,95 @@ export async function submitOracleResultHandler(
 export async function listOracleResultsHandler(req: Request, res: Response): Promise<void> {
   throw new Error("Not implemented");
 }
+
+// ─── Oracle Address Management Endpoints (Issue #455) ────────────────────────
+
+/**
+ * GET /api/admin/oracles
+ * List all registered oracles
+ */
+export async function getAllOraclesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const oracles = await oracleService.getAllOracles();
+    res.status(200).json(oracles);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/admin/oracles
+ * Create a new oracle entry
+ * Body: { address: string, name: string }
+ */
+export async function createOracleHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { address, name } = req.body as { address?: string; name?: string };
+
+    if (!address || !name) {
+      res.status(400).json({ error: "Missing required fields: address, name" });
+      return;
+    }
+
+    const oracle = await oracleService.createOracle(address, name);
+    res.status(201).json(oracle);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/admin/oracles/:id
+ * Update oracle name or active status
+ * Body: { name?: string, active?: boolean }
+ */
+export async function updateOracleHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { name, active } = req.body as { name?: string; active?: boolean };
+
+    if (name === undefined && active === undefined) {
+      res.status(400).json({ error: "At least one field (name, active) is required" });
+      return;
+    }
+
+    const oracle = await oracleService.updateOracle(id, {
+      ...(name && { name }),
+      ...(active !== undefined && { active }),
+    });
+
+    res.status(200).json(oracle);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/admin/oracles/:id
+ * Deactivate an oracle (soft delete)
+ */
+export async function deleteOracleHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const oracle = await oracleService.deleteOracle(id);
+    res.status(200).json(oracle);
+  } catch (err) {
+    next(err);
+  }
+}
