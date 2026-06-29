@@ -92,6 +92,29 @@ pub struct ProtocolConfig {
     pub paused:             bool,
 }
 
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FightDetails {
+    pub match_id: String,
+    pub fighter_a: String,
+    pub fighter_b: String,
+    pub weight_class: String,
+    pub scheduled_at: u64,
+    pub betting_ends_at: u64,
+    pub venue: String,
+    pub title_fight: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MarketConfig {
+    pub min_bet: i128,
+    pub max_bet: i128,
+    pub fee_bps: u32,
+    pub lock_before_secs: u64,
+    pub resolution_window: u64,
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 /// Compute protocol fee from a total amount and fee in basis points.

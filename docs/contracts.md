@@ -146,27 +146,259 @@ paused             bool
 
 ---
 
-## Events
+## Events Reference
 
-All events are emitted via `env.events().publish()`.
+All events are emitted via `env.events().publish()` and indexed by topic. Events are published with specific topics for efficient blockchain indexing.
 
-| Event name | Emitted by | Key fields |
-|---|---|---|
-| `MarketCreated` | `create_market` | market_id, fighter_a.name, fighter_b.name, scheduled_at |
-| `BetPlaced` | `place_bet` | bet_id, bettor, side, amount, market_id |
-| `MarketLocked` | `lock_market` | market_id, locked_at |
-| `MarketResolved` | `resolve_market` | market_id, outcome, resolved_at |
-| `WinningsClaimed` | `claim_winnings` | bet_id, bettor, payout |
-| `RefundClaimed` | `claim_refund` | bet_id, bettor, amount |
-| `DisputeRaised` | `raise_dispute` | market_id, raised_by, reason |
-| `DisputeResolved` | `resolve_dispute` | market_id, override_outcome, resolved_by |
-| `ProtocolPaused` | `pause_protocol` | paused_by, paused_at |
-| `ProtocolUnpaused` | `unpause_protocol` | unpaused_by, unpaused_at |
-| `ConfigUpdated` | `update_config` | updated_by |
-| `AdminTransferInitiated` | `transfer_admin` | current_admin, pending_admin |
-| `FeesDeposited` | `deposit_fees` | market_id, amount |
-| `FeesWithdrawn` | `withdraw_fees` | recipient, amount |
-| `EmergencyDrain` | `emergency_drain` | recipient, amount |
+### MarketFactory Events
+
+#### 1. `market_created`
+**Emitted by:** `create_market()`  
+**Topics:** `Symbol("market_created"), market_id`  
+**Data fields:**
+- `contract_address: Address` - Address of deployed Market contract
+- `match_id: String` - Human-readable match identifier
+
+**Emitted when:** A new market for a boxing match is successfully deployed  
+**Example:** When a MarketFactory creates a market for "Fury vs Usyk 2025"
+
+#### 2. `admin_transferred`
+**Emitted by:** `accept_admin()` (after transfer completion)  
+**Topics:** `Symbol("admin_transferred")`  
+**Data fields:**
+- `old_admin: Address` - Previous admin address
+- `new_admin: Address` - New admin address
+
+**Emitted when:** A two-step admin transfer is completed  
+**Condition:** New admin accepts the pending transfer via `accept_admin()`
+
+#### 3. `protocol_paused`
+**Emitted by:** `pause_protocol()`  
+**Topics:** `Symbol("protocol_paused")`  
+**Data fields:** (none)
+
+**Emitted when:** Protocol is paused, blocking new market creation and bets  
+**Effect:** All markets become read-only; no new markets can be created
+
+#### 4. `protocol_unpaused`
+**Emitted by:** `unpause_protocol()`  
+**Topics:** `Symbol("protocol_unpaused")`  
+**Data fields:** (none)
+
+**Emitted when:** Paused protocol is resumed  
+**Effect:** Normal operations resume
+
+#### 5. `config_updated`
+**Emitted by:** `update_config()`  
+**Topics:** `Symbol("config_updated")`  
+**Data fields:**
+- `param_name: String` - Name of parameter changed (e.g., "default_fee_bp", "min_bet_amount")
+- `new_value: i128` - New parameter value
+
+**Emitted when:** Protocol configuration is updated by admin
+
+---
+
+### Market Events
+
+#### 6. `market_locked`
+**Emitted by:** `lock_market()`  
+**Topics:** `Symbol("market_locked"), market_id`  
+**Data fields:** (none)
+
+**Emitted when:** Market transitions from Open → Locked  
+**Condition:** Betting period ends; fight is starting  
+**Effect:** No new bets accepted
+
+#### 7. `market_resolved`
+**Emitted by:** `resolve_market()`  
+**Topics:** `Symbol("market_resolved"), market_id`  
+**Data fields:**
+- `outcome: Outcome` - Fight result (FighterA, FighterB, Draw, NoContest)
+- `oracle_address: Address` - Oracle that submitted the outcome
+
+**Emitted when:** Fight result is submitted and market resolved  
+**Condition:** Market must be in Locked status  
+**Effect:** Claims become available to winners or all bettors (if Draw/NoContest)
+
+#### 8. `bet_placed`
+**Emitted by:** `place_bet()`  
+**Topics:** `Symbol("bet_placed"), market_id`  
+**Data fields:**
+- `bet: BetRecord` containing:
+  - `bettor: Address` - Account that placed the bet
+  - `market_id: u64` - Market identifier
+  - `side: BetSide` - Which fighter backed (FighterA or FighterB)
+  - `amount: i128` - Bet amount in stroops
+  - `placed_at: u64` - Unix timestamp of placement
+  - `claimed: bool` - Always false at emission
+
+**Emitted when:** A valid bet is placed and pools updated  
+**Conditions:**
+- Market status is Open
+- Current time < betting_ends_at
+- Bet amount between min/max configured limits
+
+#### 9. `winnings_claimed`
+**Emitted by:** `claim_winnings()`  
+**Topics:** `Symbol("winnings_claimed"), market_id`  
+**Data fields:**
+- `receipt: ClaimReceipt` containing:
+  - `bettor: Address` - Winner claiming payout
+  - `market_id: u64` - Market identifier
+  - `amount_won: i128` - Payout amount in stroops (after fees)
+  - `fee_deducted: i128` - Protocol fee deducted
+  - `claimed_at: u64` - Unix timestamp of claim
+
+**Emitted when:** A winning bet is claimed  
+**Conditions:**
+- Market status is Resolved
+- Bet was on winning side
+- Not yet claimed by this bettor
+
+#### 10. `refund_claimed`
+**Emitted by:** `claim_refund()`  
+**Topics:** `Symbol("refund_claimed"), market_id`  
+**Data fields:**
+- `bettor: Address` - Account receiving refund
+- `amount: i128` - Full original bet amount (no fee deducted)
+
+**Emitted when:** Full refund claimed on cancelled/no-contest market  
+**Conditions:**
+- Market status is Cancelled (Draw or NoContest outcome)
+- Bet not yet claimed
+
+#### 11. `market_cancelled`
+**Emitted by:** `resolve_market()`  
+**Topics:** `Symbol("market_cancelled"), market_id`  
+**Data fields:**
+- `reason: String` - Cancellation reason (e.g., "fight_postponed", "injury")
+
+**Emitted when:** Market is cancelled (implicitly from Draw or NoContest resolution)  
+**Effect:** All bettors receive full refunds; no protocol fees collected
+
+#### 12. `market_disputed`
+**Emitted by:** `raise_dispute()`  
+**Topics:** `Symbol("market_disputed"), market_id`  
+**Data fields:**
+- `reason: String` - Why result is disputed (e.g., "oracle_conflict", "scoring_error")
+
+**Emitted when:** A bettor flags a resolved result for admin review  
+**Condition:** Called within dispute_window_sec of resolution  
+**Effect:** Claims are frozen pending admin review
+
+#### 13. `dispute_resolved`
+**Emitted by:** `resolve_dispute()`  
+**Topics:** `Symbol("dispute_resolved"), market_id`  
+**Data fields:**
+- `final_outcome: Outcome` - Admin's final determination
+
+**Emitted when:** Disputed market is finalized by admin  
+**Effect:** Claims reopen with corrected outcome
+
+#### 14. `conflicting_oracle_report`
+**Emitted by:** (when multiple oracles submit differing outcomes)  
+**Topics:** `Symbol("conflicting_oracle_report"), market_id`  
+**Data fields:**
+- `oracle_address: Address` - Oracle that submitted conflicting outcome
+
+**Emitted when:** A second oracle submits a different outcome than the first  
+**Effect:** Market may be flagged for dispute or admin review
+
+---
+
+### Treasury Events
+
+#### 15. `fee_deposited`
+**Emitted by:** `deposit_fees()`  
+**Topics:** `Symbol("fee_deposited")`  
+**Data fields:**
+- `market: Address` - Market contract depositing fees
+- `token: Address` - Token address (XLM)
+- `amount: i128` - Fee amount in stroops
+
+**Emitted when:** A resolved market deposits protocol fees  
+**Condition:** Called by authorized Market contracts
+
+#### 16. `fee_withdrawn`
+**Emitted by:** `withdraw_fees()`  
+**Topics:** `Symbol("fee_withdrawn")`  
+**Data fields:**
+- `token: Address` - Token withdrawn (XLM)
+- `amount: i128` - Withdrawal amount in stroops
+- `destination: Address` - Recipient address
+
+**Emitted when:** Admin withdraws accumulated fees  
+**Condition:** Only callable by treasury admin
+
+#### 17. `emergency_drain`
+**Emitted by:** `emergency_drain()`  
+**Topics:** `Symbol("emergency_drain")`  
+**Data fields:**
+- `token: Address` - Token drained (XLM)
+- `amount: i128` - Drained amount in stroops
+- `admin: Address` - Admin executing drain
+
+**Emitted when:** All treasury funds are drained  
+**Condition:** Only callable when protocol is paused  
+**Security:** Emergency-only operation; signals protocol shutdown
+
+#### 18. `contract_upgraded`
+**Emitted by:** Contract upgrade function  
+**Topics:** `Symbol("contract_upgraded")`  
+**Data fields:**
+- `new_wasm_hash: BytesN<32>` - SHA256 hash of new contract code
+
+**Emitted when:** Contract code is upgraded  
+**Use case:** Tracking deployment history
+
+---
+
+## Indexer Integration Example
+
+Here's how to subscribe to market events using a Soroban indexer:
+
+```javascript
+// Subscribe to all market creation events
+indexer.subscribe({
+  topics: [["market_created"]],
+  contracts: [MARKET_FACTORY_ADDRESS],
+  callback: (event) => {
+    const { market_id, contract_address, match_id } = event.data;
+    console.log(`New market: ${match_id} at ${contract_address}`);
+  }
+});
+
+// Subscribe to all bet placements
+indexer.subscribe({
+  topics: [["bet_placed"]],
+  contracts: [MARKET_ADDRESS], // or ALL_MARKETS with wildcard
+  callback: (event) => {
+    const { bettor, side, amount, placed_at } = event.data.bet;
+    console.log(`Bet: ${amount} stroops on ${side} by ${bettor}`);
+  }
+});
+
+// Subscribe to dispute resolution
+indexer.subscribe({
+  topics: [["dispute_resolved"]],
+  contracts: [MARKET_ADDRESS],
+  callback: (event) => {
+    const { final_outcome } = event.data;
+    console.log(`Dispute resolved: outcome = ${final_outcome}`);
+  }
+});
+
+// Subscribe to treasury operations
+indexer.subscribe({
+  topics: [["fee_withdrawn", "emergency_drain"]],
+  contracts: [TREASURY_ADDRESS],
+  callback: (event) => {
+    const { amount, destination } = event.data;
+    console.log(`Treasury event: ${amount} stroops to ${destination}`);
+  }
+});
+```
 
 ---
 

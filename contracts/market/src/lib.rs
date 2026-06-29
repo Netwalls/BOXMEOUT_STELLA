@@ -210,10 +210,10 @@ impl MarketContract {
         }
 
         match side {
-            BetSide::FighterA => market.pool_a += amount,
-            BetSide::FighterB => market.pool_b += amount,
+            BetSide::FighterA => market.pool_a = market.pool_a.checked_add(amount).expect("pool_a overflow"),
+            BetSide::FighterB => market.pool_b = market.pool_b.checked_add(amount).expect("pool_b overflow"),
         }
-        market.total_pool += amount;
+        market.total_pool = market.total_pool.checked_add(amount).expect("total_pool overflow");
 
         let bet_count: u64 = env.storage().persistent()
             .get(&Symbol::new(&env, "BET_CNT"))
@@ -452,12 +452,12 @@ impl MarketContract {
         let winning_pool = match outcome {
             Outcome::FighterA => market.pool_a,
             Outcome::FighterB => market.pool_b,
-            _ => market.pool_a + market.pool_b,
+            _ => market.pool_a.checked_add(market.pool_b).expect("pool sum overflow"),
         };
 
         let payout = if winning_pool > 0 {
             let fee_amount = shared::types::calculate_fee(market.total_pool, market.protocol_fee_bp);
-            let net_pool = market.total_pool - fee_amount;
+            let net_pool = market.total_pool.checked_sub(fee_amount).expect("net pool underflow");
             bet.amount
                 .checked_mul(net_pool)
                 .expect("payout overflow")
@@ -756,24 +756,18 @@ impl MarketContract {
         let market: Market = env.storage().persistent()
             .get(&DataKey::MarketInfo)
             .expect("market not initialized");
-        let total = market.pool_a + market.pool_b;
+        let total = market.pool_a.checked_add(market.pool_b).unwrap_or(0);
         let (odds_a, odds_b) = if total == 0 {
             (5_000u32, 5_000u32)
         } else {
-            let a = (market.pool_a * 10_000 / total) as u32;
-            (a, 10_000 - a)
+            let a = market.pool_a
+                .checked_mul(10_000)
+                .expect("odds multiplication overflow")
+                .checked_div(total)
+                .expect("odds division error") as u32;
+            (a, 10_000u32.checked_sub(a).expect("odds underflow"))
         };
         (market.pool_a, market.pool_b, odds_a, odds_b)
-        let _ = env;
-        todo!("implement: read pools from MarketInfo, compute implied odds, return tuple")
-        let market: Market = env.storage().persistent().get(&DataKey::MarketInfo)
-            .expect("market not initialized");
-        if market.total_pool == 0 {
-            return (market.pool_a, market.pool_b, 5000, 5000);
-        }
-        let odds_a_bp = ((market.pool_a as u128 * 10000) / market.total_pool as u128) as u32;
-        let odds_b_bp = 10000 - odds_a_bp;
-        (market.pool_a, market.pool_b, odds_a_bp, odds_b_bp)
     }
 }
 
@@ -1103,7 +1097,7 @@ mod test {
             market.status     = MarketStatus::Locked;
             market.pool_a     = amount_a;
             market.pool_b     = amount_b;
-            market.total_pool = amount_a + amount_b;
+            market.total_pool = amount_a.checked_add(amount_b).expect("total_pool overflow");
             market.oracle_address = oracle.clone();
             env.storage().persistent().set(&DataKey::MarketInfo, &market);
 
@@ -1763,5 +1757,84 @@ mod test {
         assert!(events.len() > 0, "RefundClaimed event should be emitted");
         let (topic, _) = &events[events.len() - 1];
         assert_eq!(*topic, vec![&env, &Symbol::new(&env, "RefundClaimed")]);
+    #[test]
+    fn test_overflow_safe_arithmetic_large_values() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, MarketContract);
+        let client = MarketContractClient::new(&env, &contract_id);
+
+        let oracle = create_test_address(&env);
+        let factory = create_test_address(&env);
+        let fee_col = create_test_address(&env);
+        let fighter_a = make_fighter(&env, "Fury");
+        let fighter_b = make_fighter(&env, "Usyk");
+        let market_id = Bytes::from_array(&env, &[1u8; 32]);
+
+        client.initialize(
+            &market_id,
+            &fighter_a,
+            &fighter_b,
+            &1000u64,
+            &500u64,
+            &oracle,
+            &factory,
+            &200u32,
+            &fee_col,
+        );
+
+        let bettor_a = create_test_address(&env);
+        let bettor_b = create_test_address(&env);
+
+        let large_amount_a: i128 = 50_000_000_000_000i128;
+        let large_amount_b: i128 = 75_000_000_000_000i128;
+
+        let bet_id_a = client.place_bet(&bettor_a, &BetSide::FighterA, &large_amount_a);
+        assert!(bet_id_a.len() > 0);
+
+        let bet_id_b = client.place_bet(&bettor_b, &BetSide::FighterB, &large_amount_b);
+        assert!(bet_id_b.len() > 0);
+
+        let market = client.get_market_info();
+        assert_eq!(market.pool_a, large_amount_a);
+        assert_eq!(market.pool_b, large_amount_b);
+        let expected_total = large_amount_a.checked_add(large_amount_b).unwrap();
+        assert_eq!(market.total_pool, expected_total);
+    }
+
+    #[test]
+    #[should_panic(expected = "pool_a overflow")]
+    fn test_pool_overflow_protection() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, MarketContract);
+        let client = MarketContractClient::new(&env, &contract_id);
+
+        let oracle = create_test_address(&env);
+        let factory = create_test_address(&env);
+        let fee_col = create_test_address(&env);
+        let fighter_a = make_fighter(&env, "Fury");
+        let fighter_b = make_fighter(&env, "Usyk");
+        let market_id = Bytes::from_array(&env, &[1u8; 32]);
+
+        client.initialize(
+            &market_id,
+            &fighter_a,
+            &fighter_b,
+            &1000u64,
+            &500u64,
+            &oracle,
+            &factory,
+            &200u32,
+            &fee_col,
+        );
+
+        let bettor = create_test_address(&env);
+        let overflow_amount = i128::MAX;
+
+        client.place_bet(&bettor, &BetSide::FighterA, &overflow_amount);
+        client.place_bet(&bettor, &BetSide::FighterA, &1i128);
     }
 }
