@@ -65,6 +65,8 @@ pub struct Market {
     pub outcome: SettledOutcome,
     pub outcome: Option<Outcome>,
     pub fee_collector_address: Address,
+    pub resolved_at: u64,
+    pub dispute_window_sec: u64,
 }
 
 #[contracttype]

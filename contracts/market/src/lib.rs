@@ -91,6 +91,7 @@ impl MarketContract {
     /// * `factory` - Address of the deploying `MarketFactory` contract.
     /// * `protocol_fee_bp` - Protocol fee in basis points (e.g. `200` = 2%).
     /// * `fee_collector` - Address that receives the protocol fee on payouts.
+    /// * `dispute_window_sec` - Duration in seconds during which disputes can be raised after resolution.
     ///
     /// # Panics
     ///
@@ -106,6 +107,7 @@ impl MarketContract {
         factory: Address,
         protocol_fee_bp: u32,
         fee_collector: Address,
+        dispute_window_sec: u64,
     ) {
         if env.storage().persistent().has(&DataKey::MarketInfo) {
             panic!("already initialized");
@@ -127,6 +129,8 @@ impl MarketContract {
             outcome: SettledOutcome::Pending,
             fee_collector_address: fee_collector,
             outcome: None,
+            resolved_at: 0,
+            dispute_window_sec,
         };
         env.storage().persistent().set(&DataKey::MarketInfo, &market);
         env.storage().persistent().set(&DataKey::Factory, &factory);
@@ -373,6 +377,13 @@ impl MarketContract {
             panic!("market not locked");
         }
 
+        if market.oracle_address != oracle {
+            panic!("not authorized oracle");
+        }
+
+        // Set resolved_at timestamp for dispute window enforcement
+        market.resolved_at = env.ledger().timestamp();
+
         // Draw reuses the Cancelled path so both sides receive full refunds with no fee.
         market.status = match outcome {
             Outcome::NoContest | Outcome::Draw => MarketStatus::Cancelled,
@@ -503,6 +514,7 @@ impl MarketContract {
     /// - `bettor` is not the owner of the bet.
     /// - The market status is not `Cancelled` and outcome is not `NoContest`.
     /// - The bet has already been claimed.
+    /// Full refund for a bet when market is Cancelled. No protocol fee.
     pub fn claim_refund(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
         bettor.require_auth();
 
@@ -573,8 +585,49 @@ impl MarketContract {
     /// - A dispute is already active on this market.
     /// - The market status is not `Resolved`.
     pub fn raise_dispute(env: Env, bettor: Address, reason: Bytes) {
-        let _ = (env, bettor, reason);
-        todo!("implement: require_auth(bettor), verify bettor has bet, check within window, set status=Disputed")
+        bettor.require_auth();
+
+        let mut market = Self::read_market(&env);
+
+        if market.status != MarketStatus::Resolved {
+            panic!("market not resolved");
+        }
+
+        // Check if a dispute has already been raised
+        let already_disputed: bool = env.storage().persistent()
+            .get(&DataKey::DisputeRaised)
+            .unwrap_or(false);
+        if already_disputed {
+            panic!("dispute already raised");
+        }
+
+        // Verify bettor has a bet in this market
+        let bettor_bets: Vec<Bytes> = env.storage().persistent()
+            .get(&DataKey::BetsByAddr(bettor.clone()))
+            .unwrap_or(Vec::new(&env));
+        if bettor_bets.is_empty() {
+            panic!("bettor has no bets in this market");
+        }
+
+        // Check if within dispute window
+        let current_time = env.ledger().timestamp();
+        let dispute_deadline = market.resolved_at + market.dispute_window_sec;
+        if current_time > dispute_deadline {
+            panic!("dispute window has closed");
+        }
+
+        // Transition to Disputed status
+        market.status = MarketStatus::Disputed;
+        Self::write_market(&env, &market);
+
+        // Store dispute reason
+        env.storage().persistent().set(&DataKey::DisputeRaised, &true);
+        env.storage().persistent().set(&DataKey::DisputeReason, &reason);
+
+        env.events().publish(
+            (Symbol::new(&env, "DisputeRaised"),),
+            (market.market_id.clone(), bettor.clone(), reason),
+        );
     }
 
     /// Settles a disputed market with a final admin-override outcome.
@@ -1452,6 +1505,7 @@ mod test {
             .expect("market not initialized");
         market.status = MarketStatus::Resolved;
         market.outcome = Some(outcome);
+        market.resolved_at = env.ledger().timestamp();
         env.storage().persistent().set(&DataKey::MarketInfo, &market);
     }
 

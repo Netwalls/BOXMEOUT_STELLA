@@ -3,20 +3,20 @@ import type { Config } from "jest";
 const config: Config = {
   preset: "ts-jest",
   testEnvironment: "node",
-  roots: ["<rootDir>/src"],
-  testMatch: ["**/__tests__/**/*.test.ts", "**/*.test.ts"],
+  rootDir: ".",
+  roots: ["<rootDir>/src", "<rootDir>/__tests__", "<rootDir>/tests"],
+  testMatch: ["**/__tests__/**/*.test.ts", "**/tests/**/*.test.ts", "**/*.test.ts"],
   moduleFileExtensions: ["ts", "js", "json"],
-  clearMocks: true,
-  roots: ["<rootDir>/__tests__"],
-  testMatch: ["**/*.test.ts"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   clearMocks: true,
   restoreMocks: true,
-  rootDir: ".",
-  testMatch: ["**/__tests__/**/*.test.ts", "**/tests/**/*.test.ts"],
-  moduleFileExtensions: ["ts", "js", "json"],
+  collectCoverageFrom: [
+    "src/**/*.ts",
+    "!src/**/*.d.ts",
+    "!src/**/index.ts",
+  ],
 };
 
 export default config;
