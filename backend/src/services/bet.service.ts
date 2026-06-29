@@ -96,7 +96,19 @@ export async function calculatePotentialPayout(
   side: BetSide,
   amount: bigint
 ): Promise<bigint> {
-  throw new Error("Not implemented");
+  const market = await db.market.findUnique({ where: { id: market_id } });
+  if (!market) throw new Error(`Market not found: ${market_id}`);
+
+  const poolSide = side === "FighterA" ? market.poolA : market.poolB;
+  if (poolSide === 0n) return 0n;
+
+  const totalPool = market.totalPool;
+  const FEE_BP = 200n; // 2% = 200 basis points
+  const fee = (totalPool * FEE_BP) / 10000n;
+  const netPool = totalPool - fee;
+
+  const payout = (amount * netPool) / (poolSide + amount);
+  return payout;
 }
 
 export async function getPortfolioSummary(

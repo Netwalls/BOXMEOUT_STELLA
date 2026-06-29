@@ -1,8 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import pino from "pino";
+import { SorobanRpc } from "@stellar/stellar-sdk";
 
 import * as marketService from "./market.service";
 import * as betService from "./bet.service";
+import { markBetClaimed } from "./bet.service";
 
 const prisma = new PrismaClient();
 const logger = pino({ name: "indexer" });
@@ -10,10 +12,6 @@ const logger = pino({ name: "indexer" });
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-import { SorobanRpc } from "@stellar/stellar-sdk";
-
-const prisma = new PrismaClient();
-import { markBetClaimed } from "./bet.service";
 
 export interface SorobanEvent {
   type: string;
@@ -64,10 +62,10 @@ export async function startIndexer(): Promise<void> {
         if (!byLedger.has(ledger)) byLedger.set(ledger, []);
         byLedger.get(ledger)!.push({
           type: raw.type,
-          contractId: raw.contractId,
+          contractId: raw.contractId as unknown as string,
           ledger: raw.ledger,
           ledgerClosedAt: raw.ledgerClosedAt,
-          body: raw.value as Record<string, unknown>,
+          body: raw.value as unknown as Record<string, unknown>,
           txHash: raw.txHash,
         });
       }
@@ -269,8 +267,6 @@ export async function handleWinnersClaimedEvent(event: SorobanEvent): Promise<vo
   const b = event.body;
   await betService.markBetClaimed(b.bet_id as string, toBigInt(b.payout));
   logger.info({ betId: b.bet_id, type: event.type }, "Claim processed");
-  const { bet_id, payout } = event.body as { bet_id: string; bettor: string; payout: string };
-  await markBetClaimed(bet_id, BigInt(payout));
 }
 
 /**
@@ -314,14 +310,6 @@ export async function handleDisputeEvent(event: SorobanEvent): Promise<void> {
   logger.info({ marketId: b.market_id, type: event.type }, "Dispute event processed");
 }
 
-/**
- * Bootstraps the blockchain event listener.
- * Connects to Stellar Soroban RPC, polls from last indexed ledger.
- * Long-lived process — run as a background worker.
- */
-export async function startIndexer(): Promise<void> {
-  throw new Error("Not implemented");
-}
 
 /**
  * Replays a ledger range to catch events missed during downtime.
