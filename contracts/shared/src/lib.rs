@@ -10,6 +10,9 @@ pub mod events;
 pub mod math;
 pub mod types;
 
+#[cfg(all(test, feature = "proptest"))]
+mod prop_tests;
+
 pub use amm::*;
 pub use errors::ContractError;
 pub use event_parser::*;

@@ -9,9 +9,11 @@
 
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, feature = "proptest"))]
+mod prop_tests;
 
 use soroban_sdk::{
-    contract, contractimpl, contractclient, token, Address, BytesN, Env, Map, Vec, String,
+    contract, contractimpl, contractclient, token, Address, BytesN, Env, Map, Vec,
 };
 
 use boxmeout_shared::{
@@ -155,21 +157,12 @@ impl Market {
         from_amount: i128,
         min_xlm_out: i128,
     ) -> Result<i128, ContractError> {
-        // Native XLM - no conversion needed
-        let xlm_address = Address::from_string(&String::from_slice(env, "XLM"));
-        if from_token.clone() == xlm_address {
-            if from_amount < min_xlm_out {
-                return Err(ContractError::SlippageExceeded);
-            }
-            return Ok(from_amount);
-        }
-
         // For token-to-XLM, we use the token's swap function (simulate path payment)
         // In production, this would invoke the actual Stellar path payment via
         // the token's built-in swap or via a DEX aggregator contract.
         // For now, we use a simple 1:1 rate as placeholder - real implementation
         // would call the actual Stellar DEX path payment operations.
-        let token_client = token::Client::new(env, from_token);
+        let _token_client = token::Client::new(env, from_token);
         
         // Attempt swap via the token's swap function (if available)
         // This is a placeholder - actual implementation would use:
@@ -200,17 +193,8 @@ impl Market {
         xlm_amount: i128,
         min_token_out: i128,
     ) -> Result<i128, ContractError> {
-        // Native XLM - no conversion needed
-        let xlm_address = Address::from_string(&String::from_slice(env, "XLM"));
-        if to_token.clone() == xlm_address {
-            if xlm_amount < min_token_out {
-                return Err(ContractError::SlippageExceeded);
-            }
-            return Ok(xlm_amount);
-        }
-
         // For XLM-to-token, perform reverse swap
-        let token_client = token::Client::new(env, to_token);
+        let _token_client = token::Client::new(env, to_token);
         
         // Placeholder: assume 1:1 conversion for testing
         // TODO: Implement actual reverse path payment using Stellar's DEX
@@ -704,12 +688,10 @@ impl Market {
             0
         };
 
-        // Net payout after fee (in XLM)
-        let net_payout_xlm = payout_xlm.saturating_sub(fee);
-
-        // Attempt reverse path payment from XLM to preferred token
-        let token_received = if net_payout_xlm > 0 {
-            match Self::path_pay_out(&env, &preferred_token, net_payout_xlm, min_token_out) {
+        // Attempt reverse path payment from XLM to preferred token.
+        // `payout_xlm` is already the bettor's share of the post-fee pool.
+        let token_received = if payout_xlm > 0 {
+            match Self::path_pay_out(&env, &preferred_token, payout_xlm, min_token_out) {
                 Ok(received) => Some(received),
                 Err(_) => None, // Fall back to XLM if path payment fails
             }
@@ -721,9 +703,8 @@ impl Market {
         let (payout_token, payout_amount) = match token_received {
             Some(received) => (preferred_token.clone(), received),
             None => {
-                // Fall back to XLM if reverse path payment fails
-                let xlm_address = Address::from_string(&String::from_slice(&env, "XLM"));
-                (xlm_address.clone(), net_payout_xlm)
+                // Fall back to the requested token amount if reverse path payment fails.
+                (preferred_token.clone(), payout_xlm)
             }
         };
 
@@ -789,7 +770,7 @@ impl Market {
         let mut any_unclaimed = false;
         for bet in bets.iter() {
             if !bet.claimed {
-                refund_total += bet.amount;
+                refund_total += bet.original_amount;
                 any_unclaimed = true;
             }
         }

@@ -3,7 +3,13 @@
 //! Covers: re-entrancy, auth checks, pause guard, CEI pattern,
 //!         stale-state-after-transfer, payout math.
 //! ============================================================
-#![allow(unused_imports, unused_variables, unused_assignments, dead_code, unused_mut)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    unused_assignments,
+    dead_code,
+    unused_mut
+)]
 #[cfg(test)]
 mod security_tests {
     use soroban_sdk::{
@@ -12,8 +18,8 @@ mod security_tests {
     };
 
     use boxmeout_shared::types::{
-        BetSide, FightDetails, MarketConfig, MarketStatus, Outcome,
-        OptionalOracleRole, OptionalOutcome,
+        BetSide, FightDetails, MarketConfig, MarketStatus, OptionalOracleRole, OptionalOutcome,
+        Outcome,
     };
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -71,7 +77,10 @@ mod security_tests {
         // Simulate paused state check
         let paused = true;
         let result: Result<(), ()> = if paused { Err(()) } else { Ok(()) };
-        assert!(result.is_err(), "Paused contract must reject fund-moving calls");
+        assert!(
+            result.is_err(),
+            "Paused contract must reject fund-moving calls"
+        );
     }
 
     // ── Test: reentrancy guard blocks concurrent claims ───────────────────────
@@ -101,7 +110,10 @@ mod security_tests {
         } else {
             Ok(())
         };
-        assert!(result.is_ok(), "Reentrancy guard must allow after lock is cleared");
+        assert!(
+            result.is_ok(),
+            "Reentrancy guard must allow after lock is cleared"
+        );
     }
 
     // ── Test: CEI — state updated before transfer ─────────────────────────────
@@ -117,10 +129,13 @@ mod security_tests {
         let mut bet_claimed = false;
 
         // Simulate CEI: effects before interactions
-        bet_claimed = true;                    // EFFECT: mark claimed
-        let _transfer_called = true;           // INTERACTION: transfer (after effect)
+        bet_claimed = true; // EFFECT: mark claimed
+        let _transfer_called = true; // INTERACTION: transfer (after effect)
 
-        assert!(bet_claimed, "Bet must be marked claimed before transfer executes");
+        assert!(
+            bet_claimed,
+            "Bet must be marked claimed before transfer executes"
+        );
     }
 
     // ── Test: no stale state read after transfer ──────────────────────────────
@@ -132,12 +147,16 @@ mod security_tests {
         // variable captured before transfers and never calls load_state() again.
         // This test documents the invariant.
         let state_read_count_before_transfer = 1usize;
-        let state_read_count_after_transfer  = 0usize;
+        let state_read_count_after_transfer = 0usize;
 
-        assert_eq!(state_read_count_after_transfer, 0,
-            "State must not be re-read from storage after token transfer");
-        assert_eq!(state_read_count_before_transfer, 1,
-            "State must be read exactly once before any transfer");
+        assert_eq!(
+            state_read_count_after_transfer, 0,
+            "State must not be re-read from storage after token transfer"
+        );
+        assert_eq!(
+            state_read_count_before_transfer, 1,
+            "State must be read exactly once before any transfer"
+        );
     }
 
     // ── Test: parimutuel payout math ──────────────────────────────────────────
@@ -146,7 +165,7 @@ mod security_tests {
     fn test_payout_single_winner_takes_net_pool() {
         // Single bettor on winning side should receive the full net pool.
         let total_pool: i128 = 10_000_000; // 1 XLM
-        let fee_bps: i128 = 200;           // 2%
+        let fee_bps: i128 = 200; // 2%
         let fee = total_pool * fee_bps / 10_000;
         let net_pool = total_pool - fee;
         let bettor_stake: i128 = 10_000_000;
@@ -156,7 +175,10 @@ mod security_tests {
 
         assert_eq!(fee, 200_000);
         assert_eq!(net_pool, 9_800_000);
-        assert_eq!(payout, 9_800_000, "Single winner must receive full net pool");
+        assert_eq!(
+            payout, 9_800_000,
+            "Single winner must receive full net pool"
+        );
     }
 
     #[test]
@@ -170,7 +192,10 @@ mod security_tests {
 
         let payout = bettor_stake * net_pool / winning_pool;
 
-        assert_eq!(payout, 9_800_000, "Each of two equal bettors gets half the net pool");
+        assert_eq!(
+            payout, 9_800_000,
+            "Each of two equal bettors gets half the net pool"
+        );
     }
 
     #[test]
@@ -187,14 +212,16 @@ mod security_tests {
         let total_payout_3_equal = payout * 3;
 
         // Total payout must never exceed net_pool
-        assert!(total_payout_3_equal <= net_pool,
-            "Total payouts must never exceed net pool (no overpayment)");
+        assert!(
+            total_payout_3_equal <= net_pool,
+            "Total payouts must never exceed net pool (no overpayment)"
+        );
     }
 
     #[test]
     fn test_fee_deduction_correct() {
         let total_pool: i128 = 100_000_000; // 10 XLM
-        let fee_bps: i128 = 200;            // 2%
+        let fee_bps: i128 = 200; // 2%
         let expected_fee: i128 = 2_000_000; // 0.2 XLM
 
         let fee = total_pool * fee_bps / 10_000;
@@ -226,8 +253,10 @@ mod security_tests {
         let lock_threshold = scheduled_at - lock_before_secs;
         let current_time = lock_threshold; // exactly at threshold
 
-        assert!(current_time >= lock_threshold,
-            "Bet at exact lock threshold must be rejected");
+        assert!(
+            current_time >= lock_threshold,
+            "Bet at exact lock threshold must be rejected"
+        );
     }
 
     #[test]
@@ -237,8 +266,10 @@ mod security_tests {
         let lock_threshold = scheduled_at - lock_before_secs;
         let current_time = lock_threshold - 1; // one second before
 
-        assert!(current_time < lock_threshold,
-            "Bet one second before lock threshold must be accepted");
+        assert!(
+            current_time < lock_threshold,
+            "Bet one second before lock threshold must be accepted"
+        );
     }
 
     // ── Test: pool accounting ─────────────────────────────────────────────────
@@ -253,13 +284,13 @@ mod security_tests {
         // Simulate three bets
         let bet1 = (BetSide::FighterA, 5_000_000i128);
         let bet2 = (BetSide::FighterB, 3_000_000i128);
-        let bet3 = (BetSide::Draw,     2_000_000i128);
+        let bet3 = (BetSide::Draw, 2_000_000i128);
 
         for (side, amount) in [bet1, bet2, bet3] {
             match side {
                 BetSide::FighterA => pool_a += amount,
                 BetSide::FighterB => pool_b += amount,
-                BetSide::Draw     => pool_draw += amount,
+                BetSide::Draw => pool_draw += amount,
             }
             total_pool += amount;
         }
@@ -279,14 +310,18 @@ mod security_tests {
         let mut claimed = false;
 
         // First claim
-        let result1: Result<(), &str> = if claimed { Err("AlreadyClaimed") } else {
+        let result1: Result<(), &str> = if claimed {
+            Err("AlreadyClaimed")
+        } else {
             claimed = true;
             Ok(())
         };
         assert!(result1.is_ok(), "First claim must succeed");
 
         // Second claim attempt
-        let result2: Result<(), &str> = if claimed { Err("AlreadyClaimed") } else {
+        let result2: Result<(), &str> = if claimed {
+            Err("AlreadyClaimed")
+        } else {
             Ok(())
         };
         assert!(result2.is_err(), "Second claim must be rejected");
@@ -335,14 +370,20 @@ mod security_tests {
         // Sixth withdrawal — would exceed daily cap
         let amount6: i128 = 1;
         let would_exceed = today_total + amount6 > daily_cap;
-        assert!(would_exceed, "Sixth withdrawal must be rejected by daily cap");
+        assert!(
+            would_exceed,
+            "Sixth withdrawal must be rejected by daily cap"
+        );
     }
 
     #[test]
     fn test_single_withdrawal_over_limit_rejected() {
         let limit: i128 = 10_000_000;
         let amount: i128 = 10_000_001;
-        assert!(amount > limit, "Single withdrawal over limit must be rejected");
+        assert!(
+            amount > limit,
+            "Single withdrawal over limit must be rejected"
+        );
     }
 }
 
@@ -356,11 +397,11 @@ mod place_bet_edge_cases {
         Address, Env, Map, Vec,
     };
 
-    use boxmeout_shared::types::{
-        BetSide, FightDetails, MarketConfig, MarketStatus, Outcome,
-        OptionalOracleRole, OptionalOutcome,
-    };
     use crate::Market;
+    use boxmeout_shared::types::{
+        BetSide, FightDetails, MarketConfig, MarketStatus, OptionalOracleRole, OptionalOutcome,
+        Outcome,
+    };
 
     fn default_fight(env: &Env, scheduled_at: u64) -> FightDetails {
         FightDetails {
@@ -418,7 +459,10 @@ mod place_bet_edge_cases {
 
         // Verify that amount < min_bet is rejected
         let amount = config.min_bet - 1;
-        assert!(amount < config.min_bet, "Test setup: amount must be below min_bet");
+        assert!(
+            amount < config.min_bet,
+            "Test setup: amount must be below min_bet"
+        );
     }
 
     /// Test: Bet amount above max_bet → BetTooLarge
@@ -434,7 +478,10 @@ mod place_bet_edge_cases {
 
         // Verify that amount > max_bet is rejected
         let amount = config.max_bet + 1;
-        assert!(amount > config.max_bet, "Test setup: amount must be above max_bet");
+        assert!(
+            amount > config.max_bet,
+            "Test setup: amount must be above max_bet"
+        );
     }
 
     /// Test: Bet on Locked market → InvalidMarketStatus
@@ -446,7 +493,11 @@ mod place_bet_edge_cases {
 
         // Simulate locked market status
         let status = MarketStatus::Locked;
-        assert_ne!(status, MarketStatus::Open, "Market must be locked for this test");
+        assert_ne!(
+            status,
+            MarketStatus::Open,
+            "Market must be locked for this test"
+        );
     }
 
     /// Test: Bet at exact lock threshold → BettingClosed
@@ -459,7 +510,10 @@ mod place_bet_edge_cases {
 
         // At exact lock threshold, betting should be closed
         let current_time = lock_threshold;
-        assert!(current_time >= lock_threshold, "Current time must be at or past lock threshold");
+        assert!(
+            current_time >= lock_threshold,
+            "Current time must be at or past lock threshold"
+        );
     }
 
     /// Test: Valid bet on FighterA
@@ -471,8 +525,10 @@ mod place_bet_edge_cases {
         let (factory, _market, treasury) = setup_market(&env, scheduled_at);
 
         let amount = config.min_bet;
-        assert!(amount >= config.min_bet && amount <= config.max_bet,
-            "Amount must be within valid range");
+        assert!(
+            amount >= config.min_bet && amount <= config.max_bet,
+            "Amount must be within valid range"
+        );
     }
 
     /// Test: Valid bet on FighterB
@@ -484,8 +540,10 @@ mod place_bet_edge_cases {
         let (factory, _market, treasury) = setup_market(&env, scheduled_at);
 
         let amount = config.min_bet;
-        assert!(amount >= config.min_bet && amount <= config.max_bet,
-            "Amount must be within valid range");
+        assert!(
+            amount >= config.min_bet && amount <= config.max_bet,
+            "Amount must be within valid range"
+        );
     }
 
     /// Test: Valid bet on Draw
@@ -497,8 +555,10 @@ mod place_bet_edge_cases {
         let (factory, _market, treasury) = setup_market(&env, scheduled_at);
 
         let amount = config.min_bet;
-        assert!(amount >= config.min_bet && amount <= config.max_bet,
-            "Amount must be within valid range");
+        assert!(
+            amount >= config.min_bet && amount <= config.max_bet,
+            "Amount must be within valid range"
+        );
     }
 
     /// Test: Second bet by same address — both bets stored
@@ -571,7 +631,10 @@ mod claim_winnings_payout_math {
 
         assert_eq!(fee, 200_000);
         assert_eq!(net_pool, 9_800_000);
-        assert_eq!(payout, 9_800_000, "Single winner must receive full net pool");
+        assert_eq!(
+            payout, 9_800_000,
+            "Single winner must receive full net pool"
+        );
     }
 
     /// Test: Two equal bettors on winning side — each gets ~50%
@@ -588,7 +651,10 @@ mod claim_winnings_payout_math {
 
         assert_eq!(fee, 400_000);
         assert_eq!(net_pool, 19_600_000);
-        assert_eq!(payout, 9_800_000, "Each of two equal bettors gets half the net pool");
+        assert_eq!(
+            payout, 9_800_000,
+            "Each of two equal bettors gets half the net pool"
+        );
     }
 
     /// Test: Fee deduction is correct (e.g. 2% fee)
@@ -617,8 +683,10 @@ mod claim_winnings_payout_math {
         let total_payout_3_equal = payout * 3;
 
         // Total payout must never exceed net_pool
-        assert!(total_payout_3_equal <= net_pool,
-            "Total payouts must never exceed net pool (no overpayment)");
+        assert!(
+            total_payout_3_equal <= net_pool,
+            "Total payouts must never exceed net pool (no overpayment)"
+        );
     }
 
     /// Test: Bettor on losing side gets 0 (cannot claim)
@@ -687,7 +755,10 @@ mod claim_winnings_payout_math {
 
         assert_eq!(fee, 1_200_000);
         assert_eq!(net_pool, 58_800_000);
-        assert!(total_payout <= net_pool, "Total payout must not exceed net pool");
+        assert!(
+            total_payout <= net_pool,
+            "Total payout must not exceed net pool"
+        );
     }
 }
 
@@ -702,8 +773,8 @@ mod full_market_lifecycle {
     };
 
     use boxmeout_shared::types::{
-        BetSide, FightDetails, MarketConfig, MarketStatus, Outcome,
-        OptionalOracleRole, OptionalOutcome,
+        BetSide, FightDetails, MarketConfig, MarketStatus, OptionalOracleRole, OptionalOutcome,
+        Outcome,
     };
 
     fn default_fight(env: &Env, scheduled_at: u64) -> FightDetails {
@@ -855,7 +926,10 @@ mod full_market_lifecycle {
 
         let total_payout = payout1 + payout2 + payout3;
 
-        assert!(total_payout <= net_pool, "Total payout must not exceed net pool");
+        assert!(
+            total_payout <= net_pool,
+            "Total payout must not exceed net pool"
+        );
     }
 
     /// Test: Verify treasury balance matches expected fee
@@ -880,11 +954,11 @@ mod resolve_dispute_tests {
         Address, Env, Symbol,
     };
 
-    use boxmeout_shared::types::{
-        BetSide, FightDetails, MarketConfig, MarketState, MarketStatus, Outcome, OracleRole,
-        OptionalOracleRole, OptionalOutcome,
-    };
     use crate::Market;
+    use boxmeout_shared::types::{
+        BetSide, FightDetails, MarketConfig, MarketState, MarketStatus, OptionalOracleRole,
+        OptionalOutcome, OracleRole, Outcome,
+    };
 
     fn default_fight(env: &Env) -> FightDetails {
         FightDetails {
@@ -909,9 +983,7 @@ mod resolve_dispute_tests {
         }
     }
 
-    fn setup_disputed_market(
-        env: &Env,
-    ) -> (crate::MarketClient<'static>, Address, Address) {
+    fn setup_disputed_market(env: &Env) -> (crate::MarketClient<'static>, Address, Address) {
         env.mock_all_auths();
         env.ledger().set(LedgerInfo {
             timestamp: 1_000,
@@ -929,7 +1001,13 @@ mod resolve_dispute_tests {
         let contract_id = env.register_contract(None, Market);
         let client = crate::MarketClient::new(env, &contract_id);
 
-        client.initialize(&factory, &1u64, &default_fight(env), &default_config(), &treasury);
+        client.initialize(
+            &factory,
+            &1u64,
+            &default_fight(env),
+            &default_config(),
+            &treasury,
+        );
 
         // Directly write a Disputed state into storage so we can test resolve_dispute
         // without needing a full oracle consensus setup.
@@ -975,7 +1053,10 @@ mod resolve_dispute_tests {
         let state = client.get_state();
         assert_eq!(state.status, MarketStatus::Resolved);
         assert_eq!(state.outcome, OptionalOutcome::Some(Outcome::FighterB));
-        assert_eq!(state.oracle_used, OptionalOracleRole::Some(OracleRole::Admin));
+        assert_eq!(
+            state.oracle_used,
+            OptionalOracleRole::Some(OracleRole::Admin)
+        );
     }
 
     /// DisputeResolved event is emitted with correct market_id and outcome.
@@ -1016,7 +1097,13 @@ mod resolve_dispute_tests {
         let treasury = Address::generate(&env);
         let contract_id = env.register_contract(None, Market);
         let client = crate::MarketClient::new(&env, &contract_id);
-        client.initialize(&factory, &1u64, &default_fight(&env), &default_config(), &treasury);
+        client.initialize(
+            &factory,
+            &1u64,
+            &default_fight(&env),
+            &default_config(),
+            &treasury,
+        );
         // Market is Open, not Disputed
         let result = client.try_resolve_dispute(&factory, &Outcome::FighterA);
         assert!(result.is_err());
@@ -1038,7 +1125,10 @@ mod resolve_dispute_tests {
         let fee = state.total_pool * (state.config.fee_bps as i128) / 10_000;
         let net_pool = state.total_pool - fee;
         let payout = 10_000_000i128 * net_pool / state.pool_a;
-        assert!(payout > 0, "Payout must be positive after dispute resolution");
+        assert!(
+            payout > 0,
+            "Payout must be positive after dispute resolution"
+        );
         assert!(payout <= net_pool, "Payout must not exceed net pool");
     }
 }
@@ -1053,10 +1143,10 @@ mod get_current_odds_tests {
         Address, Env,
     };
 
-    use boxmeout_shared::types::{FightDetails, MarketConfig, MarketState, MarketStatus,
-        OptionalOracleRole, OptionalOutcome,
-    };
     use crate::Market;
+    use boxmeout_shared::types::{
+        FightDetails, MarketConfig, MarketState, MarketStatus, OptionalOracleRole, OptionalOutcome,
+    };
 
     fn default_fight(env: &Env) -> FightDetails {
         FightDetails {
@@ -1103,7 +1193,13 @@ mod get_current_odds_tests {
         let treasury = Address::generate(env);
         let contract_id = env.register_contract(None, Market);
         let client = crate::MarketClient::new(env, &contract_id);
-        client.initialize(&factory, &1u64, &default_fight(env), &default_config(), &treasury);
+        client.initialize(
+            &factory,
+            &1u64,
+            &default_fight(env),
+            &default_config(),
+            &treasury,
+        );
 
         let total = pool_a + pool_b + pool_draw;
         let state = MarketState {
@@ -1159,8 +1255,14 @@ mod get_current_odds_tests {
         let b: i128 = 10_000_000_000;
         let client = setup_market_with_pools(&env, 5 * b, 3 * b, b);
         let (a, bp, d) = client.get_current_odds();
-        assert!(a > bp, "pool_a > pool_b should give odds_a > odds_b: a={a}, b={bp}");
-        assert!(bp > d, "pool_b > pool_d should give odds_b > odds_d: b={bp}, d={d}");
+        assert!(
+            a > bp,
+            "pool_a > pool_b should give odds_a > odds_b: a={a}, b={bp}"
+        );
+        assert!(
+            bp > d,
+            "pool_b > pool_d should give odds_b > odds_d: b={bp}, d={d}"
+        );
         // Odds must sum to ≤ 10_000
         assert!(a as u64 + bp as u64 + d as u64 <= 10_000);
     }
@@ -1204,11 +1306,11 @@ mod estimate_payout_tests {
         Address, Env,
     };
 
-    use boxmeout_shared::types::{
-        BetSide, FightDetails, MarketConfig, MarketState, MarketStatus, Outcome, OracleRole,
-        OptionalOracleRole, OptionalOutcome,
-    };
     use crate::Market;
+    use boxmeout_shared::types::{
+        BetSide, FightDetails, MarketConfig, MarketState, MarketStatus, OptionalOracleRole,
+        OptionalOutcome, OracleRole, Outcome,
+    };
 
     fn default_fight(env: &Env) -> FightDetails {
         FightDetails {
@@ -1255,7 +1357,13 @@ mod estimate_payout_tests {
         let treasury = Address::generate(env);
         let contract_id = env.register_contract(None, Market);
         let client = crate::MarketClient::new(env, &contract_id);
-        client.initialize(&factory, &1u64, &default_fight(env), &default_config(), &treasury);
+        client.initialize(
+            &factory,
+            &1u64,
+            &default_fight(env),
+            &default_config(),
+            &treasury,
+        );
 
         let total = pool_a + pool_b + pool_draw;
         let state = MarketState {
@@ -1291,7 +1399,10 @@ mod estimate_payout_tests {
             env.storage().persistent().set(&"STATE", &state);
         });
 
-        assert_eq!(client.estimate_payout(&BetSide::FighterA, &1_000_000i128), 0);
+        assert_eq!(
+            client.estimate_payout(&BetSide::FighterA, &1_000_000i128),
+            0
+        );
     }
 
     /// Returns 0 for Resolved market.
@@ -1308,7 +1419,10 @@ mod estimate_payout_tests {
             env.storage().persistent().set(&"STATE", &state);
         });
 
-        assert_eq!(client.estimate_payout(&BetSide::FighterA, &1_000_000i128), 0);
+        assert_eq!(
+            client.estimate_payout(&BetSide::FighterA, &1_000_000i128),
+            0
+        );
     }
 
     /// Does not mutate storage — state is unchanged after call.
@@ -1343,7 +1457,10 @@ mod estimate_payout_tests {
         let intended = 10_000_000i128;
         let cost = client.estimate_payout(&BetSide::FighterA, &intended);
         assert!(cost > 0, "LMSR cost must be positive, got {cost}");
-        assert!(cost < intended, "LMSR cost {cost} must be less than intended bet {intended}");
+        assert!(
+            cost < intended,
+            "LMSR cost {cost} must be less than intended bet {intended}"
+        );
     }
 
     /// Positive payout for a valid Open market bet.
@@ -1352,35 +1469,35 @@ mod estimate_payout_tests {
         let env = Env::default();
         let (client, _) = setup_open_market(&env, 5_000_000, 5_000_000, 0);
         let payout = client.estimate_payout(&BetSide::FighterA, &1_000_000i128);
-        assert!(payout > 0, "Payout must be positive for a valid Open market bet");
+        assert!(
+            payout > 0,
+            "Payout must be positive for a valid Open market bet"
+        );
     }
 }
-
-
 
 // ============================================================
 // ISSUE #13: Ed25519 signature verification unit tests
 // ============================================================
 #[cfg(test)]
 mod oracle_sig_tests {
+    use crate::Market;
+    use boxmeout_shared::types::{
+        FightDetails, MarketConfig, MarketState, MarketStatus, OptionalOracleRole, OptionalOutcome,
+        OracleReport, OracleRole, Outcome,
+    };
     use soroban_sdk::{
         testutils::{Address as _, Ledger, LedgerInfo},
         Address, Bytes, BytesN, Env,
     };
-    use boxmeout_shared::types::{
-        FightDetails, MarketConfig, MarketState, MarketStatus, Outcome, OracleReport, OracleRole,
-        OptionalOracleRole, OptionalOutcome,
-    };
-    use crate::Market;
 
     // Known Ed25519 test keypair (generated offline for deterministic tests).
     // secret key (seed): [1u8; 32]
     // These values were produced with the ed25519-dalek crate from seed [1u8;32].
     const TEST_PUB_KEY: [u8; 32] = [
-        0x4c, 0xb5, 0xab, 0xf3, 0x69, 0x9b, 0x18, 0x3d,
-        0x5e, 0x15, 0x3a, 0xa1, 0x4c, 0x4b, 0x5e, 0x5e,
-        0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e,
-        0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e,
+        0x4c, 0xb5, 0xab, 0xf3, 0x69, 0x9b, 0x18, 0x3d, 0x5e, 0x15, 0x3a, 0xa1, 0x4c, 0x4b, 0x5e,
+        0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e, 0x5e,
+        0x5e, 0x5e,
     ];
 
     fn default_fight(env: &Env) -> FightDetails {
@@ -1423,7 +1540,13 @@ mod oracle_sig_tests {
         let treasury = Address::generate(env);
         let contract_id = env.register_contract(None, Market);
         let client = crate::MarketClient::new(env, &contract_id);
-        client.initialize(&factory, &1u64, &default_fight(env), &default_config(), &treasury);
+        client.initialize(
+            &factory,
+            &1u64,
+            &default_fight(env),
+            &default_config(),
+            &treasury,
+        );
 
         // Set market to Locked state
         let state = MarketState {
@@ -1475,10 +1598,42 @@ mod oracle_sig_tests {
     /// Outcome byte encoding is deterministic and correct.
     #[test]
     fn test_outcome_byte_encoding() {
-        assert_eq!(0u8, { let o = Outcome::FighterA; match o { Outcome::FighterA => 0, Outcome::FighterB => 1, Outcome::Draw => 2, Outcome::NoContest => 3 } });
-        assert_eq!(1u8, { let o = Outcome::FighterB; match o { Outcome::FighterA => 0, Outcome::FighterB => 1, Outcome::Draw => 2, Outcome::NoContest => 3 } });
-        assert_eq!(2u8, { let o = Outcome::Draw;     match o { Outcome::FighterA => 0, Outcome::FighterB => 1, Outcome::Draw => 2, Outcome::NoContest => 3 } });
-        assert_eq!(3u8, { let o = Outcome::NoContest; match o { Outcome::FighterA => 0, Outcome::FighterB => 1, Outcome::Draw => 2, Outcome::NoContest => 3 } });
+        assert_eq!(0u8, {
+            let o = Outcome::FighterA;
+            match o {
+                Outcome::FighterA => 0,
+                Outcome::FighterB => 1,
+                Outcome::Draw => 2,
+                Outcome::NoContest => 3,
+            }
+        });
+        assert_eq!(1u8, {
+            let o = Outcome::FighterB;
+            match o {
+                Outcome::FighterA => 0,
+                Outcome::FighterB => 1,
+                Outcome::Draw => 2,
+                Outcome::NoContest => 3,
+            }
+        });
+        assert_eq!(2u8, {
+            let o = Outcome::Draw;
+            match o {
+                Outcome::FighterA => 0,
+                Outcome::FighterB => 1,
+                Outcome::Draw => 2,
+                Outcome::NoContest => 3,
+            }
+        });
+        assert_eq!(3u8, {
+            let o = Outcome::NoContest;
+            match o {
+                Outcome::FighterA => 0,
+                Outcome::FighterB => 1,
+                Outcome::Draw => 2,
+                Outcome::NoContest => 3,
+            }
+        });
     }
 
     /// reported_at is encoded big-endian (8 bytes).
@@ -1527,7 +1682,10 @@ mod oracle_sig_tests {
         });
 
         let deadline: u64 = 100_000u64.saturating_add(86400);
-        assert!(200_000u64 > deadline, "Time must be past deadline for this test");
+        assert!(
+            200_000u64 > deadline,
+            "Time must be past deadline for this test"
+        );
     }
 
     /// oracle_address != caller returns InvalidOracleSignature.
@@ -1547,8 +1705,11 @@ mod oracle_sig_tests {
     fn test_tampered_outcome_changes_message() {
         let env = Env::default();
         let msg_original = build_msg(&env, "FURY-USYK-2025", 0 /* FighterA */, 50_000);
-        let msg_tampered  = build_msg(&env, "FURY-USYK-2025", 1 /* FighterB */, 50_000);
-        assert_ne!(msg_original, msg_tampered, "Tampered outcome must produce different message");
+        let msg_tampered = build_msg(&env, "FURY-USYK-2025", 1 /* FighterB */, 50_000);
+        assert_ne!(
+            msg_original, msg_tampered,
+            "Tampered outcome must produce different message"
+        );
     }
 
     /// Tampered match_id changes the message.
@@ -1556,8 +1717,11 @@ mod oracle_sig_tests {
     fn test_tampered_match_id_changes_message() {
         let env = Env::default();
         let msg_original = build_msg(&env, "FURY-USYK-2025", 0, 50_000);
-        let msg_tampered  = build_msg(&env, "FURY-USYK-XXXX", 0, 50_000);
-        assert_ne!(msg_original, msg_tampered, "Tampered match_id must produce different message");
+        let msg_tampered = build_msg(&env, "FURY-USYK-XXXX", 0, 50_000);
+        assert_ne!(
+            msg_original, msg_tampered,
+            "Tampered match_id must produce different message"
+        );
     }
 
     /// Tampered reported_at changes the message.
@@ -1565,8 +1729,11 @@ mod oracle_sig_tests {
     fn test_tampered_reported_at_changes_message() {
         let env = Env::default();
         let msg_original = build_msg(&env, "FURY-USYK-2025", 0, 50_000);
-        let msg_tampered  = build_msg(&env, "FURY-USYK-2025", 0, 50_001);
-        assert_ne!(msg_original, msg_tampered, "Tampered reported_at must produce different message");
+        let msg_tampered = build_msg(&env, "FURY-USYK-2025", 0, 50_001);
+        assert_ne!(
+            msg_original, msg_tampered,
+            "Tampered reported_at must produce different message"
+        );
     }
 
     /// Double-report from same oracle returns Unauthorized.
@@ -1604,7 +1771,10 @@ mod oracle_sig_tests {
 
         // Oracle 2 submits same outcome
         matching_count += 1;
-        assert!(matching_count >= 2, "Two matching reports must trigger resolution");
+        assert!(
+            matching_count >= 2,
+            "Two matching reports must trigger resolution"
+        );
     }
 
     /// 2-of-3 consensus: conflicting reports do not resolve.
@@ -1614,7 +1784,10 @@ mod oracle_sig_tests {
         let conflicting_count = 1u32;
 
         // One match, one conflict — no resolution yet
-        assert!(matching_count < 2, "Conflicting reports must not trigger resolution");
+        assert!(
+            matching_count < 2,
+            "Conflicting reports must not trigger resolution"
+        );
     }
 }
 
@@ -1623,16 +1796,16 @@ mod oracle_sig_tests {
 // ============================================================
 #[cfg(test)]
 mod claim_routing_tests {
+    use crate::Market;
+    use boxmeout_shared::types::{
+        BetRecord, BetSide, FightDetails, MarketConfig, MarketState, MarketStatus,
+        OptionalOracleRole, OptionalOutcome, OracleRole, Outcome,
+    };
     use soroban_sdk::{
         testutils::{Address as _, Ledger, LedgerInfo},
         token::StellarAssetClient,
         Address, Env,
     };
-    use boxmeout_shared::types::{
-        BetRecord, BetSide, FightDetails, MarketConfig, MarketState, MarketStatus, Outcome, OracleRole,
-        OptionalOracleRole, OptionalOutcome,
-    };
-    use crate::Market;
 
     fn default_fight(env: &Env) -> FightDetails {
         FightDetails {
@@ -1671,10 +1844,20 @@ mod claim_routing_tests {
         });
     }
 
-    fn register_market(env: &Env, factory: &Address, treasury: &Address) -> (crate::MarketClient<'static>, Address) {
+    fn register_market(
+        env: &Env,
+        factory: &Address,
+        treasury: &Address,
+    ) -> (crate::MarketClient<'static>, Address) {
         let contract_id = env.register_contract(None, Market);
         let client = crate::MarketClient::new(env, &contract_id);
-        client.initialize(factory, &1u64, &default_fight(env), &default_config(), treasury);
+        client.initialize(
+            factory,
+            &1u64,
+            &default_fight(env),
+            &default_config(),
+            treasury,
+        );
         (client, contract_id)
     }
 
@@ -1714,6 +1897,8 @@ mod claim_routing_tests {
             market_id: 1,
             side: BetSide::FighterA,
             amount: 10_000_000,
+            original_token: token_id.clone(),
+            original_amount: 10_000_000,
             placed_at: 1_000,
             claimed: false,
         };
@@ -1770,6 +1955,8 @@ mod claim_routing_tests {
             market_id: 1,
             side: BetSide::FighterA,
             amount: 10_000_000,
+            original_token: token_id.clone(),
+            original_amount: 10_000_000,
             placed_at: 1_000,
             claimed: false,
         };
@@ -1821,6 +2008,8 @@ mod claim_routing_tests {
             market_id: 1,
             side: BetSide::FighterA,
             amount: 5_000_000,
+            original_token: token_id.clone(),
+            original_amount: 5_000_000,
             placed_at: 1_000,
             claimed: false,
         };
@@ -1874,6 +2063,8 @@ mod claim_routing_tests {
             market_id: 1,
             side: BetSide::FighterA,
             amount: 3_000_000,
+            original_token: token_id.clone(),
+            original_amount: 3_000_000,
             placed_at: 1_000,
             claimed: false,
         };
@@ -1931,13 +2122,13 @@ mod claim_routing_tests {
 // ============================================================
 #[cfg(test)]
 mod bet_timing_lock_tests {
+    use crate::Market;
+    use boxmeout_shared::types::{BetSide, FightDetails, MarketConfig};
     use soroban_sdk::{
         testutils::{Address as _, Ledger, LedgerInfo},
         token::StellarAssetClient,
         Address, Env,
     };
-    use boxmeout_shared::types::{BetSide, FightDetails, MarketConfig};
-    use crate::Market;
 
     const SCHEDULED_AT: u64 = 100_000;
     const LOCK_BEFORE_SECS: u64 = 3_600;
@@ -1967,7 +2158,10 @@ mod bet_timing_lock_tests {
     }
 
     /// Sets up a registered market contract and returns (client, contract_id, factory, token_id).
-    fn setup(env: &Env, timestamp: u64) -> (crate::MarketClient<'static>, Address, Address, Address) {
+    fn setup(
+        env: &Env,
+        timestamp: u64,
+    ) -> (crate::MarketClient<'static>, Address, Address, Address) {
         env.mock_all_auths();
         env.ledger().set(LedgerInfo {
             timestamp,
@@ -2000,7 +2194,13 @@ mod bet_timing_lock_tests {
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &10_000_000i128);
 
-        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
+        let result = client.try_place_bet(
+            &bettor,
+            &BetSide::FighterA,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
         assert!(result.is_ok(), "Bet before lock threshold must succeed");
     }
 
@@ -2014,8 +2214,17 @@ mod bet_timing_lock_tests {
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &10_000_000i128);
 
-        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
-        assert!(result.is_err(), "Bet at exact lock threshold must return BettingClosed");
+        let result = client.try_place_bet(
+            &bettor,
+            &BetSide::FighterA,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        assert!(
+            result.is_err(),
+            "Bet at exact lock threshold must return BettingClosed"
+        );
     }
 
     /// Bets placed after the lock threshold must return BettingClosed.
@@ -2028,8 +2237,17 @@ mod bet_timing_lock_tests {
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &10_000_000i128);
 
-        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
-        assert!(result.is_err(), "Bet after lock threshold must return BettingClosed");
+        let result = client.try_place_bet(
+            &bettor,
+            &BetSide::FighterA,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        assert!(
+            result.is_err(),
+            "Bet after lock threshold must return BettingClosed"
+        );
     }
 }
 
@@ -2038,13 +2256,13 @@ mod bet_timing_lock_tests {
 // ============================================================
 #[cfg(test)]
 mod min_bet_enforcement_tests {
+    use crate::Market;
+    use boxmeout_shared::types::{BetSide, FightDetails, MarketConfig};
     use soroban_sdk::{
         testutils::{Address as _, Ledger, LedgerInfo},
         token::StellarAssetClient,
         Address, Env,
     };
-    use boxmeout_shared::types::{BetSide, FightDetails, MarketConfig};
-    use crate::Market;
 
     const SCHEDULED_AT: u64 = 100_000;
 
@@ -2100,7 +2318,7 @@ mod min_bet_enforcement_tests {
         let (client, token_id) = setup(&env, min_bet);
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &min_bet);
-        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &min_bet, &token_id);
+        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &min_bet, &token_id, &0i128);
         assert!(result.is_ok(), "Bet at exact min_bet must succeed");
     }
 
@@ -2112,7 +2330,13 @@ mod min_bet_enforcement_tests {
         let (client, token_id) = setup(&env, min_bet);
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &min_bet);
-        let result = client.try_place_bet(&bettor, &BetSide::FighterA, &(min_bet - 1), &token_id);
+        let result = client.try_place_bet(
+            &bettor,
+            &BetSide::FighterA,
+            &(min_bet - 1),
+            &token_id,
+            &0i128,
+        );
         assert!(result.is_err(), "Bet below min_bet must return BetTooSmall");
     }
 
@@ -2123,7 +2347,7 @@ mod min_bet_enforcement_tests {
         let (client, token_id) = setup(&env, 1_000_000);
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &1_000_000);
-        let result = client.try_place_bet(&bettor, &BetSide::FighterB, &1i128, &token_id);
+        let result = client.try_place_bet(&bettor, &BetSide::FighterB, &1i128, &token_id, &0i128);
         assert!(result.is_err());
     }
 
@@ -2136,10 +2360,16 @@ mod min_bet_enforcement_tests {
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &min_bet);
         // min_bet - 1 must fail
-        let fail = client.try_place_bet(&bettor, &BetSide::FighterA, &(min_bet - 1), &token_id);
+        let fail = client.try_place_bet(
+            &bettor,
+            &BetSide::FighterA,
+            &(min_bet - 1),
+            &token_id,
+            &0i128,
+        );
         assert!(fail.is_err());
         // min_bet must succeed
-        let ok = client.try_place_bet(&bettor, &BetSide::FighterA, &min_bet, &token_id);
+        let ok = client.try_place_bet(&bettor, &BetSide::FighterA, &min_bet, &token_id, &0i128);
         assert!(ok.is_ok());
     }
 }
@@ -2149,13 +2379,13 @@ mod min_bet_enforcement_tests {
 // ============================================================
 #[cfg(test)]
 mod get_all_bets_tests {
+    use crate::Market;
+    use boxmeout_shared::types::{BetSide, FightDetails, MarketConfig};
     use soroban_sdk::{
         testutils::{Address as _, Ledger, LedgerInfo},
         token::StellarAssetClient,
         Address, Env,
     };
-    use boxmeout_shared::types::{BetSide, FightDetails, MarketConfig};
-    use crate::Market;
 
     const SCHEDULED_AT: u64 = 100_000;
 
@@ -2223,8 +2453,20 @@ mod get_all_bets_tests {
         StellarAssetClient::new(&env, &token_id).mint(&bettor1, &2_000_000i128);
         StellarAssetClient::new(&env, &token_id).mint(&bettor2, &2_000_000i128);
 
-        client.place_bet(&bettor1, &BetSide::FighterA, &1_000_000i128, &token_id);
-        client.place_bet(&bettor2, &BetSide::FighterB, &1_000_000i128, &token_id);
+        client.place_bet(
+            &bettor1,
+            &BetSide::FighterA,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        client.place_bet(
+            &bettor2,
+            &BetSide::FighterB,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
 
         let result = client.get_all_bets(&0u32, &10u32);
         assert_eq!(result.len(), 2);
@@ -2243,9 +2485,21 @@ mod get_all_bets_tests {
         StellarAssetClient::new(&env, &token_id).mint(&bettor2, &2_000_000i128);
         StellarAssetClient::new(&env, &token_id).mint(&bettor3, &2_000_000i128);
 
-        client.place_bet(&bettor1, &BetSide::FighterA, &1_000_000i128, &token_id);
-        client.place_bet(&bettor2, &BetSide::FighterB, &1_000_000i128, &token_id);
-        client.place_bet(&bettor3, &BetSide::Draw, &1_000_000i128, &token_id);
+        client.place_bet(
+            &bettor1,
+            &BetSide::FighterA,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        client.place_bet(
+            &bettor2,
+            &BetSide::FighterB,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        client.place_bet(&bettor3, &BetSide::Draw, &1_000_000i128, &token_id, &0i128);
 
         // offset=1, limit=10 → should return 2 records
         let result = client.get_all_bets(&1u32, &10u32);
@@ -2261,7 +2515,13 @@ mod get_all_bets_tests {
         for _ in 0..3 {
             let bettor = Address::generate(&env);
             StellarAssetClient::new(&env, &token_id).mint(&bettor, &2_000_000i128);
-            client.place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
+            client.place_bet(
+                &bettor,
+                &BetSide::FighterA,
+                &1_000_000i128,
+                &token_id,
+                &0i128,
+            );
         }
 
         // limit=100 capped at 50, but only 3 bets exist → returns 3
@@ -2277,7 +2537,13 @@ mod get_all_bets_tests {
 
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &2_000_000i128);
-        client.place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
+        client.place_bet(
+            &bettor,
+            &BetSide::FighterA,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
 
         let result = client.get_all_bets(&99u32, &10u32);
         assert_eq!(result.len(), 0);
@@ -2291,7 +2557,13 @@ mod get_all_bets_tests {
 
         let bettor = Address::generate(&env);
         StellarAssetClient::new(&env, &token_id).mint(&bettor, &2_000_000i128);
-        client.place_bet(&bettor, &BetSide::FighterA, &1_000_000i128, &token_id);
+        client.place_bet(
+            &bettor,
+            &BetSide::FighterA,
+            &1_000_000i128,
+            &token_id,
+            &0i128,
+        );
 
         let result = client.get_all_bets(&0u32, &0u32);
         assert_eq!(result.len(), 0);
@@ -2303,16 +2575,16 @@ mod get_all_bets_tests {
 // ============================================================
 #[cfg(test)]
 mod market_lifecycle_tests {
+    use crate::Market;
+    use boxmeout_shared::types::{
+        BetRecord, BetSide, FightDetails, MarketConfig, MarketState, MarketStatus,
+        OptionalOracleRole, OptionalOutcome, OracleRole, Outcome,
+    };
     use soroban_sdk::{
         testutils::{Address as _, Ledger, LedgerInfo},
         token::StellarAssetClient,
         Address, Env,
     };
-    use boxmeout_shared::types::{
-        BetRecord, BetSide, FightDetails, MarketConfig, MarketState, MarketStatus, Outcome,
-        OracleRole, OptionalOracleRole, OptionalOutcome,
-    };
-    use crate::Market;
 
     const SCHEDULED_AT: u64 = 100_000;
     const LOCK_BEFORE: u64 = 3_600;
@@ -2378,8 +2650,20 @@ mod market_lifecycle_tests {
         StellarAssetClient::new(&env, &token_id).mint(&bettor1, &10_000_000i128);
         StellarAssetClient::new(&env, &token_id).mint(&bettor2, &5_000_000i128);
 
-        client.place_bet(&bettor1, &BetSide::FighterA, &10_000_000i128, &token_id);
-        client.place_bet(&bettor2, &BetSide::FighterB, &5_000_000i128, &token_id);
+        client.place_bet(
+            &bettor1,
+            &BetSide::FighterA,
+            &10_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        client.place_bet(
+            &bettor2,
+            &BetSide::FighterB,
+            &5_000_000i128,
+            &token_id,
+            &0i128,
+        );
 
         // LMSR: pool grows by marginal cost paid, not the intended bet size.
         let state_after = client.get_state();
@@ -2387,7 +2671,10 @@ mod market_lifecycle_tests {
         assert!(state_after.pool_b > 0, "pool_b must be positive after bet");
         assert!(state_after.total_pool > 0, "total_pool must be positive");
         // bettor1 intended 2x bettor2, so pool_a > pool_b
-        assert!(state_after.pool_a > state_after.pool_b, "pool_a should exceed pool_b");
+        assert!(
+            state_after.pool_a > state_after.pool_b,
+            "pool_a should exceed pool_b"
+        );
 
         // Lock market
         set_time(&env, SCHEDULED_AT - LOCK_BEFORE + 1);
@@ -2421,7 +2708,10 @@ mod market_lifecycle_tests {
         let net_pool = actual_total - fee;
         let receipt = client.claim_winnings(&bettor1, &token_id);
         assert_eq!(receipt.fee_deducted, fee, "Fee must be 2% of total pool");
-        assert_eq!(receipt.amount_won, net_pool, "Sole A-winner gets entire net pool");
+        assert_eq!(
+            receipt.amount_won, net_pool,
+            "Sole A-winner gets entire net pool"
+        );
     }
 
     // ── Lifecycle: create → place bets → cancel → refund ─────────────────────
@@ -2437,29 +2727,53 @@ mod market_lifecycle_tests {
         StellarAssetClient::new(&env, &token_id).mint(&bettor1, &3_000_000i128);
         StellarAssetClient::new(&env, &token_id).mint(&bettor2, &7_000_000i128);
 
-        client.place_bet(&bettor1, &BetSide::FighterA, &3_000_000i128, &token_id);
-        client.place_bet(&bettor2, &BetSide::FighterB, &7_000_000i128, &token_id);
+        client.place_bet(
+            &bettor1,
+            &BetSide::FighterA,
+            &3_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        client.place_bet(
+            &bettor2,
+            &BetSide::FighterB,
+            &7_000_000i128,
+            &token_id,
+            &0i128,
+        );
 
-        // Capture actual LMSR costs paid (bet.amount = cost, not intended size).
-        let state_after = client.get_state();
-        let cost1 = state_after.pool_a; // bettor1's cost = pool_a (sole A bettor)
-        let cost2 = state_after.pool_b; // bettor2's cost = pool_b (sole B bettor)
-
-        client.cancel_market(&factory, &soroban_sdk::String::from_str(&env, "fight cancelled"));
+        client.cancel_market(
+            &factory,
+            &soroban_sdk::String::from_str(&env, "fight cancelled"),
+        );
         assert_eq!(client.get_state().status, MarketStatus::Cancelled);
 
-        // Refund returns what was actually paid (LMSR cost), not intended bet size.
+        // Refund returns the original amount transferred from each bettor.
         let refund1 = client.claim_refund(&bettor1, &token_id);
         let refund2 = client.claim_refund(&bettor2, &token_id);
-        assert_eq!(refund1, cost1, "Refund must equal LMSR cost paid by bettor1");
-        assert_eq!(refund2, cost2, "Refund must equal LMSR cost paid by bettor2");
+        assert_eq!(
+            refund1, 3_000_000,
+            "Refund must equal original amount paid by bettor1"
+        );
+        assert_eq!(
+            refund2, 7_000_000,
+            "Refund must equal original amount paid by bettor2"
+        );
         assert!(refund1 > 0);
         assert!(refund2 > 0);
 
-        // Token balances restored: initial mint - cost + refund = initial mint.
+        // Token balances restored: initial mint - original amount + refund = initial mint.
         let token_client = soroban_sdk::token::Client::new(&env, &token_id);
-        assert_eq!(token_client.balance(&bettor1), 3_000_000, "bettor1 net balance should equal initial mint");
-        assert_eq!(token_client.balance(&bettor2), 7_000_000, "bettor2 net balance should equal initial mint");
+        assert_eq!(
+            token_client.balance(&bettor1),
+            3_000_000,
+            "bettor1 net balance should equal initial mint"
+        );
+        assert_eq!(
+            token_client.balance(&bettor2),
+            7_000_000,
+            "bettor2 net balance should equal initial mint"
+        );
     }
 
     // ── Lifecycle: dispute → resolve dispute → claim with corrected outcome ───
@@ -2490,6 +2804,8 @@ mod market_lifecycle_tests {
             market_id: 1,
             side: BetSide::FighterA,
             amount: 10_000_000,
+            original_token: token_id.clone(),
+            original_amount: 10_000_000,
             placed_at: 1_000,
             claimed: false,
         };
@@ -2504,7 +2820,10 @@ mod market_lifecycle_tests {
         StellarAssetClient::new(&env, &token_id).mint(&contract_id, &10_000_000i128);
 
         // Dispute
-        client.dispute_market(&factory, &soroban_sdk::String::from_str(&env, "wrong outcome"));
+        client.dispute_market(
+            &factory,
+            &soroban_sdk::String::from_str(&env, "wrong outcome"),
+        );
         assert_eq!(client.get_state().status, MarketStatus::Disputed);
 
         // Admin resolves with corrected outcome
@@ -2512,7 +2831,10 @@ mod market_lifecycle_tests {
         let state = client.get_state();
         assert_eq!(state.status, MarketStatus::Resolved);
         assert_eq!(state.outcome, OptionalOutcome::Some(Outcome::FighterA));
-        assert_eq!(state.oracle_used, OptionalOracleRole::Some(OracleRole::Admin));
+        assert_eq!(
+            state.oracle_used,
+            OptionalOracleRole::Some(OracleRole::Admin)
+        );
 
         // Bettor claims with corrected outcome
         let receipt = client.claim_winnings(&bettor, &token_id);
@@ -2534,9 +2856,27 @@ mod market_lifecycle_tests {
         StellarAssetClient::new(&env, &token_id).mint(&bettor2, &20_000_000i128);
         StellarAssetClient::new(&env, &token_id).mint(&bettor3, &30_000_000i128);
 
-        client.place_bet(&bettor1, &BetSide::FighterA, &10_000_000i128, &token_id);
-        client.place_bet(&bettor2, &BetSide::FighterA, &20_000_000i128, &token_id);
-        client.place_bet(&bettor3, &BetSide::FighterA, &30_000_000i128, &token_id);
+        client.place_bet(
+            &bettor1,
+            &BetSide::FighterA,
+            &10_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        client.place_bet(
+            &bettor2,
+            &BetSide::FighterA,
+            &20_000_000i128,
+            &token_id,
+            &0i128,
+        );
+        client.place_bet(
+            &bettor3,
+            &BetSide::FighterA,
+            &30_000_000i128,
+            &token_id,
+            &0i128,
+        );
 
         // LMSR: pool_a = sum of LMSR costs (less than sum of intended bets).
         let state_after = client.get_state();
@@ -2572,9 +2912,17 @@ mod market_lifecycle_tests {
         let net_pool = actual_pool_a - fee;
         // bettor2 intended 2x bettor1 → cost2 ≈ 2*cost1 → r2 ≈ 2*r1
         // bettor3 intended 3x bettor1 → cost3 ≈ 3*cost1 → r3 ≈ 3*r1
-        assert!(r2.amount_won > r1.amount_won, "bettor2 (2x bet) should win more than bettor1");
-        assert!(r3.amount_won > r2.amount_won, "bettor3 (3x bet) should win more than bettor2");
-        assert!(r1.amount_won + r2.amount_won + r3.amount_won <= net_pool,
-            "Total payouts must not exceed net pool");
+        assert!(
+            r2.amount_won > r1.amount_won,
+            "bettor2 (2x bet) should win more than bettor1"
+        );
+        assert!(
+            r3.amount_won > r2.amount_won,
+            "bettor3 (3x bet) should win more than bettor2"
+        );
+        assert!(
+            r1.amount_won + r2.amount_won + r3.amount_won <= net_pool,
+            "Total payouts must not exceed net pool"
+        );
     }
 }

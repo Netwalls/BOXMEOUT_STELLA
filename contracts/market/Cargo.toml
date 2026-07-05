@@ -7,6 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+proptest = []
 testutils = ["soroban-sdk/testutils", "boxmeout-shared/testutils"]
 
 [dependencies]
@@ -14,4 +15,5 @@ soroban-sdk     = { version = "20.0.0", features = ["alloc"] }
 boxmeout-shared = { path = "../shared" }
 
 [dev-dependencies]
+proptest = "1.6"
 soroban-sdk = { version = "20.0.0", features = ["testutils"] }
