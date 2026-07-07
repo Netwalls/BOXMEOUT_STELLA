@@ -8,7 +8,7 @@
 //!   - require_auth() is always the FIRST call in create_proposal, vote, veto
 //!   - CEI pattern in execute(): state set to Executed BEFORE cross-contract call
 //!   - Persistent entries extend_ttl() after every write to survive voting + timelock
-//! ============================================================
+//!     ============================================================
 
 #[cfg(test)]
 mod tests;
