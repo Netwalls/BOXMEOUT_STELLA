@@ -239,7 +239,7 @@ mod tests {
     use soroban_sdk::{
         contract, contractimpl,
         testutils::{Address as _, Events},
-        Address, Env, IntoVal,
+        Address, Env,
     };
 
     use crate::{

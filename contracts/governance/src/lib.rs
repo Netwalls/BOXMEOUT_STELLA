@@ -1,5 +1,5 @@
 #![no_std]
-//! ============================================================
+//!     ============================================================
 //! BOXMEOUT — Governance Contract
 //! On-chain governance with XLM-balance snapshot voting,
 //! 48-hour timelock executor, and cross-contract execution.
