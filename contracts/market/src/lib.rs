@@ -691,10 +691,7 @@ impl Market {
         // Attempt reverse path payment from XLM to preferred token.
         // `payout_xlm` is already the bettor's share of the post-fee pool.
         let token_received = if payout_xlm > 0 {
-            match Self::path_pay_out(&env, &preferred_token, payout_xlm, min_token_out) {
-                Ok(received) => Some(received),
-                Err(_) => None, // Fall back to XLM if path payment fails
-            }
+            Self::path_pay_out(&env, &preferred_token, payout_xlm, min_token_out).ok()
         } else {
             None
         };

@@ -769,8 +769,8 @@ mod treasury_lifecycle_tests {
         let market = Address::generate(env);
         client.initialize(
             &admin,
-            &Address::generate(&env),
-            &Address::generate(&env),
+            &Address::generate(env),
+            &Address::generate(env),
             &limit,
         );
         let token = env.register_stellar_asset_contract(admin.clone());

@@ -2136,12 +2136,12 @@ mod bet_timing_lock_tests {
 
     fn fight(env: &Env) -> FightDetails {
         FightDetails {
-            match_id: soroban_sdk::String::from_slice(env, "FURY-USYK-2025"),
-            fighter_a: soroban_sdk::String::from_slice(env, "Fury"),
-            fighter_b: soroban_sdk::String::from_slice(env, "Usyk"),
-            weight_class: soroban_sdk::String::from_slice(env, "Heavyweight"),
+            match_id: soroban_sdk::String::from_str(env, "FURY-USYK-2025"),
+            fighter_a: soroban_sdk::String::from_str(env, "Fury"),
+            fighter_b: soroban_sdk::String::from_str(env, "Usyk"),
+            weight_class: soroban_sdk::String::from_str(env, "Heavyweight"),
             scheduled_at: SCHEDULED_AT,
-            venue: soroban_sdk::String::from_slice(env, "Riyadh"),
+            venue: soroban_sdk::String::from_str(env, "Riyadh"),
             title_fight: true,
         }
     }
