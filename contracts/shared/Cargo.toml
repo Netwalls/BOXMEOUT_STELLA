@@ -7,10 +7,12 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+proptest = []
 testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
 soroban-sdk = { version = "20.0.0", features = ["alloc"] }
 
 [dev-dependencies]
+proptest = "1.6"
 soroban-sdk = { version = "20.0.0", features = ["testutils"] }

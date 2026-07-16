@@ -1,0 +1,30 @@
+name: Property Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "contracts/**"
+      - ".github/workflows/property-tests.yml"
+
+jobs:
+  property-tests:
+    name: contracts property tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Run feature-gated property tests
+        working-directory: contracts
+        run: cargo test --features proptest -- prop_tests --test-threads=1
