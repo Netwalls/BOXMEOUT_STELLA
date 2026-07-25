@@ -5,7 +5,7 @@
 
 import { useCallback, useState } from 'react';
 import type { BetSide, TxStatus } from '../types';
-import { submitBet } from '../services/wallet';
+import { submitBet, WalletSignError, TxSubmissionError } from '../services/wallet';
 import { useAppStore } from '../store';
 
 export interface UsePlaceBetResult {
@@ -13,6 +13,7 @@ export interface UsePlaceBetResult {
   txStatus: TxStatus;
   txHash: string | null;
   error: string | null;
+  errorType: 'wallet-rejected' | 'network-failed' | 'contract-reverted' | null;
   reset: () => void;
 }
 
@@ -24,11 +25,13 @@ export interface UsePlaceBetResult {
 export function usePlaceBet(): UsePlaceBetResult {
   const [txStatus, setTxStatus] = useState<TxStatus>({ hash: null, status: 'idle', error: null });
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<'wallet-rejected' | 'network-failed' | 'contract-reverted' | null>(null);
   const { setTxStatus: setAppTxStatus } = useAppStore();
 
   const placeBet = useCallback(
     async (market_id: string, side: BetSide, amount: number, token: string, minXlmOut: number) => {
       setError(null);
+      setErrorType(null);
       setTxStatus({ hash: null, status: 'signing', error: null });
 
       try {
@@ -46,7 +49,19 @@ export function usePlaceBet(): UsePlaceBetResult {
         // Invalidate caches (handled by parent component via useMarket/useBets polling)
       } catch (err: any) {
         const msg = err?.message ?? 'Transaction failed';
+        let type: 'wallet-rejected' | 'network-failed' | 'contract-reverted' = 'network-failed';
+
+        if (err instanceof WalletSignError) {
+          type = 'wallet-rejected';
+        } else if (err instanceof TxSubmissionError) {
+          // Check if it's a contract error or network error
+          if (err.details?.status === 'FAILED') {
+            type = 'contract-reverted';
+          }
+        }
+
         setError(msg);
+        setErrorType(type);
         setTxStatus({ hash: null, status: 'error', error: msg });
         setAppTxStatus({ hash: null, status: 'error', error: msg });
         throw err;
@@ -58,6 +73,7 @@ export function usePlaceBet(): UsePlaceBetResult {
   const reset = useCallback(() => {
     setTxStatus({ hash: null, status: 'idle', error: null });
     setError(null);
+    setErrorType(null);
     setAppTxStatus({ hash: null, status: 'idle', error: null });
   }, [setAppTxStatus]);
 
@@ -66,6 +82,7 @@ export function usePlaceBet(): UsePlaceBetResult {
     txStatus,
     txHash: txStatus.hash,
     error,
+    errorType,
     reset,
   };
 }

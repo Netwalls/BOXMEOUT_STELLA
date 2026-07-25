@@ -12,18 +12,17 @@ export interface UseWalletResult {
   disconnect: () => void;
 }
 
-const STORAGE_KEY = 'boxmeout_wallet_address';
-
 export function useWallet(): UseWalletResult {
   const { walletAddress, walletBalance, isConnecting, setWallet, clearWallet } = useAppStore();
   const [error, setError] = useState<string | null>(null);
 
+  // Restore wallet connection on mount if persisted
   useEffect(() => {
     const stored = getConnectedAddress();
     if (stored) {
       getWalletBalance().then((bal) => setWallet(stored, bal)).catch(() => {});
     }
-  }, []);
+  }, [setWallet]);
 
   const connect = useCallback(async () => {
     setError(null);
@@ -31,7 +30,6 @@ export function useWallet(): UseWalletResult {
     try {
       const address = await connectWallet();
       const balance = await getWalletBalance();
-      sessionStorage.setItem(STORAGE_KEY, address);
       setWallet(address, balance);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to connect wallet');
@@ -42,7 +40,6 @@ export function useWallet(): UseWalletResult {
 
   const disconnect = useCallback(() => {
     disconnectWallet();
-    sessionStorage.removeItem(STORAGE_KEY);
     clearWallet();
   }, [clearWallet]);
 

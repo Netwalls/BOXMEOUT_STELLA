@@ -7,9 +7,10 @@ import { buildContractTransaction, submitTransaction, NETWORK_PASSPHRASE } from 
 import { getConnectedAddress } from '../services/wallet';
 
 export interface UseCreateMarketResult {
-  createMarket: (params: CreateMarketParams) => Promise<void>;
+  createMarket: (params: CreateMarketParams) => Promise<string>;
   txStatus: TxStatus['status'];
   txHash: string | null;
+  marketId: string | null;
   error: string | null;
 }
 
@@ -55,9 +56,10 @@ export function useCreateMarket(): UseCreateMarketResult {
   const router = useRouter();
   const [txStatus, setTxStatus] = useState<TxStatus['status']>('idle');
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [marketId, setMarketId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const createMarket = useCallback(async (params: CreateMarketParams) => {
+  const createMarket = useCallback(async (params: CreateMarketParams): Promise<string> => {
     const factoryAddress = process.env.NEXT_PUBLIC_MARKET_FACTORY_ADDRESS;
     if (!factoryAddress) throw new Error('NEXT_PUBLIC_MARKET_FACTORY_ADDRESS not set');
 
@@ -66,6 +68,7 @@ export function useCreateMarket(): UseCreateMarketResult {
 
     setTxStatus('signing');
     setTxHash(null);
+    setMarketId(null);
     setError(null);
 
     try {
@@ -102,15 +105,18 @@ export function useCreateMarket(): UseCreateMarketResult {
       const resultXdr = (txResult as any).returnValue
         ? (txResult as any).returnValue.toXDR('base64')
         : '';
-      const marketId = parseMarketId(resultXdr);
+      const id = parseMarketId(resultXdr);
+      setMarketId(id);
 
       setTxStatus('success');
-      router.push(`/markets/${marketId}`);
+      router.push(`/markets/${id}`);
+      return id;
     } catch (e: any) {
       setTxStatus('error');
       setError(e?.message ?? String(e));
+      throw e;
     }
   }, [router]);
 
-  return { createMarket, txStatus, txHash, error };
+  return { createMarket, txStatus, txHash, marketId, error };
 }
