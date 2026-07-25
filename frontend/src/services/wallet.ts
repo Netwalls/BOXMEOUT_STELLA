@@ -171,6 +171,20 @@ export function getConnectedAddress(): string | null {
   return localStorage.getItem(LS_KEY);
 }
 
+export async function getConnectedNetwork(): Promise<string> {
+  if (typeof window === 'undefined') return NETWORK;
+  const freighter = (window as any).freighter;
+  if (freighter) {
+    try {
+      const network = await freighter.getNetwork();
+      return network?.network ?? NETWORK;
+    } catch {
+      return NETWORK;
+    }
+  }
+  return NETWORK;
+}
+
 // ─── Contract invocations ─────────────────────────────────────────────────────
 
 export async function submitBet(

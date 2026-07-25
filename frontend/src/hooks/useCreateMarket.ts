@@ -5,6 +5,7 @@ import type { TxStatus } from '../types';
 import type { CreateMarketParams } from '../services/wallet';
 import { buildContractTransaction, submitTransaction, NETWORK_PASSPHRASE } from '../../lib/stellar';
 import { getConnectedAddress } from '../services/wallet';
+import { useNetworkMismatch } from './useNetworkMismatch';
 
 export interface UseCreateMarketResult {
   createMarket: (params: CreateMarketParams) => Promise<string>;
@@ -58,8 +59,16 @@ export function useCreateMarket(): UseCreateMarketResult {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [marketId, setMarketId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { isMismatched } = useNetworkMismatch();
 
   const createMarket = useCallback(async (params: CreateMarketParams): Promise<string> => {
+    if (isMismatched) {
+      const msg = 'Wallet network does not match app configuration. Cannot create market.';
+      setTxStatus('error');
+      setError(msg);
+      throw new Error(msg);
+    }
+
     const factoryAddress = process.env.NEXT_PUBLIC_MARKET_FACTORY_ADDRESS;
     if (!factoryAddress) throw new Error('NEXT_PUBLIC_MARKET_FACTORY_ADDRESS not set');
 
@@ -116,7 +125,7 @@ export function useCreateMarket(): UseCreateMarketResult {
       setError(e?.message ?? String(e));
       throw e;
     }
-  }, [router]);
+  }, [router, isMismatched]);
 
   return { createMarket, txStatus, txHash, marketId, error };
 }

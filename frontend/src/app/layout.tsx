@@ -8,6 +8,8 @@ import { Inter } from 'next/font/google';
 import { Header } from '../components/layout/Header';
 import { QueryProvider } from '../providers/QueryProvider';
 import { ToastProvider } from '../components/ui/ToastProvider';
+import { ErrorBoundary } from '../components/ui/ErrorBoundary';
+import { NetworkMismatchBanner } from '../components/ui/NetworkMismatchBanner';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -36,12 +38,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
         />
       </head>
       <body className="bg-gray-950 dark:bg-gray-950 text-white dark:text-white min-h-screen">
-        <QueryProvider>
-          <ToastProvider>
-            <Header />
-            {children}
-          </ToastProvider>
-        </QueryProvider>
+        <ErrorBoundary>
+          <QueryProvider>
+            <ToastProvider>
+              <NetworkMismatchBanner />
+              <Header />
+              {children}
+            </ToastProvider>
+          </QueryProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

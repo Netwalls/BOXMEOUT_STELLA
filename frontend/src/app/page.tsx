@@ -86,9 +86,20 @@ export default function HomePage(): JSX.Element {
           ))}
         </div>
       ) : sorted.length === 0 ? (
-        <p className="text-gray-500 text-center py-16">
-          No markets found. Try changing your filters.
-        </p>
+        <div className="text-center py-20 space-y-6">
+          <div className="space-y-2">
+            <p className="text-4xl">🥊</p>
+            <h2 className="text-xl font-semibold text-white">No active markets</h2>
+            <p className="text-gray-400">
+              {total === 0 ? 'Be the first to create a boxing prediction market' : 'Try adjusting your filters to find more markets'}
+            </p>
+          </div>
+          {total === 0 && (
+            <a href="/create" className="inline-block px-6 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 font-semibold text-black text-sm transition-colors">
+              Create the first market →
+            </a>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sorted.map((m) => (

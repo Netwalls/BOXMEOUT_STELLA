@@ -7,6 +7,7 @@ import type { TxStatus } from '../types';
 import { submitClaimWithStages, stroopsToXlm } from '../services/wallet';
 import { useAppStore } from '../store';
 import { rpc } from '@stellar/stellar-sdk';
+import { useNetworkMismatch } from './useNetworkMismatch';
 
 export interface UseClaimWinningsResult {
   claimWinnings: (marketId: string) => Promise<number>;
@@ -25,8 +26,17 @@ export function useClaimWinnings(): UseClaimWinningsResult {
   const [claimedAmount, setClaimedAmount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { setTxStatus: setStoreTxStatus } = useAppStore();
+  const { isMismatched } = useNetworkMismatch();
 
   const claimWinnings = useCallback(async (marketId: string): Promise<number> => {
+    if (isMismatched) {
+      const msg = 'Wallet network does not match app configuration. Cannot claim winnings.';
+      setError(msg);
+      setTxStatus({ hash: null, status: 'error', error: msg });
+      setStoreTxStatus({ hash: null, status: 'error', error: msg });
+      throw new Error(msg);
+    }
+
     setError(null);
     setTxHash(null);
     setClaimedAmount(null);
@@ -77,7 +87,7 @@ export function useClaimWinnings(): UseClaimWinningsResult {
       update({ hash: null, status: 'error', error: msg });
       throw e;
     }
-  }, [setStoreTxStatus]);
+  }, [setStoreTxStatus, isMismatched]);
 
   const reset = useCallback(() => {
     setTxStatus(IDLE);

@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import type { BetSide, TxStatus } from '../types';
 import { submitBet, WalletSignError, TxSubmissionError } from '../services/wallet';
 import { useAppStore } from '../store';
+import { useNetworkMismatch } from './useNetworkMismatch';
 
 export interface UsePlaceBetResult {
   placeBet: (market_id: string, side: BetSide, amount: number, token: string, minXlmOut: number) => Promise<void>;
@@ -27,9 +28,18 @@ export function usePlaceBet(): UsePlaceBetResult {
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<'wallet-rejected' | 'network-failed' | 'contract-reverted' | null>(null);
   const { setTxStatus: setAppTxStatus } = useAppStore();
+  const { isMismatched } = useNetworkMismatch();
 
   const placeBet = useCallback(
     async (market_id: string, side: BetSide, amount: number, token: string, minXlmOut: number) => {
+      if (isMismatched) {
+        const msg = 'Wallet network does not match app configuration. Cannot place bet.';
+        setError(msg);
+        setErrorType('network-failed');
+        setTxStatus({ hash: null, status: 'error', error: msg });
+        return;
+      }
+
       setError(null);
       setErrorType(null);
       setTxStatus({ hash: null, status: 'signing', error: null });
@@ -67,7 +77,7 @@ export function usePlaceBet(): UsePlaceBetResult {
         throw err;
       }
     },
-    [setAppTxStatus],
+    [setAppTxStatus, isMismatched],
   );
 
   const reset = useCallback(() => {
