@@ -5,6 +5,7 @@
 // Contributors: implement every function marked TODO.
 // ============================================================
 
+import { z } from 'zod';
 import type {
   Bet,
   Market,
@@ -166,4 +167,76 @@ export async function submitVote(
 
 export class AlreadyVotedError extends Error {
   constructor(message = 'Already voted') { super(message); this.name = 'AlreadyVotedError'; }
+}
+
+// ─── Runtime Validation Schemas (F-25, F-26) ────────────────────────────────────
+
+const MarketSchema = z.object({
+  market_id: z.string(),
+  match_id: z.string(),
+  fighter_a: z.string(),
+  fighter_b: z.string(),
+  weight_class: z.string(),
+  title_fight: z.boolean(),
+  venue: z.string(),
+  scheduled_at: z.string(),
+  status: z.enum(['open', 'locked', 'resolved', 'cancelled', 'disputed']),
+  outcome: z.enum(['fighter_a', 'fighter_b', 'draw', 'no_contest']).nullable(),
+  pool_a: z.string(),
+  pool_b: z.string(),
+  pool_draw: z.string(),
+  total_pool: z.string(),
+  odds_a: z.number(),
+  odds_b: z.number(),
+  odds_draw: z.number(),
+  fee_bps: z.number(),
+  oracle_address: z.string().optional(),
+  resolution_tx_hash: z.string().optional(),
+});
+
+const MarketListResponseSchema = z.object({
+  markets: z.array(MarketSchema),
+  total: z.number(),
+  page: z.number(),
+  limit: z.number(),
+});
+
+/**
+ * Typed wrapper around GET /markets with runtime validation.
+ * Validates response schema with zod before returning.
+ * Throws NetworkError on validation failure or network error.
+ */
+export async function getMarkets(
+  filters?: MarketFilters,
+  pagination?: PaginationParams,
+): Promise<MarketListResponse> {
+  try {
+    const result = await fetchMarkets(filters, pagination);
+    return MarketListResponseSchema.parse(result);
+  } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      throw new NetworkError(`Invalid market response schema: ${e.message}`);
+    }
+    throw e;
+  }
+}
+
+/**
+ * Typed wrapper around GET /markets/:marketId with runtime validation.
+ * Validates response schema with zod before returning.
+ * Throws NotFoundError on 404, NetworkError on validation failure or other errors.
+ */
+export async function getMarketById(marketId: string): Promise<Market> {
+  try {
+    const result = await fetchMarketById(marketId);
+    return MarketSchema.parse(result);
+  } catch (e: any) {
+    if (e instanceof NotFoundError) {
+      throw e;
+    }
+    if (e instanceof z.ZodError) {
+      throw new NetworkError(`Invalid market response schema: ${e.message}`);
+    }
+    throw e;
+  }
 }
