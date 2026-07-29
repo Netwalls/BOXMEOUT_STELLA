@@ -39,6 +39,15 @@ pub struct Fighter {
     pub weight_class: String,
 }
 
+/// Soroban's `#[contracttype]` does not support `Option<T>` directly.
+/// This enum serves as the canonical nullable-outcome type for the `Market` struct.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum OptionalOutcome {
+    None,
+    Some(Outcome),
+}
+
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Market {
@@ -56,7 +65,7 @@ pub struct Market {
     pub protocol_fee_bp:        u32,
     pub oracle_address:         Address,
     pub fee_collector_address:  Address,
-    pub outcome:                Option<Outcome>,
+    pub outcome:                OptionalOutcome,
 }
 
 #[contracttype]

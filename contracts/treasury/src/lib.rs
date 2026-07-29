@@ -129,8 +129,6 @@ impl Treasury {
 
         let caller = env.current_contract_address();
 
-        let caller = env.current_contract_address();
-
         let registered: Address = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_market_address"),
@@ -228,8 +226,6 @@ impl Treasury {
             (Symbol::new(&env, "FeesWithdrawn"),),
             (recipient, amount, ts),
         );
-
-        amount
     }
 
     /// Drains all treasury funds to `recipient` in an emergency.
@@ -413,9 +409,8 @@ mod tests {
 
         assert_eq!(client.get_balance(), 0);
         assert_eq!(client.get_total_fees_earned(), 0);
-        assert_eq!(client.get_fee_bps(), 0);
-        assert_eq!(client.get_withdrawal_log().len(), 0);
         assert_eq!(client.get_fee_bps(), 200);
+        assert_eq!(client.get_withdrawal_log().len(), 0);
         assert_eq!(client.get_fee_recipient(), fee_recipient);
     }
 
@@ -463,5 +458,140 @@ mod tests {
 
         client.initialize(&admin, &1000u32, &fee_recipient, &factory, &token);
         assert_eq!(client.get_fee_bps(), 1000);
+    }
+
+    // ─── withdraw_fees tests ───────────────────────────────────────────────────
+
+    /// Helper: registers treasury, initialises with a funded token, and seeds
+    /// BALANCE by directly setting storage so we can test withdraw_fees without
+    /// needing a real market factory cross-contract call.
+    fn setup_treasury_with_balance(env: &Env, balance: i128) -> (TreasuryClient, Address, Address) {
+        use soroban_sdk::testutils::Ledger;
+
+        env.ledger().with_mut(|li| li.timestamp = 1_000_000);
+
+        let admin = create_test_address(env);
+        let factory = create_test_address(env);
+        let fee_recipient = create_test_address(env);
+
+        // Mint `balance` tokens to the treasury contract so the token transfer succeeds.
+        let contract_id = env.register_contract(None, Treasury);
+        let token_addr = shared::test_utils::fund_address(env, &contract_id, balance);
+
+        let client = TreasuryClient::new(env, &contract_id);
+        client.initialize(&admin, &200u32, &fee_recipient, &factory, &token_addr);
+
+        // Seed BALANCE via a direct storage write so we don't need the full
+        // deposit_fees machinery (which requires a registered market).
+        env.as_contract(&contract_id, || {
+            env.storage().persistent().set(&key_balance(env), &balance);
+            env.storage()
+                .persistent()
+                .set(&key_total_fees(env), &balance);
+        });
+
+        (client, admin, contract_id)
+    }
+
+    #[test]
+    fn test_withdraw_fees_happy_path() {
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let initial_balance: i128 = 10_000;
+        let withdraw_amount: i128 = 3_000;
+        let (client, admin, _) = setup_treasury_with_balance(&env, initial_balance);
+        let recipient = create_test_address(&env);
+
+        client.withdraw_fees(&admin, &recipient, &withdraw_amount);
+
+        // Balance decremented correctly
+        assert_eq!(client.get_balance(), initial_balance - withdraw_amount);
+
+        // Withdrawal logged
+        let log = client.get_withdrawal_log();
+        assert_eq!(log.len(), 1);
+        let entry = log.get(0).unwrap();
+        assert_eq!(entry.0, recipient);
+        assert_eq!(entry.1, withdraw_amount);
+    }
+
+    #[test]
+    fn test_withdraw_fees_full_balance() {
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let balance: i128 = 5_000;
+        let (client, admin, _) = setup_treasury_with_balance(&env, balance);
+        let recipient = create_test_address(&env);
+
+        // Withdraw exactly the full balance — must succeed
+        client.withdraw_fees(&admin, &recipient, &balance);
+
+        assert_eq!(client.get_balance(), 0);
+        assert_eq!(client.get_withdrawal_log().len(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds balance")]
+    fn test_withdraw_fees_exceeds_balance_panics() {
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let balance: i128 = 1_000;
+        let (client, admin, _) = setup_treasury_with_balance(&env, balance);
+        let recipient = create_test_address(&env);
+
+        // Attempt to withdraw more than available — must panic
+        client.withdraw_fees(&admin, &recipient, &(balance + 1));
+    }
+
+    #[test]
+    #[should_panic(expected = "not admin")]
+    fn test_withdraw_fees_non_admin_panics() {
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let (client, _, _) = setup_treasury_with_balance(&env, 5_000);
+        let non_admin = create_test_address(&env);
+        let recipient = create_test_address(&env);
+
+        // A random address that is not the stored admin must panic
+        client.withdraw_fees(&non_admin, &recipient, &1_000);
+    }
+
+    #[test]
+    fn test_withdraw_fees_multiple_withdrawals_logged() {
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let (client, admin, _) = setup_treasury_with_balance(&env, 9_000);
+        let recipient_a = create_test_address(&env);
+        let recipient_b = create_test_address(&env);
+
+        client.withdraw_fees(&admin, &recipient_a, &4_000);
+        client.withdraw_fees(&admin, &recipient_b, &2_000);
+
+        assert_eq!(client.get_balance(), 3_000);
+
+        let log = client.get_withdrawal_log();
+        assert_eq!(log.len(), 2);
+        assert_eq!(log.get(0).unwrap().0, recipient_a);
+        assert_eq!(log.get(0).unwrap().1, 4_000i128);
+        assert_eq!(log.get(1).unwrap().0, recipient_b);
+        assert_eq!(log.get(1).unwrap().1, 2_000i128);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds balance")]
+    fn test_withdraw_fees_zero_balance_panics() {
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let (client, admin, _) = setup_treasury_with_balance(&env, 0);
+        let recipient = create_test_address(&env);
+
+        // Withdrawing any positive amount from an empty treasury must panic
+        client.withdraw_fees(&admin, &recipient, &1);
     }
 }
