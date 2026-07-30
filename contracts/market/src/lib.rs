@@ -175,6 +175,10 @@ impl MarketContract {
             &Symbol::new(&env, "get_config"),
             soroban_sdk::vec![&env],
         );
+
+        // Prevent dust bets that consume on-chain storage without contributing
+        // meaningful opposing liquidity. The configured min_bet_amount is checked
+        // before any escrow transfer or state mutation.
         if amount < config.min_bet_amount {
             panic!("below minimum bet");
         }

@@ -252,6 +252,30 @@ fn edge_below_minimum_bet_panics() {
     client.place_bet(&bettor, &BetSide::FighterA, &1i128);
 }
 
+#[test]
+fn edge_minimum_bet_amount_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _oracle, _admin, _betting_ends_at) = setup_market(&env);
+    let bettor = Address::generate(&env);
+
+    let bet_id = client.place_bet(&bettor, &BetSide::FighterA, &100i128);
+    assert!(!bet_id.to_array().is_empty());
+}
+
+#[test]
+fn edge_maximum_bet_amount_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _oracle, _admin, _betting_ends_at) = setup_market(&env);
+    let bettor = Address::generate(&env);
+
+    let bet_id = client.place_bet(&bettor, &BetSide::FighterA, &(i128::MAX / 2));
+    assert!(!bet_id.to_array().is_empty());
+}
+
 // ─── Test 6: Multiple claims on same bet must panic ───────────────────────────
 
 #[test]
