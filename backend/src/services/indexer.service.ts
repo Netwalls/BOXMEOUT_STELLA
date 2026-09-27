@@ -213,424 +213,185 @@ export async function saveLastIndexedLedger(ledger: number): Promise<void> {
  * Idempotency guarantee: each event is skipped if its EventLog row already has
  * a non-null processedAt, so retries are safe.
  */
-/**
- * Processes all contract events in a single ledger.
- * Routes each event to the appropriate handler by event.type.
- * Wrapped in a Prisma interactive transaction — all handlers succeed or none persist.
- *
- * #1228 B-50: normalises raw on-chain topics via CONTRACT_TOPIC_MAP before routing.
- * Unknown events for tracked contracts are logged at error level and stored in
- * EventLog with processedAt=null so they can be replayed once a handler is added.
- *
- * Idempotency guarantee: checks EventLog for previously processed events
- * (txHash + eventType) and skips them. Marks each event as processed on success.
- * This ensures never reprocessing already-processed events on restart (Task 4).
- */
-export async function processLedger(ledger: LedgerData): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    const now = new Date();
+export async function processLedger(data: LedgerData): Promise<void> {
+  await db.$transaction(async (tx) => {
+    for (const event of data.events) {
+      const canonicalType = normaliseEventType(event.type);
 
-    for (const event of ledger.events) {
-      // ── Upsert the raw EventLog row (idempotent) ────────────────────
-      await tx.eventLog.upsert({
-        where: {
-          txHash_eventType: {
-            txHash: event.txHash,
-            eventType: event.type,
-          },
-        },
-        update: {}, // no-op on conflict — preserve original record
-        create: {
-          txHash: event.txHash,
-          eventType: event.type,
-          contractId: event.contractId,
-          ledger: event.ledger,
-          ledgerClosedAt: new Date(event.ledgerClosedAt),
-          body: event.body as object,
-        },
+      // Persist raw event first (idempotent upsert on txHash + type)
+      const existing = await tx.eventLog.findFirst({
+        where: { txHash: event.txHash, eventType: event.type },
       });
 
-      // ── Skip if already processed (idempotent on restart) ──────────
-      const existing = await tx.eventLog.findUnique({
-        where: { txHash_eventType: { txHash: event.txHash, eventType: event.type } },
-        select: { processedAt: true },
-      });
       if (existing?.processedAt) {
         logger.debug(
-          { eventType: canonicalType, txHash: event.txHash },
-          "Event already processed — skipping"
+          { txHash: event.txHash, eventType: event.type, ledger: event.ledger },
+          "Skipping already-processed event",
         );
         continue;
       }
 
-      // ── Route to handler ───────────────────────────────────────────
-      switch (canonicalType) {
-        case "MarketCreated":
-          await handleMarketCreatedEvent(normalisedEvent);
-          break;
-        case "BetPlaced":
-          await handleBetPlacedEvent(normalisedEvent);
-          break;
-        case "MarketResolved":
-          await handleMarketResolvedEvent(normalisedEvent);
-          break;
-        case "MarketCancelled":
-          await handleMarketCancelledEvent(normalisedEvent);
-          break;
-        case "WinningsClaimed":
-          await handleWinningsClaimedEvent(normalisedEvent);
-          break;
-        case "RefundClaimed":
-          await handleRefundClaimedEvent(normalisedEvent);
-          break;
-        case "MarketLocked":
-          await handleMarketLockedEvent(normalisedEvent);
-          break;
-        case "DisputeRaised":
-        case "DisputeResolved":
-          await handleDisputeEvent(normalisedEvent);
-          break;
-        default: {
-          // #1228 B-50: Unknown events for tracked contracts — log at error
-          // level and persist with processedAt=null for later replay.
-          // The ledger cursor still advances so we don't stall the indexer.
-          logger.error(
-            {
-              rawEventType: event.type,
-              canonicalType,
-              contractId: event.contractId,
-              ledger: ledger.sequence,
-              txHash: event.txHash,
-            },
-            "Unknown event type for tracked contract — stored for replay"
-          );
-
-          // Store raw event with processedAt=null so it can be replayed
-          // once the handler is implemented. Uses upsert to stay idempotent.
-          await db.eventLog.upsert({
-            where: {
-              txHash_eventType: {
-                txHash: event.txHash,
-                eventType: event.type,
-              },
-            },
-            update: {}, // preserve original — do not overwrite
-            create: {
+      const eventLog = existing
+        ? existing
+        : await tx.eventLog.create({
+            data: {
               txHash: event.txHash,
               eventType: event.type,
-              contractId: event.contractId,
               ledger: event.ledger,
-              ledgerClosedAt: new Date(event.ledgerClosedAt),
-              body: event.body,
-              // processedAt intentionally left null — signals unhandled
+              payload: event.body as object,
             },
           });
 
-          // Do NOT mark as processed — leave processedAt null for replay
-          continue;
-        }
+      if (!canonicalType) {
+        logger.warn(
+          { txHash: event.txHash, eventType: event.type, ledger: event.ledger },
+          "Unknown event type — stored but not processed",
+        );
+        continue;
       }
 
-      // ── Mark event as processed (still inside the transaction) ─────
-      await tx.eventLog.updateMany({
-        where: {
-          txHash: event.txHash,
-          eventType: event.type,
-          processedAt: null,
-        },
-        data: { processedAt: now },
-      });
+      try {
+        await handleEvent(canonicalType, event, tx);
+
+        await tx.eventLog.update({
+          where: { id: eventLog.id },
+          data: { processedAt: new Date() },
+        });
+      } catch (err) {
+        logger.error(
+          { err, txHash: event.txHash, eventType: event.type, ledger: event.ledger },
+          "Failed to process event",
+        );
+        throw err;
+      }
     }
 
-    // ── Advance the cursor — only commits if all handlers succeeded ──
     await tx.indexerState.upsert({
       where: { id: 1 },
-      update: { lastLedger: ledger.sequence },
-      create: { id: 1, lastLedger: ledger.sequence },
+      update: { lastLedger: data.sequence },
+      create: { id: 1, lastLedger: data.sequence },
     });
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// handleMarketCreatedEvent
+// handleEvent: routes canonical event types to their handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Parses MarketCreated event body and calls market.service.createMarketRecord().
- * Also registers the new Market contract address for future event subscriptions.
- *
- * Expected event.body shape (from Soroban contract):
- * {
- *   market_id:       string,
- *   contractAddress: string,
- *   fighterA:        object,
- *   fighterB:        object,
- *   scheduledAt:     string | number,   // ISO string or Unix timestamp
- *   bettingEndsAt:   string | number,
- *   oracleAddress:   string,
- *   createdBy:       string,
- * }
- */
-export async function handleMarketCreatedEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-
-  await marketService.createMarketRecord({
-    id: b.market_id as string,
-    contractAddress: b.contractAddress as string,
-    fighterA: b.fighterA as object,
-    fighterB: b.fighterB as object,
-    scheduledAt: toDate(b.scheduledAt as string | number),
-    bettingEndsAt: toDate(b.bettingEndsAt as string | number),
-    createdAt: toDate(event.ledgerClosedAt),
-    createdBy: b.createdBy as string,
-    oracleAddress: b.oracleAddress as string,
-    txHash: event.txHash,
-  });
-
-  logger.info({ marketId: b.market_id, ledger: event.ledger }, "MarketCreated processed");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// handleBetPlacedEvent
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parses BetPlaced event body, records the bet and updates pool totals.
- *
- * Pool totals are updated atomically with bet insertion — both operations
- * execute within the same $transaction wrapping processLedger (B-62).
- *
- * Expected event.body shape:
- * {
- *   bet_id:    string,
- *   market_id: string,
- *   bettor:    string,
- *   side:      "FighterA" | "FighterB",
- *   amount:    string | number | bigint,
- *   placed_at: string | number,
- *   pool_a:    string | number | bigint,   // updated totals after this bet
- *   pool_b:    string | number | bigint,
- * }
- */
-export async function handleBetPlacedEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-
-  // Both operations execute atomically inside the $transaction in processLedger
-  await betService.recordBet({
-    id: b.bet_id as string,
-    marketId: b.market_id as string,
-    bettor: b.bettor as string,
-    side: b.side as "FighterA" | "FighterB",
-    amount: toBigInt(b.amount),
-    placedAt: toDate(b.placed_at as string | number),
-    txHash: event.txHash,
-  });
-
-  await marketService.updateMarketPools(
-    b.market_id as string,
-    toBigInt(b.pool_a),
-    toBigInt(b.pool_b)
-  );
-
-  publishMarketEvent(b.market_id as string, "bet_placed", {
-    betId: b.bet_id,
-    bettor: b.bettor,
-    side: b.side,
-    amount: String(toBigInt(b.amount)),
-    poolA: String(toBigInt(b.pool_a)),
-    poolB: String(toBigInt(b.pool_b)),
-  });
-
-  logger.info(
-    { betId: b.bet_id, marketId: b.market_id, ledger: event.ledger },
-    "BetPlaced processed"
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Remaining handlers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parses MarketResolved event and calls market.service.updateMarketStatus()
- * with the final outcome decoded from the event body.
- *
- * Gracefully rejects out-of-order application: if the market doesn't exist yet
- * (market_created event hasn't been processed), throws an error so the ledger
- * transaction rolls back and the indexer retries on the next poll cycle.
- *
- * Expected event.body: { market_id, outcome: "FighterA"|"FighterB"|"Draw"|"NoContest" }
- */
-export async function handleMarketResolvedEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-  const marketId = b.market_id as string;
-
-  // Out-of-order guard — reject gracefully if market not yet created
-  const market = await prisma.market.findUnique({ where: { id: marketId } });
-  if (!market) {
-    throw new Error(
-      `Market ${marketId} not found — event arrived out of order (market_created not yet processed), will retry`
-    );
-  }
-
-  await marketService.updateMarketStatus(
-    marketId,
-    "Resolved",
-    b.outcome as "FighterA" | "FighterB" | "Draw" | "NoContest"
-  );
-
-  publishMarketEvent(b.market_id as string, "market_resolved", {
-    outcome: b.outcome,
-  });
-
-  logger.info({ marketId: b.market_id, outcome: b.outcome }, "MarketResolved processed");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// handleWinningsClaimedEvent / handleRefundClaimedEvent
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parses WinningsClaimed event.
- * Matches the bet by (marketId, bettor) from the event body.
- *
- * Expected event.body: { market_id, bettor, payout: string | number | bigint }
- */
-export async function handleWinningsClaimedEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-  await betService.markBetClaimedByMarketAndBettor(
-    b.market_id as string,
-    b.bettor as string,
-    toBigInt(b.payout)
-  );
-  logger.info({ marketId: b.market_id, bettor: b.bettor, type: event.type }, "WinningsClaimed processed");
-}
-
-/**
- * Parses RefundClaimed event.
- * Matches the bet by (marketId, bettor) from the event body.
- *
- * Expected event.body: { market_id, bettor, amount: string | number | bigint }
- */
-export async function handleRefundClaimedEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-  await betService.markBetClaimedByMarketAndBettor(
-    b.market_id as string,
-    b.bettor as string,
-    toBigInt(b.amount)
-  );
-  logger.info({ marketId: b.market_id, bettor: b.bettor, type: event.type }, "RefundClaimed processed");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// handleMarketLockedEvent
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parses MarketLocked event and sets market status to Locked in DB.
- *
- * Expected event.body: { market_id }
- */
-export async function handleMarketLockedEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-  await marketService.updateMarketStatus(b.market_id as string, "Locked");
-  logger.info({ marketId: b.market_id }, "MarketLocked processed");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// handleDisputeEvent
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parses DisputeRaised or DisputeResolved events and syncs dispute state to DB.
- *
- * DisputeRaised body:   { market_id, raised_by, reason }
- * DisputeResolved body: { market_id, resolution }
- *
- * On dispute raised: sets market status to Disputed and stores the dispute
- * reason for admin review via the Dispute table.
- */
-export async function handleDisputeEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-  if (event.type === "DisputeRaised") {
-    await db.dispute.create({
-      data: {
-        marketId: b.market_id as string,
-        raisedBy: b.raised_by as string,
-        reason: b.reason as string,
-        raisedAt: toDate(event.ledgerClosedAt),
-      },
-    });
-    await marketService.updateMarketStatus(b.market_id as string, "Disputed");
-  } else if (event.type === "DisputeResolved") {
-    await db.dispute.updateMany({
-      where: { marketId: b.market_id as string, resolvedAt: null },
-      data: {
-        resolvedAt: toDate(event.ledgerClosedAt),
-        resolution: b.resolution as string,
-      },
-    });
-    await marketService.updateMarketStatus(b.market_id as string, "Resolved");
-  }
-  logger.info({ marketId: b.market_id, type: event.type }, "Dispute event processed");
-}
-
-/**
- * Parses MarketCancelled event and sets market status to Cancelled.
- *
- * Expected event.body: { market_id, reason: string }
- */
-export async function handleMarketCancelledEvent(event: SorobanEvent): Promise<void> {
-  const b = event.body;
-  await marketService.updateMarketStatus(b.market_id as string, "Cancelled");
-  logger.info({ marketId: b.market_id, reason: b.reason }, "MarketCancelled processed");
-}
-
-
-/**
- * Replays a ledger range to catch events missed during downtime.
- * All handlers use upsert patterns so replays create no duplicates.
- */
-export async function recoverMissedEvents(
-  fromLedger: number,
-  toLedger: number
+async function handleEvent(
+  canonicalType: string,
+  event: SorobanEvent,
+  tx: PrismaClient,
 ): Promise<void> {
-  const latest = await getLastIndexedLedger();
-  if (fromLedger > latest) return;
+  const body = event.body as Record<string, any>;
+  const marketId = body.marketId ?? body.market_id;
 
-  const rpcUrl = process.env.SOROBAN_RPC_URL;
-  for (let seq = fromLedger; seq <= toLedger; seq++) {
-    const res = await fetch(rpcUrl!, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: seq, method: "getLedgers", params: { startLedger: seq, limit: 1 } }),
-    });
-    const json = await res.json() as { result: { ledgers: LedgerData[] } };
-    const ledger = json.result.ledgers[0];
-    if (ledger) await processLedger(ledger);
-    if ((seq - fromLedger + 1) % 100 === 0) {
-      console.log(`recoverMissedEvents: processed ${seq - fromLedger + 1} ledgers (${seq}/${toLedger})`);
+  switch (canonicalType) {
+    case "MarketCreated": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling MarketCreated",
+      );
+      await marketService.createMarket(body, tx);
+      break;
+    }
+
+    case "BetPlaced": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling BetPlaced",
+      );
+      await betService.recordBet(body, tx);
+      break;
+    }
+
+    case "MarketResolved": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling MarketResolved",
+      );
+      await marketService.resolveMarket(body, tx);
+      break;
+    }
+
+    case "MarketCancelled": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling MarketCancelled",
+      );
+      await marketService.cancelMarket(body, tx);
+      break;
+    }
+
+    case "WinningsClaimed": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling WinningsClaimed",
+      );
+      await markBetClaimed(body, tx);
+      break;
+    }
+
+    case "RefundClaimed": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling RefundClaimed",
+      );
+      await betService.markBetRefunded(body, tx);
+      break;
+    }
+
+    case "MarketLocked": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling MarketLocked",
+      );
+      await marketService.lockMarket(body, tx);
+      break;
+    }
+
+    case "DisputeRaised": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling DisputeRaised",
+      );
+      await marketService.raiseDispute(body, tx);
+      break;
+    }
+
+    case "DisputeResolved": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger },
+        "Handling DisputeResolved",
+      );
+      await marketService.resolveDispute(body, tx);
+      break;
+    }
+
+    case "FeesWithdrawn":
+    case "EmrgDrain": {
+      logger.info(
+        { marketId, txHash: event.txHash, ledger: event.ledger, eventType: canonicalType },
+        "Event stored (no handler yet)",
+      );
+      break;
+    }
+
+    default: {
+      logger.warn(
+        { marketId, txHash: event.txHash, ledger: event.ledger, eventType: canonicalType },
+        "Unhandled canonical event type",
+      );
+      break;
     }
   }
+
+  // Publish to in-process event bus for downstream consumers (websockets, etc.)
+  publishMarketEvent(canonicalType, { ...body, txHash: event.txHash, ledger: event.ledger });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// Prisma client (singleton)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Convert ISO string or Unix timestamp (seconds) to Date. */
-function toDate(value: string | number): Date {
-  if (typeof value === "number") {
-    // Soroban timestamps are Unix seconds
-    return new Date(value * 1000);
-  }
-  return new Date(value);
-}
-
-/** Safely coerce string | number | bigint to BigInt. */
-function toBigInt(value: unknown): bigint {
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number") return BigInt(Math.trunc(value));
-  if (typeof value === "string") return BigInt(value);
-  throw new TypeError(`Cannot convert ${typeof value} to BigInt`);
-}
+const db = new PrismaClient();
