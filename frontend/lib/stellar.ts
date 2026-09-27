@@ -1,4 +1,5 @@
 import type { Transaction } from "@stellar/stellar-sdk";
+import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
@@ -31,6 +32,37 @@ export interface TransactionResult {
   txHash: string;
   ledger: number;
   returnValue: unknown;
+}
+
+// ─── ERROR DECODING ───────────────────────────────────────────────────────────
+
+/**
+ * Decodes a raw Soroban host error into a friendly `ContractErrorException`.
+ * Non-contract errors are returned unchanged so callers can rethrow them.
+ */
+function decodeContractError(error: unknown): unknown {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const code = parseContractErrorCode(raw);
+
+  if (code !== null) {
+    return new ContractErrorException(code);
+  }
+
+  return error;
+}
+
+/**
+ * Extracts the raw error string from a failed simulation result.
+ */
+function simulationErrorText(simResult: unknown): string {
+  const result = simResult as { error?: unknown };
+  const err = result?.error;
+
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") return JSON.stringify(err);
+
+  return "Transaction simulation failed";
 }
 
 // ─── FUNCTIONS ────────────────────────────────────────────────────────────────
@@ -103,7 +135,7 @@ export async function buildSorobanInvocation(
     return finalTx.toXDR();
   }
 
-  throw new Error("Transaction simulation failed");
+  throw decodeContractError(new Error(simulationErrorText(simResult)));
 }
 
 /**
@@ -124,7 +156,9 @@ export async function submitTransaction(signedXdr: string): Promise<TransactionR
   const response = await server.sendTransaction(transaction);
 
   if (response.status !== "PENDING") {
-    throw new Error(`Transaction submission failed with status: ${response.status}`);
+    throw decodeContractError(
+      new Error(`Transaction submission failed with status: ${response.status}`)
+    );
   }
 
   const hash = transaction.hash();
@@ -145,7 +179,9 @@ export async function submitTransaction(signedXdr: string): Promise<TransactionR
   }
 
   if (result.status !== "SUCCESS") {
-    throw new Error(`Transaction failed with status: ${result.status}`);
+    throw decodeContractError(
+      new Error(`Transaction failed with status: ${result.status}`)
+    );
   }
 
   return {
