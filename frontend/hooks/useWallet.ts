@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   isConnected,
   requestAccess,
@@ -30,27 +38,6 @@ const initialState: WalletState = {
   networkPassphrase: null,
 };
 
-// Module-level store shared by every useWallet() call site, so the connected
-// wallet's address/network stays consistent across the navbar, the
-// network-mismatch banner, and the mutation hooks without needing a Context
-// provider wired through the whole tree.
-let state: WalletState = { ...initialState };
-const listeners = new Set<() => void>();
-
-function setState(patch: Partial<WalletState>): void {
-  state = { ...state, ...patch };
-  listeners.forEach((listener) => listener());
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-function getSnapshot(): WalletState {
-  return state;
-}
-
 function readPersistedConnection(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -73,46 +60,6 @@ function persistConnection(connected: boolean): void {
   }
 }
 
-/** Test-only: resets the shared wallet store between test cases. */
-export function __resetWalletStoreForTests(): void {
-  state = { ...initialState };
-}
-
-async function refreshNetwork(): Promise<void> {
-  try {
-    const netResult = await getNetwork();
-    if (netResult.error) return;
-    setState({ networkPassphrase: netResult.networkPassphrase });
-  } catch {
-    // Leave last-known network state in place; Freighter may be transiently unreachable.
-  }
-}
-
-// Silently restores an already-authorised wallet on mount. Uses isConnected()
-// (extension presence) and getAddress() (already-granted address) which do not
-// trigger a Freighter popup, unlike requestAccess().
-async function restoreConnection(): Promise<void> {
-  if (!readPersistedConnection()) return;
-  try {
-    const connResult = await isConnected();
-    if (connResult.error || !connResult.isConnected) {
-      persistConnection(false);
-      return;
-    }
-
-    const addressResult = await getAddress();
-    if (addressResult.error || !addressResult.address) {
-      persistConnection(false);
-      return;
-    }
-
-    setState({ address: addressResult.address, connected: true, walletNotInstalled: false });
-    await refreshNetwork();
-  } catch {
-    // Silent restore failed; leave the wallet disconnected without surfacing an error.
-  }
-}
-
 export interface UseWalletResult {
   address: string | null;
   isConnected: boolean;
@@ -124,75 +71,141 @@ export interface UseWalletResult {
   signTransaction: (xdr: string) => Promise<string>;
 }
 
-export function useWallet(): UseWalletResult {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+const WalletContext = createContext<UseWalletResult | null>(null);
+
+/**
+ * Owns the single source of truth for wallet state and the one network poll.
+ * Mounted once in the root layout so every useWallet() consumer (Navbar,
+ * BetForm, Portfolio, ...) reads the same state instead of polling in parallel.
+ */
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<WalletState>(initialState);
+
+  const refreshNetwork = useCallback(async () => {
+    try {
+      const netResult = await getNetwork();
+      if (netResult.error) return;
+      setState((prev) => ({ ...prev, networkPassphrase: netResult.networkPassphrase }));
+    } catch {
+      // Leave last-known network state in place; Freighter may be transiently unreachable.
+    }
+  }, []);
+
+  // Silently restores an already-authorised wallet on mount. Uses isConnected()
+  // (extension presence) and getAddress() (already-granted address) which do not
+  // trigger a Freighter popup, unlike requestAccess().
+  const restoreConnection = useCallback(async () => {
+    if (!readPersistedConnection()) return;
+    try {
+      const connResult = await isConnected();
+      if (connResult.error || !connResult.isConnected) {
+        persistConnection(false);
+        return;
+      }
+
+      const addressResult = await getAddress();
+      if (addressResult.error || !addressResult.address) {
+        persistConnection(false);
+        return;
+      }
+
+      setState((prev) => ({
+        ...prev,
+        address: addressResult.address,
+        connected: true,
+        walletNotInstalled: false,
+      }));
+      await refreshNetwork();
+    } catch {
+      // Silent restore failed; leave the wallet disconnected without surfacing an error.
+    }
+  }, [refreshNetwork]);
 
   const connect = useCallback(async () => {
     try {
       // isConnected() only reports whether the extension is installed
       const connResult = await isConnected();
       if (connResult.error || !connResult.isConnected) {
-        setState({ walletNotInstalled: true });
+        setState((prev) => ({ ...prev, walletNotInstalled: true }));
         return;
       }
 
       // Prompts the user to allow this site on first use and returns the address
       const accessResult = await requestAccess();
       if (accessResult.error || !accessResult.address) {
-        setState({ walletNotInstalled: true });
+        setState((prev) => ({ ...prev, walletNotInstalled: true }));
         return;
       }
 
       persistConnection(true);
-      setState({ address: accessResult.address, connected: true, walletNotInstalled: false });
+      setState((prev) => ({
+        ...prev,
+        address: accessResult.address,
+        connected: true,
+        walletNotInstalled: false,
+      }));
       await refreshNetwork();
     } catch {
-      setState({ walletNotInstalled: true });
+      setState((prev) => ({ ...prev, walletNotInstalled: true }));
     }
-  }, []);
+  }, [refreshNetwork]);
 
   const disconnect = useCallback(() => {
     persistConnection(false);
-    setState({ address: null, connected: false, networkPassphrase: null });
+    setState((prev) => ({ ...prev, address: null, connected: false, networkPassphrase: null }));
   }, []);
 
-  const signTransaction = useCallback(async (xdr: string): Promise<string> => {
-    const { address } = state;
-    if (!address) throw new Error("Wallet not connected");
+  const signTransaction = useCallback(
+    async (xdr: string): Promise<string> => {
+      if (!state.address) throw new Error("Wallet not connected");
 
-    const result = await freighterSignTransaction(xdr, {
-      networkPassphrase: NETWORK_PASSPHRASE,
-      address,
-    });
-    if (result.error) throw new Error(result.error.message);
+      const result = await freighterSignTransaction(xdr, {
+        networkPassphrase: NETWORK_PASSPHRASE,
+        address: state.address,
+      });
+      if (result.error) throw new Error(result.error.message);
 
-    return result.signedTxXdr;
-  }, []);
+      return result.signedTxXdr;
+    },
+    [state.address],
+  );
 
   // On mount, silently restore a previously-authorised wallet without prompting.
   useEffect(() => {
     void restoreConnection();
-  }, []);
+  }, [restoreConnection]);
 
   // Wallets can switch network at any time from their own UI; poll while
   // connected so the mismatch banner/guards react without requiring a reconnect.
   useEffect(() => {
-    if (!snapshot.connected) return;
+    if (!state.connected) return;
     const interval = setInterval(refreshNetwork, NETWORK_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [snapshot.connected]);
+  }, [state.connected, refreshNetwork]);
 
-  const isNetworkMismatched =
-    snapshot.connected && snapshot.networkPassphrase !== null && snapshot.networkPassphrase !== NETWORK_PASSPHRASE;
+  const value = useMemo<UseWalletResult>(() => {
+    const isNetworkMismatched =
+      state.connected && state.networkPassphrase !== null && state.networkPassphrase !== NETWORK_PASSPHRASE;
 
-  return {
-    address: snapshot.address,
-    isConnected: snapshot.connected,
-    walletNotInstalled: snapshot.walletNotInstalled,
-    networkPassphrase: snapshot.networkPassphrase,
-    isNetworkMismatched,
-    connect,
-    disconnect,
-    signTransaction,
-  };
+    return {
+      address: state.address,
+      isConnected: state.connected,
+      walletNotInstalled: state.walletNotInstalled,
+      networkPassphrase: state.networkPassphrase,
+      isNetworkMismatched,
+      connect,
+      disconnect,
+      signTransaction,
+    };
+  }, [state, connect, disconnect, signTransaction]);
+
+  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
+}
+
+export function useWallet(): UseWalletResult {
+  const context = useContext(WalletContext);
+  if (!context) {
+    throw new Error("useWallet must be used within a WalletProvider");
+  }
+  return context;
 }
