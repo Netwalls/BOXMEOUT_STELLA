@@ -12,6 +12,7 @@ import authRoutes from "./api/routes/auth.routes";
 import oracleRoutes from "./api/routes/oracle.routes";
 import healthRoutes from "./api/routes/health.routes";
 import docsRoutes from "./api/routes/docs.routes";
+import leaderboardRoutes from "./api/routes/leaderboard.routes";
 
 export function createApp(): express.Application {
   const app = express();
@@ -56,6 +57,9 @@ export function createApp(): express.Application {
 
   // #1221: Mount oracle routes (protected by Bearer ORACLE_API_KEY in controller).
   app.use("/api/oracle", oracleRoutes);
+
+  // #1249: Mount leaderboard routes (rank bettors by realised profit / win rate).
+  app.use("/api/leaderboard", leaderboardRoutes);
 
   // B-37: Swagger UI — dev mode only (Issue #1095)
   if (process.env.NODE_ENV !== "production") {
