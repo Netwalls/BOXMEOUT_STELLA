@@ -11,6 +11,10 @@ import {
   deleteOracleHandler,
 } from "../controllers/oracle.controller";
 import { getAuditLogsHandler } from "../controllers/audit.controller";
+import {
+  getFailedSubmissionsHandler,
+  retryFailedSubmissionHandler,
+} from "../controllers/oracleSubmission.controller";
 import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 import { adminAuth } from "../middleware/adminAuth";
 
@@ -33,6 +37,13 @@ const oracleWriteLimiter = rateLimitMiddleware({
   keyPrefix: "admin:oracles:write",
 });
 
+// #1257: Oracle result submission retry/idempotency admin surface.
+const oracleSubmissionLimiter = rateLimitMiddleware({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyPrefix: "admin:oracle-submissions:write",
+});
+
 // Market management
 router.get("/markets/pending", getPendingResolutionsHandler);
 router.post("/markets/resolve", marketResolutionLimiter, resolveMarketHandler);
@@ -43,6 +54,14 @@ router.get("/oracles", getAllOraclesHandler);
 router.post("/oracles", oracleWriteLimiter, createOracleHandler);
 router.patch("/oracles/:id", oracleWriteLimiter, updateOracleHandler);
 router.delete("/oracles/:id", oracleWriteLimiter, deleteOracleHandler);
+
+// Oracle result submission jobs (Issue #1257)
+router.get("/oracle-submissions/failed", getFailedSubmissionsHandler);
+router.post(
+  "/oracle-submissions/:id/retry",
+  oracleSubmissionLimiter,
+  retryFailedSubmissionHandler,
+);
 
 // Audit logging (Issue #456)
 router.get("/audit-logs", getAuditLogsHandler);
