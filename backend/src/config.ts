@@ -59,6 +59,12 @@ const configSchema = z.object({
 
   /** Base URL for the external fight data provider (BoxRec or equivalent) */
   BOXREC_API_URL: z.string().url().optional(),
+
+  /** TTL (seconds) for cached market list responses */
+  MARKET_LIST_CACHE_TTL: z.coerce.number().int().positive().default(10),
+
+  /** TTL (seconds) for cached market stats responses */
+  MARKET_STATS_CACHE_TTL: z.coerce.number().int().positive().default(4),
 });
 
 export type Config = z.infer<typeof configSchema>;

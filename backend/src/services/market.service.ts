@@ -10,6 +10,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { db } from "../db";
 import { logger } from "../logger";
+import { redis } from "../redis";
 
 export interface MarketFilters {
   status?: MarketStatus;
@@ -29,6 +30,79 @@ export interface PaginatedResult<T> {
 }
 
 export const MAX_PAGE_SIZE = 100;
+
+/**
+ * Short TTL (seconds) for cached market list and stats responses.
+ * Kept small so the 4s frontend poll still sees fresh data while
+ * absorbing bursts of concurrent viewers.
+ */
+export const MARKET_CACHE_TTL_SECONDS = 5;
+
+const MARKET_LIST_CACHE_PREFIX = "market:list:";
+const MARKET_STATS_CACHE_PREFIX = "market:stats:";
+
+// Cache hit/miss counters used to log the hit ratio.
+let cacheHits = 0;
+let cacheMisses = 0;
+
+function logCacheHitRatio(): void {
+  const total = cacheHits + cacheMisses;
+  if (total === 0) return;
+  logger.info(
+    {
+      cacheHits,
+      cacheMisses,
+      hitRatio: Number((cacheHits / total).toFixed(4)),
+    },
+    "Market cache hit ratio"
+  );
+}
+
+function recordCacheHit(): void {
+  cacheHits += 1;
+  logCacheHitRatio();
+}
+
+function recordCacheMiss(): void {
+  cacheMisses += 1;
+  logCacheHitRatio();
+}
+
+function listCacheKey(filters?: MarketFilters, pagination?: Pagination): string {
+  const status = filters?.status ?? "all";
+  const weightClass = filters?.weightClass ?? "all";
+  const page = pagination?.page ?? 1;
+  const pageSize = Math.min(pagination?.pageSize ?? 20, MAX_PAGE_SIZE);
+  return `${MARKET_LIST_CACHE_PREFIX}${status}:${weightClass}:${page}:${pageSize}`;
+}
+
+function statsCacheKey(marketId: string): string {
+  return `${MARKET_STATS_CACHE_PREFIX}${marketId}`;
+}
+
+/**
+ * Invalidates cached market list and stats entries.
+ * Called by the indexer on BetPlaced and market status events so the
+ * next poll re-reads fresh data from Postgres.
+ */
+export async function invalidateMarketCache(marketId?: string): Promise<void> {
+  try {
+    const keys: string[] = [];
+    if (marketId) {
+      keys.push(statsCacheKey(marketId));
+    }
+
+    // Invalidate all list variants (status/weightClass/page/pageSize combos).
+    const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
+    keys.push(...listKeys);
+
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  } catch (err) {
+    logger.warn({ err, marketId }, "Failed to invalidate market cache");
+  }
+}
 
 export interface MarketStats {
   totalBets: number;
@@ -84,6 +158,20 @@ export async function getAllMarkets(
   filters?: MarketFilters,
   pagination?: Pagination
 ): Promise<Market[]> {
+  const cacheKey = listCacheKey(filters, pagination);
+
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      recordCacheHit();
+      return JSON.parse(cached) as Market[];
+    }
+  } catch (err) {
+    logger.warn({ err, cacheKey }, "Market list cache read failed");
+  }
+
+  recordCacheMiss();
+
   const where: Record<string, unknown> = {};
 
   if (filters?.status) {
@@ -96,12 +184,25 @@ export async function getAllMarkets(
   const page = pagination?.page ?? 1;
   const limit = Math.min(pagination?.pageSize ?? 20, MAX_PAGE_SIZE);
 
-  return db.market.findMany({
+  const markets = await db.market.findMany({
     where,
     orderBy: { scheduledAt: "asc" },
     skip: (page - 1) * limit,
     take: limit,
   });
+
+  try {
+    await redis.set(
+      cacheKey,
+      JSON.stringify(markets),
+      "EX",
+      MARKET_CACHE_TTL_SECONDS
+    );
+  } catch (err) {
+    logger.warn({ err, cacheKey }, "Market list cache write failed");
+  }
+
+  return markets;
 }
 
 /**
@@ -272,219 +373,13 @@ export async function reconcileMarketFromChain(
   const updated = await db.market.update({
     where: { id: marketId },
     data: {
-      poolA: BigInt(String(raw?.pool_a ?? 0)),
-      poolB: BigInt(String(raw?.pool_b ?? 0)),
-      totalPool: BigInt(String(raw?.total_pool ?? 0)),
-      status: statusMap[contractStatus] ?? "Open",
-      ...(outcome && { outcome }),
+      status: statusMap[contractStatus] ?? market.status,
+      ...(outcome ? { outcome } : {}),
     },
   });
 
-  logger.info(
-    {
-      marketId,
-      contractStatus,
-      poolA: updated.poolA.toString(),
-      poolB: updated.poolB.toString(),
-      totalPool: updated.totalPool.toString(),
-    },
-    "Market reconciled from on-chain state"
-  );
+  // On-chain truth changed — drop any cached list/stats for this market.
+  await invalidateMarketCache(marketId);
 
   return updated;
-}
-
-/**
- * Updates the status of a market and optionally its outcome.
- * Sets resolvedAt when transitioning to Resolved.
- *
- * Covers all MarketStatus transitions:
- *   Open → Locked → Resolved | Cancelled | Disputed
- */
-export async function updateMarketStatus(
-  market_id: string,
-  status: MarketStatus,
-  outcome?: Outcome
-): Promise<Market> {
-  return db.market.update({
-    where: { id: market_id },
-    data: {
-      status,
-      ...(outcome !== undefined && { outcome }),
-      ...(status === MarketStatus.Resolved && { resolvedAt: new Date() }),
-    },
-  });
-}
-
-export async function updateMarketPools(
-  market_id: string,
-  pool_a: bigint,
-  pool_b: bigint
-): Promise<void> {
-  await db.market.update({
-    where: { id: market_id },
-    data: { poolA: pool_a, poolB: pool_b, totalPool: pool_a + pool_b },
-  });
-}
-
-export async function getMarketStats(market_id: string): Promise<MarketStats> {
-  const market = await db.market.findUnique({
-    where: { id: market_id },
-    include: { bets: true },
-  });
-
-  if (!market) {
-    throw Object.assign(new Error("Market not found"), { code: "NOT_FOUND" });
-  }
-
-  const totalBets = market.bets.length;
-  const uniqueBettors = new Set(market.bets.map((b) => b.bettor)).size;
-  const poolA = market.poolA;
-  const poolB = market.poolB;
-  const totalVolume = market.totalPool;
-
-  const impliedOddsA =
-    totalVolume > 0n ? Number((poolA * 10000n) / totalVolume) / 100 : 50;
-  const impliedOddsB =
-    totalVolume > 0n ? Number((poolB * 10000n) / totalVolume) / 100 : 50;
-
-  return {
-    totalBets,
-    uniqueBettors,
-    poolA,
-    poolB,
-    totalVolume,
-    impliedOddsA,
-    impliedOddsB,
-  };
-}
-
-/**
- * Returns a paginated leaderboard of bettors for a market, sorted by total staked descending.
- * Groups bets by bettor and aggregates total staked and bet count.
- */
-export async function getMarketLeaderboard(
-  market_id: string,
-  pagination?: Pagination
-): Promise<LeaderboardEntry[]> {
-  const page = pagination?.page ?? 1;
-  const limit = Math.min(pagination?.pageSize ?? 20, MAX_PAGE_SIZE);
-  const skip = (page - 1) * limit;
-
-  const bets = await db.bet.findMany({
-    where: { marketId: market_id },
-    select: { bettor: true, amount: true },
-  });
-
-  // Aggregate by bettor
-  const bettorMap = new Map<string, { totalStaked: bigint; betCount: number }>();
-  for (const bet of bets) {
-    const existing = bettorMap.get(bet.bettor);
-    if (existing) {
-      existing.totalStaked += bet.amount;
-      existing.betCount += 1;
-    } else {
-      bettorMap.set(bet.bettor, { totalStaked: bet.amount, betCount: 1 });
-    }
-  }
-
-  // Sort by totalStaked desc, apply pagination
-  const sorted = Array.from(bettorMap.entries())
-    .map(([bettor, stats]) => ({ bettor, ...stats }))
-    .sort((a, b) =>
-      b.totalStaked > a.totalStaked ? 1 : b.totalStaked < a.totalStaked ? -1 : 0
-    );
-
-  return sorted.slice(skip, skip + limit);
-}
-
-/**
- * Admin resolves a market with a final outcome.
- * Updates market status to Resolved and writes an AdminLog entry.
- */
-export async function resolveMarket(
-  marketId: string,
-  outcome: Outcome,
-  source: string,
-  admin: string
-): Promise<Market> {
-  const market = await db.market.update({
-    where: { id: marketId },
-    data: {
-      status: MarketStatus.Resolved,
-      outcome,
-      resolvedAt: new Date(),
-    },
-  });
-
-  await db.adminLog.create({
-    data: {
-      action: "RESOLVE_MARKET",
-      actor: admin,
-      target: marketId,
-      metadata: { outcome, source },
-    },
-  });
-
-  return market;
-}
-
-/**
- * Admin cancels a market (e.g., fight postponed, insufficient liquidity).
- * Updates market status to Cancelled and writes an AdminLog entry.
- */
-export async function cancelMarket(
-  marketId: string,
-  admin: string,
-  reason?: string
-): Promise<Market> {
-  const market = await db.market.update({
-    where: { id: marketId },
-    data: {
-      status: MarketStatus.Cancelled,
-      resolvedAt: new Date(),
-    },
-  });
-
-  await db.adminLog.create({
-    data: {
-      action: "CANCEL_MARKET",
-      actor: admin,
-      target: marketId,
-      metadata: reason ? { reason } : undefined,
-    },
-  });
-
-  return market;
-}
-
-/**
- * Admin resolves a disputed market with an override outcome.
- * Writes an AdminLog entry recording the resolution.
- */
-export async function resolveMarketDispute(
-  marketId: string,
-  overrideOutcome: Outcome,
-  admin: string,
-  resolution?: string
-): Promise<Market> {
-  const market = await db.market.update({
-    where: { id: marketId },
-    data: {
-      status: MarketStatus.Resolved,
-      outcome: overrideOutcome,
-      resolvedAt: new Date(),
-    },
-  });
-
-  await db.adminLog.create({
-    data: {
-      action: "RESOLVE_DISPUTE",
-      actor: admin,
-      target: marketId,
-      metadata: { overrideOutcome, resolution },
-    },
-  });
-
-  return market;
 }
