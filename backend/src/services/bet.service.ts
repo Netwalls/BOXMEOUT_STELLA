@@ -25,6 +25,99 @@ export interface PortfolioSummary {
   roi: number;
 }
 
+export const MAX_BET_PAGE_LIMIT = 100;
+export const DEFAULT_BET_PAGE_LIMIT = 20;
+
+export interface BetCursor {
+  placedAt: Date;
+  id: string;
+}
+
+export interface PaginatedBets {
+  bets: Bet[];
+  nextCursor: string | null;
+}
+
+/**
+ * Encodes a (placedAt, id) cursor into an opaque base64 string.
+ */
+export function encodeBetCursor(cursor: BetCursor): string {
+  return Buffer.from(
+    JSON.stringify({ placedAt: cursor.placedAt.toISOString(), id: cursor.id })
+  ).toString("base64url");
+}
+
+/**
+ * Decodes an opaque cursor string back into a (placedAt, id) pair.
+ * Returns null when the cursor is missing or malformed.
+ */
+export function decodeBetCursor(cursor?: string | null): BetCursor | null {
+  if (!cursor) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (typeof parsed?.placedAt !== "string" || typeof parsed?.id !== "string") {
+      return null;
+    }
+    const placedAt = new Date(parsed.placedAt);
+    if (Number.isNaN(placedAt.getTime())) return null;
+    return { placedAt, id: parsed.id };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalizes a requested page size, clamping it to [1, MAX_BET_PAGE_LIMIT].
+ */
+export function normalizeBetLimit(limit?: number | string | null): number {
+  const parsed = typeof limit === "string" ? Number.parseInt(limit, 10) : limit;
+  if (parsed === undefined || parsed === null || Number.isNaN(parsed) || parsed <= 0) {
+    return DEFAULT_BET_PAGE_LIMIT;
+  }
+  return Math.min(Math.floor(parsed), MAX_BET_PAGE_LIMIT);
+}
+
+/**
+ * Builds the Prisma where clause for keyset pagination on (placedAt, id).
+ * Ordering is descending, so the next page contains rows strictly "older"
+ * than the cursor row.
+ */
+function cursorWhere(cursor: BetCursor | null): Record<string, unknown> {
+  if (!cursor) return {};
+  return {
+    OR: [
+      { placedAt: { lt: cursor.placedAt } },
+      { placedAt: cursor.placedAt, id: { lt: cursor.id } },
+    ],
+  };
+}
+
+/**
+ * Fetches a single page of bets ordered stably by (placedAt, id) descending.
+ * Fetches limit + 1 rows to determine whether a next page exists.
+ */
+async function fetchBetPage(
+  where: Record<string, unknown>,
+  limit: number,
+  cursor: BetCursor | null
+): Promise<PaginatedBets> {
+  const rows = await db.bet.findMany({
+    where: { ...where, ...cursorWhere(cursor) },
+    orderBy: [{ placedAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+  });
+
+  const hasMore = rows.length > limit;
+  const bets = hasMore ? rows.slice(0, limit) : rows;
+  const last = bets[bets.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeBetCursor({ placedAt: last.placedAt, id: last.id })
+      : null;
+
+  return { bets, nextCursor };
+}
+
 export async function getBetsByAddress(
   address: string,
   filters?: BetFilters
@@ -40,7 +133,7 @@ export async function getBetsByAddress(
     where.claimed = true;
     return db.bet.findMany({
       where,
-      orderBy: { placedAt: "desc" },
+      orderBy: [{ placedAt: "desc" }, { id: "desc" }],
     });
   }
 
@@ -49,7 +142,7 @@ export async function getBetsByAddress(
     const bets = await db.bet.findMany({
       where,
       include: { market: true },
-      orderBy: { placedAt: "desc" },
+      orderBy: [{ placedAt: "desc" }, { id: "desc" }],
     });
     return bets.filter((bet) => bet.market.outcome === null);
   }
@@ -60,7 +153,7 @@ export async function getBetsByAddress(
     const bets = await db.bet.findMany({
       where,
       include: { market: true },
-      orderBy: { placedAt: "desc" },
+      orderBy: [{ placedAt: "desc" }, { id: "desc" }],
     });
     return bets.filter((bet) => {
       if (!bet.market.outcome) return false;
@@ -72,12 +165,39 @@ export async function getBetsByAddress(
   // No status filter — return all bets for the address
   return db.bet.findMany({
     where,
-    orderBy: { placedAt: "desc" },
+    orderBy: [{ placedAt: "desc" }, { id: "desc" }],
   });
 }
 
+/**
+ * Cursor-paginated bets for a Stellar address, ordered by (placedAt, id).
+ */
+export async function getBetsByAddressPaginated(
+  address: string,
+  options?: { cursor?: string | null; limit?: number | string | null }
+): Promise<PaginatedBets> {
+  const limit = normalizeBetLimit(options?.limit);
+  const cursor = decodeBetCursor(options?.cursor);
+  return fetchBetPage({ bettor: address }, limit, cursor);
+}
+
 export async function getBetsByMarket(market_id: string): Promise<Bet[]> {
-  return db.bet.findMany({ where: { marketId: market_id } });
+  return db.bet.findMany({
+    where: { marketId: market_id },
+    orderBy: [{ placedAt: "desc" }, { id: "desc" }],
+  });
+}
+
+/**
+ * Cursor-paginated bets for a market, ordered by (placedAt, id).
+ */
+export async function getBetsByMarketPaginated(
+  market_id: string,
+  options?: { cursor?: string | null; limit?: number | string | null }
+): Promise<PaginatedBets> {
+  const limit = normalizeBetLimit(options?.limit);
+  const cursor = decodeBetCursor(options?.cursor);
+  return fetchBetPage({ marketId: market_id }, limit, cursor);
 }
 
 export async function recordBet(betData: CreateBetDTO): Promise<Bet> {
