@@ -13,10 +13,20 @@ const MARKET_WASM_HASH: &str = "MARKET_WASM_HASH";
 const TREASURY: &str = "TREASURY";
 const PAUSED: &str = "PAUSED";
 const MARKET_COUNT_KEY: &str = "MARKET_COUNT";
-const MARKET_MAP: &str = "MARKET_MAP";
-const ALL_MARKETS_KEY: &str = "ALL_MARKETS";
+// #1191: Changed from single MARKET_MAP to per-market keys
+// Format: ("MARKET", market_id) -> MarketInfo
+// Format: ("MARKET_BY_IDX", index) -> market_id
 const PENDING_ADMIN: &str = "PENDING_ADMIN";
 const ORACLE_WHITELIST: &str = "ORACLE_WL";
+
+// Helper functions for per-market keys (#1191)
+fn market_key(market_id: &Bytes) -> (&str, Bytes) {
+    ("MARKET", market_id.clone())
+}
+
+fn market_by_index_key(index: u64) -> (&str, u64) {
+    ("MARKET_BY_IDX", index)
+}
 
 /// Maximum number of markets that may be returned in a single `list_markets` /
 /// `list_active_markets` page, regardless of the caller-requested `limit`.
@@ -63,12 +73,8 @@ impl MarketFactory {
         env.storage().persistent().set(&PAUSED, &false);
         env.storage().persistent().set(&CONFIG_KEY, &config);
         env.storage().persistent().set(&MARKET_COUNT_KEY, &0u64);
-        env.storage()
-            .persistent()
-            .set(&ALL_MARKETS_KEY, &Vec::<Bytes>::new(&env));
-        env.storage()
-            .persistent()
-            .set(&MARKET_MAP, &Map::<Bytes, MarketInfo>::new(&env));
+        // #1191: No longer initialize MARKET_MAP or ALL_MARKETS_KEY
+        // Markets are now stored as individual per-market keys
 
         Ok(())
     }
@@ -165,26 +171,18 @@ impl MarketFactory {
 
         let count: u64 = env.storage().persistent().get(&MARKET_COUNT_KEY).unwrap_or(0);
 
-        // Generate a collision-resistant market_id from the creation nonce,
-        // both fighter names, and the scheduled end_time.
-        let mut id_bytes = [0u8; 32];
-        id_bytes[0..8].copy_from_slice(&count.to_le_bytes());
-        for (i, byte) in fighter_a.to_bytes().iter().take(8).enumerate() {
-            id_bytes[8 + i] ^= byte;
-        }
-        for (i, byte) in fighter_b.to_bytes().iter().take(8).enumerate() {
-            id_bytes[16 + i] ^= byte;
-        }
-        id_bytes[24..32].copy_from_slice(&end_time.to_le_bytes());
-        let market_id = Bytes::from_array(&env, &id_bytes);
+        // #1194: Generate collision-resistant market_id using sha256
+        // Hash: nonce || fighter_a || fighter_b || end_time || creator
+        let mut preimage = Bytes::new(&env);
+        preimage.append(&Bytes::from_array(&env, &count.to_le_bytes()));
+        preimage.append(&fighter_a.to_bytes());
+        preimage.append(&fighter_b.to_bytes());
+        preimage.append(&Bytes::from_array(&env, &end_time.to_le_bytes()));
+        preimage.append(&caller.to_xdr(&env));
 
-        let wasm_hash: BytesN<32> = env
-            .storage()
-            .persistent()
-            .get(&MARKET_WASM_HASH)
-            .expect("not initialized");
-
-        let salt = BytesN::from_array(&env, &id_bytes);
+        let market_id_hash = env.crypto().sha256(&preimage);
+        let market_id = Bytes::from_array(&env, &market_id_hash);
+        let salt = market_id_hash;
         let market_address = env
             .deployer()
             .with_address(env.current_contract_address(), salt)
@@ -225,21 +223,17 @@ impl MarketFactory {
             created_at: now,
         };
 
-        let mut market_map: Map<Bytes, MarketInfo> = env
-            .storage()
+        // #1191: Store as individual per-market key
+        let (key_prefix, key_suffix) = market_key(&market_id);
+        env.storage()
             .persistent()
-            .get(&MARKET_MAP)
-            .unwrap_or_else(|| Map::new(&env));
-        market_map.set(market_id.clone(), info.clone());
-        env.storage().persistent().set(&MARKET_MAP, &market_map);
+            .set(&(key_prefix, key_suffix), &info.clone());
 
-        let mut all_markets: Vec<Bytes> = env
-            .storage()
+        // #1191: Store market_id by index for pagination
+        let (idx_prefix, idx_suffix) = market_by_index_key(count);
+        env.storage()
             .persistent()
-            .get(&ALL_MARKETS_KEY)
-            .unwrap_or_else(|| Vec::new(&env));
-        all_markets.push_back(market_id.clone());
-        env.storage().persistent().set(&ALL_MARKETS_KEY, &all_markets);
+            .set(&(idx_prefix, idx_suffix), &market_id);
 
         env.storage()
             .persistent()
@@ -251,67 +245,88 @@ impl MarketFactory {
     }
 
     /// Read-only lookup of a single market by ID. Does not mutate state.
+    /// #1191: Reads from per-market key storage
     pub fn get_market(env: Env, market_id: Bytes) -> Option<MarketInfo> {
-        let map: Map<Bytes, MarketInfo> = env
-            .storage()
+        let (key_prefix, key_suffix) = market_key(&market_id);
+        env.storage()
             .persistent()
-            .get(&MARKET_MAP)
-            .unwrap_or_else(|| Map::new(&env));
-        map.get(market_id)
+            .get(&(key_prefix, key_suffix))
     }
 
     /// Returns a bounded, stably-ordered (creation order) page of all markets
     /// ever created. `limit` is capped at `MAX_PAGE_SIZE` regardless of the
     /// value requested, to bound gas.
+    /// #1191: Reads from per-market key storage
+    /// #1192: Fixed u32 overflow using saturating_add
     pub fn list_markets(env: Env, offset: u32, limit: u32) -> Vec<MarketInfo> {
-        let all_ids: Vec<Bytes> = env
-            .storage()
-            .persistent()
-            .get(&ALL_MARKETS_KEY)
-            .unwrap_or_else(|| Vec::new(&env));
+        let total: u64 = env.storage().persistent().get(&MARKET_COUNT_KEY).unwrap_or(0);
+        let offset_u64 = offset as u64;
 
-        let total = all_ids.len();
-        if offset >= total {
+        // Return empty if offset >= total
+        if offset_u64 >= total {
             return Vec::new(&env);
         }
 
-        let map: Map<Bytes, MarketInfo> = env
-            .storage()
-            .persistent()
-            .get(&MARKET_MAP)
-            .unwrap_or_else(|| Map::new(&env));
-
         let capped_limit = if limit > MAX_PAGE_SIZE { MAX_PAGE_SIZE } else { limit };
-        let end = (offset + capped_limit).min(total);
+        // #1192: Use saturating_add to prevent u32 overflow
+        let end_u64 = (offset_u64.saturating_add(capped_limit as u64)).min(total);
 
         let mut result: Vec<MarketInfo> = Vec::new(&env);
-        for i in offset..end {
-            let id = all_ids.get(i).unwrap();
-            result.push_back(map.get(id).unwrap());
+        for i in offset_u64..end_u64 {
+            let (idx_prefix, idx_suffix) = market_by_index_key(i);
+            if let Some(market_id) = env
+                .storage()
+                .persistent()
+                .get::<(_, _), Bytes>(&(idx_prefix, idx_suffix))
+            {
+                let (key_prefix, key_suffix) = market_key(&market_id);
+                if let Some(info) = env
+                    .storage()
+                    .persistent()
+                    .get::<(_, _), MarketInfo>(&(key_prefix, key_suffix))
+                {
+                    result.push_back(info);
+                }
+            }
         }
         result
     }
 
-    /// Returns every market whose `end_time` has not yet passed, in creation order.
-    pub fn list_active_markets(env: Env) -> Vec<MarketInfo> {
-        let all_ids: Vec<Bytes> = env
-            .storage()
-            .persistent()
-            .get(&ALL_MARKETS_KEY)
-            .unwrap_or_else(|| Vec::new(&env));
+    /// Returns active markets (whose `end_time` has not yet passed), in creation order.
+    /// #1191: Reads from per-market key storage
+    /// #1193: Added pagination support with offset and limit
+    pub fn list_active_markets(env: Env, offset: u32, limit: u32) -> Vec<MarketInfo> {
+        let total: u64 = env.storage().persistent().get(&MARKET_COUNT_KEY).unwrap_or(0);
+        let offset_u64 = offset as u64;
 
-        let map: Map<Bytes, MarketInfo> = env
-            .storage()
-            .persistent()
-            .get(&MARKET_MAP)
-            .unwrap_or_else(|| Map::new(&env));
-
+        let capped_limit = if limit > MAX_PAGE_SIZE { MAX_PAGE_SIZE } else { limit };
         let now = env.ledger().timestamp();
         let mut result: Vec<MarketInfo> = Vec::new(&env);
-        for id in all_ids.iter() {
-            let info = map.get(id).unwrap();
-            if info.end_time > now {
-                result.push_back(info);
+        let mut count = 0u32;
+
+        // Iterate from offset, collecting active markets until limit is reached
+        for i in offset_u64..total {
+            if count >= capped_limit {
+                break;
+            }
+
+            let (idx_prefix, idx_suffix) = market_by_index_key(i);
+            if let Some(market_id) = env
+                .storage()
+                .persistent()
+                .get::<(_, _), Bytes>(&(idx_prefix, idx_suffix))
+            {
+                let (key_prefix, key_suffix) = market_key(&market_id);
+                if let Some(info) = env
+                    .storage()
+                    .persistent()
+                    .get::<(_, _), MarketInfo>(&(key_prefix, key_suffix))
+                {
+                    if info.end_time > now {
+                        result.push_back(info);
+                        count += 1;
+                    }
+                }
             }
         }
         result
