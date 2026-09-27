@@ -4,6 +4,7 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   isConnected,
   requestAccess,
+  getAddress,
   getNetwork,
   signTransaction as freighterSignTransaction,
 } from "@stellar/freighter-api";
@@ -13,6 +14,7 @@ import { NETWORK_PASSPHRASE } from "@/lib/stellar";
 // field rather than throwing, so each result is checked for `error` first.
 
 const NETWORK_POLL_INTERVAL_MS = 3000;
+const PERSISTED_CONNECTION_KEY = "freighter:connected";
 
 interface WalletState {
   address: string | null;
@@ -49,6 +51,28 @@ function getSnapshot(): WalletState {
   return state;
 }
 
+function readPersistedConnection(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(PERSISTED_CONNECTION_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function persistConnection(connected: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (connected) {
+      window.localStorage.setItem(PERSISTED_CONNECTION_KEY, "true");
+    } else {
+      window.localStorage.removeItem(PERSISTED_CONNECTION_KEY);
+    }
+  } catch {
+    // Storage may be unavailable (private mode); persistence is best-effort.
+  }
+}
+
 /** Test-only: resets the shared wallet store between test cases. */
 export function __resetWalletStoreForTests(): void {
   state = { ...initialState };
@@ -61,6 +85,31 @@ async function refreshNetwork(): Promise<void> {
     setState({ networkPassphrase: netResult.networkPassphrase });
   } catch {
     // Leave last-known network state in place; Freighter may be transiently unreachable.
+  }
+}
+
+// Silently restores an already-authorised wallet on mount. Uses isConnected()
+// (extension presence) and getAddress() (already-granted address) which do not
+// trigger a Freighter popup, unlike requestAccess().
+async function restoreConnection(): Promise<void> {
+  if (!readPersistedConnection()) return;
+  try {
+    const connResult = await isConnected();
+    if (connResult.error || !connResult.isConnected) {
+      persistConnection(false);
+      return;
+    }
+
+    const addressResult = await getAddress();
+    if (addressResult.error || !addressResult.address) {
+      persistConnection(false);
+      return;
+    }
+
+    setState({ address: addressResult.address, connected: true, walletNotInstalled: false });
+    await refreshNetwork();
+  } catch {
+    // Silent restore failed; leave the wallet disconnected without surfacing an error.
   }
 }
 
@@ -94,6 +143,7 @@ export function useWallet(): UseWalletResult {
         return;
       }
 
+      persistConnection(true);
       setState({ address: accessResult.address, connected: true, walletNotInstalled: false });
       await refreshNetwork();
     } catch {
@@ -102,6 +152,7 @@ export function useWallet(): UseWalletResult {
   }, []);
 
   const disconnect = useCallback(() => {
+    persistConnection(false);
     setState({ address: null, connected: false, networkPassphrase: null });
   }, []);
 
@@ -116,6 +167,11 @@ export function useWallet(): UseWalletResult {
     if (result.error) throw new Error(result.error.message);
 
     return result.signedTxXdr;
+  }, []);
+
+  // On mount, silently restore a previously-authorised wallet without prompting.
+  useEffect(() => {
+    void restoreConnection();
   }, []);
 
   // Wallets can switch network at any time from their own UI; poll while
