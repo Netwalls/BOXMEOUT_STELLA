@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { useWallet, __resetWalletStoreForTests } from "../useWallet";
+import { useWallet, __resetWalletStoreForTests, UserRejectedError } from "../useWallet";
 import { NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 jest.mock("@stellar/freighter-api", () => ({
@@ -141,7 +141,7 @@ describe("useWallet", () => {
       });
     });
 
-    it("throws when the user rejects signing", async () => {
+    it("throws a typed UserRejectedError when the user rejects signing", async () => {
       freighter.signTransaction.mockResolvedValue({
         signedTxXdr: "",
         signerAddress: "",
@@ -154,7 +154,19 @@ describe("useWallet", () => {
         await result.current.connect();
       });
 
-      await expect(result.current.signTransaction("unsigned-xdr")).rejects.toThrow("User declined access");
+      await expect(result.current.signTransaction("unsigned-xdr")).rejects.toBeInstanceOf(UserRejectedError);
+    });
+
+    it("maps a rejected signTransaction promise to UserRejectedError", async () => {
+      freighter.signTransaction.mockRejectedValue(new Error("User rejected the request"));
+
+      const { result } = renderHook(() => useWallet());
+
+      await act(async () => {
+        await result.current.connect();
+      });
+
+      await expect(result.current.signTransaction("unsigned-xdr")).rejects.toBeInstanceOf(UserRejectedError);
     });
   });
 

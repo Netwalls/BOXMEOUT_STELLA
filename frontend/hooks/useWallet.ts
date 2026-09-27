@@ -14,6 +14,32 @@ import { NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 const NETWORK_POLL_INTERVAL_MS = 3000;
 
+/**
+ * Thrown when the user declines to sign a transaction in Freighter.
+ * Callers can `instanceof UserRejectedError` to distinguish a deliberate
+ * rejection from a genuine signing failure.
+ */
+export class UserRejectedError extends Error {
+  constructor(message = "User rejected the transaction") {
+    super(message);
+    this.name = "UserRejectedError";
+  }
+}
+
+// Freighter reports a user decline either via an `error` payload or by
+// throwing; both surface one of these messages/codes.
+function isUserRejection(message: string | undefined): boolean {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("user declined") ||
+    normalized.includes("user rejected") ||
+    normalized.includes("rejected by user") ||
+    normalized.includes("denied by user") ||
+    normalized.includes("request rejected")
+  );
+}
+
 interface WalletState {
   address: string | null;
   connected: boolean;
@@ -109,11 +135,23 @@ export function useWallet(): UseWalletResult {
     const { address } = state;
     if (!address) throw new Error("Wallet not connected");
 
-    const result = await freighterSignTransaction(xdr, {
-      networkPassphrase: NETWORK_PASSPHRASE,
-      address,
-    });
-    if (result.error) throw new Error(result.error.message);
+    let result: Awaited<ReturnType<typeof freighterSignTransaction>>;
+    try {
+      result = await freighterSignTransaction(xdr, {
+        networkPassphrase: NETWORK_PASSPHRASE,
+        address,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (isUserRejection(message)) throw new UserRejectedError(message);
+      throw err;
+    }
+
+    if (result.error) {
+      const message = result.error.message;
+      if (isUserRejection(message)) throw new UserRejectedError(message);
+      throw new Error(message);
+    }
 
     return result.signedTxXdr;
   }, []);
