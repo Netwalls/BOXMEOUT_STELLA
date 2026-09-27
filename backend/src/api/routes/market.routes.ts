@@ -6,6 +6,7 @@ import {
   getMarketByIdHandler,
   getMarketStatsHandler,
   getMarketBetsHandler,
+  getMarketOddsHistoryHandler,
   createMarketHandler,
 } from "../controllers/market.controller";
 import { marketEvents } from "../../events/marketEvents";
@@ -68,5 +69,8 @@ router.get("/:id/stats", getMarketStatsHandler);
 
 // GET /api/markets/:id/bets
 router.get("/:id/bets", getMarketBetsHandler);
+
+// GET /api/markets/:id/odds-history?interval=5m|1h
+router.get("/:id/odds-history", getMarketOddsHistoryHandler);
 
 export default router;
