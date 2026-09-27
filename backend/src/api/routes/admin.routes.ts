@@ -17,11 +17,16 @@ import {
 } from "../controllers/oracleSubmission.controller";
 import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 import { adminAuth } from "../middleware/adminAuth";
+import { auditLogMiddleware } from "../middleware/audit-log.middleware";
 
 const router = Router();
 
 // #1219: All /api/admin/* routes require Bearer ADMIN_API_KEY authentication.
 router.use(adminAuth);
+
+// #1258: Record verified actor, action, target id and a redacted JSON diff
+// for admin mutations (resolve/dispute/oracle changes).
+router.use(auditLogMiddleware);
 
 // Market resolution is high-stakes and infrequent — tight limit.
 const marketResolutionLimiter = rateLimitMiddleware({
@@ -63,7 +68,8 @@ router.post(
   retryFailedSubmissionHandler,
 );
 
-// Audit logging (Issue #456)
+// Audit logging (Issue #456, #1258)
+// Supports ?actor=<id>&action=<action> filtering.
 router.get("/audit-logs", getAuditLogsHandler);
 
 export default router;
