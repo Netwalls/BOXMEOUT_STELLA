@@ -4,6 +4,7 @@ import { ToastProvider } from '@/components/ToastProvider';
 import { NetworkMismatchBanner } from '@/components/NetworkMismatchBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeScript } from '@/components/ThemeScript';
+import { MotionConfigProvider } from '@/components/MotionConfigProvider';
 import '@/app/globals.css';
 
 export const metadata: Metadata = {
@@ -22,15 +23,22 @@ export default function RootLayout({
         <ThemeScript />
       </head>
       <body>
-        <ErrorBoundary>
-          <ToastProvider>
-            <NetworkMismatchBanner />
-            <Navbar />
-            <main className="min-w-0 overflow-x-hidden">
-              {children}
-            </main>
-          </ToastProvider>
-        </ErrorBoundary>
+        {/*
+          MotionConfigProvider wraps the entire app so that framer-motion
+          respects the user's prefers-reduced-motion OS preference
+          (reducedMotion="user" delegates to the media query).
+        */}
+        <MotionConfigProvider>
+          <ErrorBoundary>
+            <ToastProvider>
+              <NetworkMismatchBanner />
+              <Navbar />
+              <main className="min-w-0 overflow-x-hidden">
+                {children}
+              </main>
+            </ToastProvider>
+          </ErrorBoundary>
+        </MotionConfigProvider>
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 
 export interface CountdownTimerProps {
   targetTimestamp: number;
@@ -34,9 +35,30 @@ export function CountdownTimer({ targetTimestamp, label, expiredLabel = "Ended" 
   return (
     <span className="text-sm text-gray-400" role="status" aria-live="polite">
       {isExpired ? (
-        <span className="text-red-400 font-semibold">{expiredLabel}</span>
+        // framer-motion respects MotionConfig reducedMotion="user" — when the
+        // user has prefers-reduced-motion: reduce set, the flash animation is
+        // skipped and the element renders at full opacity immediately.
+        <motion.span
+          className="text-red-400 font-semibold"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4 }}
+        >
+          {expiredLabel}
+        </motion.span>
       ) : (
-        <>{label}: <span className="font-mono text-white">{formatRemaining(remaining)}</span></>
+        <>
+          {label}:{" "}
+          <motion.span
+            key={remaining}
+            className="font-mono text-white"
+            initial={{ opacity: 0.6 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.15 }}
+          >
+            {formatRemaining(remaining)}
+          </motion.span>
+        </>
       )}
     </span>
   );

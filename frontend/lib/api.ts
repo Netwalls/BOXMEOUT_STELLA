@@ -231,3 +231,144 @@ export async function createMarketMeta(data: CreateMarketMetaInput): Promise<{ s
     body: JSON.stringify(data),
   });
 }
+
+// ─── LEADERBOARD ──────────────────────────────────────────────────────────────
+
+export type LeaderboardPeriod = "7d" | "30d" | "all";
+
+export interface LeaderboardEntry {
+  rank: number;
+  address: string;
+  totalWinnings: string;  // stroops as string
+  totalBets: number;
+  winCount: number;
+  roi: number;
+}
+
+/**
+ * GET /api/leaderboard?period=7d|30d|all
+ * Returns the top bettors ranked by total winnings for the given period.
+ */
+export async function fetchLeaderboard(period: LeaderboardPeriod): Promise<LeaderboardEntry[]> {
+  return apiFetch<LeaderboardEntry[]>(`/api/leaderboard?period=${period}`);
+}
+
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
+
+export interface AdminMarketResolution {
+  marketId: string;
+  contractAddress: string;
+  fighterA: Fighter;
+  fighterB: Fighter;
+  scheduledAt: string;
+  status: MarketStatus;
+}
+
+export interface OracleConfig {
+  id: string;
+  address: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface ResolveMarketInput {
+  marketId: string;
+  outcome: Outcome;
+}
+
+/**
+ * GET /api/admin/markets/pending
+ * Returns markets awaiting resolution. Requires admin auth header.
+ */
+export async function fetchPendingResolutions(adminKey: string): Promise<AdminMarketResolution[]> {
+  return apiFetch<AdminMarketResolution[]>(`/api/admin/markets/pending`, {
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+  });
+}
+
+/**
+ * POST /api/admin/markets/:id/resolve
+ * Resolves a market with the given outcome. Requires admin auth header.
+ */
+export async function resolveMarket(
+  marketId: string,
+  outcome: Outcome,
+  adminKey: string,
+): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/api/admin/markets/${marketId}/resolve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+    body: JSON.stringify({ outcome }),
+  });
+}
+
+/**
+ * GET /api/admin/oracles
+ * Returns the list of configured oracle addresses. Requires admin auth header.
+ */
+export async function fetchOracles(adminKey: string): Promise<OracleConfig[]> {
+  return apiFetch<OracleConfig[]>(`/api/admin/oracles`, {
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+  });
+}
+
+/**
+ * POST /api/admin/oracles
+ * Creates a new oracle config entry. Requires admin auth header.
+ */
+export async function createOracle(
+  data: { address: string; name: string },
+  adminKey: string,
+): Promise<OracleConfig> {
+  return apiFetch<OracleConfig>(`/api/admin/oracles`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * DELETE /api/admin/oracles/:id
+ * Removes an oracle config entry. Requires admin auth header.
+ */
+export async function deleteOracle(id: string, adminKey: string): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/api/admin/oracles/${id}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+  });
+}
+
+/**
+ * PATCH /api/admin/oracles/:id
+ * Updates an oracle's name or active status. Requires admin auth header.
+ */
+export async function updateOracle(
+  id: string,
+  patch: Partial<Pick<OracleConfig, "name" | "active">>,
+  adminKey: string,
+): Promise<OracleConfig> {
+  return apiFetch<OracleConfig>(`/api/admin/oracles/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+    body: JSON.stringify(patch),
+  });
+}
