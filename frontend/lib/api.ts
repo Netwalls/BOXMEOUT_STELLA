@@ -115,7 +115,9 @@ export class ApiError extends Error {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+import { API_BASE_URL } from "./config";
+
+const BASE = API_BASE_URL;
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

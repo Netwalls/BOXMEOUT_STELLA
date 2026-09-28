@@ -2,25 +2,25 @@ import { timingSafeEqual } from "crypto";
 import type { Request, Response, NextFunction } from "express";
 
 /**
- * Admin authentication middleware.
+ * Oracle authentication middleware.
  *
- * Scheme: static API key in the `X-Admin-Key` request header.
+ * Scheme: static API key in the `X-Oracle-Key` request header.
  *
- * Set ADMIN_API_KEY in your environment (see .env.example).
+ * Set ORACLE_API_KEY in your environment (see .env.example).
  * The same key name is used in .env.example and docs/api.md.
  *
  * Uses crypto.timingSafeEqual to prevent timing attacks.
  * Returns 401 { error, code } on any failure.
  */
-export function adminAuth(req: Request, res: Response, next: NextFunction): void {
-  const provided = req.headers["x-admin-key"];
+export function oracleAuth(req: Request, res: Response, next: NextFunction): void {
+  const provided = req.headers["x-oracle-key"];
 
   if (typeof provided !== "string" || !provided) {
     res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
     return;
   }
 
-  const expected = process.env.ADMIN_API_KEY ?? "";
+  const expected = process.env.ORACLE_API_KEY ?? "";
 
   if (!expected) {
     res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });

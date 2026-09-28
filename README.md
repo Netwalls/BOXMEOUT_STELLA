@@ -53,5 +53,9 @@ correct.
 
 #### CI
 
-Visual regression tests run in the frontend CI workflow. A failing snapshot
-comparison fails the build and uploads the diff artifacts for review.
+MIT
+
+## Handsoff notes
+
+<!-- handsoff-issue-1262 -->
+- #1262: F-44: Stop tracking frontend/.next build output
