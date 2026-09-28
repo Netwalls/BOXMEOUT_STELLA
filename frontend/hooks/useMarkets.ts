@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMarkets } from '@/lib/api';
 import type { Market, MarketFilters } from '@/lib/api';
+import { useVisibilityInterval } from './useVisibilityInterval';
 
 export type { MarketFilters };
 
@@ -65,23 +66,14 @@ export function useMarkets(
     doFetch();
   }, [doFetch]);
 
-  // Initial fetch + polling, paused when the tab is not visible.
+  // Initial fetch whenever filters change.
   useEffect(() => {
-    // Kick off an immediate fetch whenever filters change.
     doFetch();
-
-    // Helper that only polls when the document is visible.
-    const tick = () => {
-      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
-        doFetch();
-      }
-    };
-
-    const id = setInterval(tick, pollingInterval);
-    return () => clearInterval(id);
-    // Re-register when the interval duration changes or filters change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pollingInterval, filters]);
+  }, [filters]);
+
+  // Poll for live odds, paused while the tab is hidden.
+  useVisibilityInterval(doFetch, pollingInterval);
 
   return { markets, isLoading, error, refetch };
 }
