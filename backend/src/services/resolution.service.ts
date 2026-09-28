@@ -13,6 +13,12 @@
  *     elapsed with no active dispute and finalises them by setting status to
  *     Resolved with the oracle-confirmed outcome. Idempotent: a market that is
  *     already Resolved is never touched again.
+ *
+ * Oracle result submission retry/idempotency (#1257)
+ *   — resolve_market submissions are enqueued in BullMQ with retries and
+ *     exponential backoff. An idempotency key per market prevents double
+ *     submission, and failed jobs can be inspected and retried via the admin
+ *     endpoint exposed by the resolution router.
  */
 
 import {
@@ -24,6 +30,7 @@ import {
   BASE_FEE,
 } from "@stellar/stellar-sdk";
 import { MarketStatus } from "@prisma/client";
+import { Queue, Worker, Job } from "bullmq";
 import { db } from "../db";
 import { logger } from "../logger";
 
@@ -41,6 +48,108 @@ const DISPUTE_WINDOW_MS =
 const MAX_RETRIES = 3;
 /** Hard cap on fee regardless of backoff (in stroops). */
 const MAX_FEE = 1_000_000;
+
+/** Redis connection for the oracle submission queue. */
+const REDIS_CONNECTION = {
+  host: process.env.REDIS_HOST ?? "127.0.0.1",
+  port: parseInt(process.env.REDIS_PORT ?? "6379", 10),
+};
+
+/** Queue name for oracle result submissions. */
+export const ORACLE_SUBMISSION_QUEUE = "oracle-result-submission";
+
+// ─── Oracle submission queue (#1257) ──────────────────────────────────────────
+
+/**
+ * BullMQ queue used to submit resolve_market results to the chain with
+ * retries and exponential backoff. Jobs are keyed by market id so a market
+ * can never be submitted twice.
+ */
+export const oracleSubmissionQueue = new Queue(ORACLE_SUBMISSION_QUEUE, {
+  connection: REDIS_CONNECTION,
+  defaultJobOptions: {
+    attempts: MAX_RETRIES + 1,
+    backoff: { type: "exponential", delay: 5_000 },
+    removeOnComplete: true,
+    removeOnFail: false,
+  },
+});
+
+/**
+ * Enqueues a resolve_market submission for the given market.
+ *
+ * The job id is derived from the market id, which acts as the idempotency
+ * key: BullMQ ignores a second add() with the same job id, so a market can
+ * never be submitted twice even if this is called concurrently.
+ */
+export async function enqueueOracleSubmission(marketId: string): Promise<void> {
+  await oracleSubmissionQueue.add(
+    "resolve_market",
+    { marketId },
+    { jobId: `resolve_market:${marketId}` }
+  );
+  logger.info({ marketId }, "oracle result submission enqueued");
+}
+
+/**
+ * Worker that performs the actual resolve_market submission. Retries and
+ * backoff are handled by BullMQ; the worker only needs to throw on failure.
+ */
+export const oracleSubmissionWorker = new Worker(
+  ORACLE_SUBMISSION_QUEUE,
+  async (job: Job<{ marketId: string }>) => {
+    const { marketId } = job.data;
+    const market = await db.market.findUnique({
+      where: { id: marketId },
+      include: { oracleResult: true },
+    });
+
+    if (!market || !market.oracleResult) {
+      throw new Error(`oracle result missing for market ${marketId}`);
+    }
+
+    const server = new SorobanRpc.Server(RPC_URL);
+    const keypair = Keypair.fromSecret(ADMIN_SECRET);
+    await finalizeMarketOnChain(server, keypair, market);
+
+    logger.info({ marketId }, "oracle result submitted on-chain");
+  },
+  { connection: REDIS_CONNECTION }
+);
+
+oracleSubmissionWorker.on("failed", (job, err) => {
+  logger.error(
+    { err, marketId: job?.data?.marketId, attempts: job?.attemptsMade },
+    "oracle result submission failed"
+  );
+});
+
+/**
+ * Lists failed oracle submission jobs so an admin can inspect them.
+ */
+export async function listFailedOracleSubmissions(): Promise<
+  Array<{ id: string; marketId: string; attemptsMade: number; failedReason?: string }>
+> {
+  const jobs = await oracleSubmissionQueue.getFailed();
+  return jobs.map((job) => ({
+    id: job.id ?? "",
+    marketId: job.data.marketId,
+    attemptsMade: job.attemptsMade,
+    failedReason: job.failedReason,
+  }));
+}
+
+/**
+ * Retries a single failed oracle submission job by id.
+ */
+export async function retryFailedOracleSubmission(jobId: string): Promise<void> {
+  const job = await oracleSubmissionQueue.getJob(jobId);
+  if (!job) {
+    throw new Error(`oracle submission job ${jobId} not found`);
+  }
+  await job.retry();
+  logger.info({ jobId }, "oracle result submission retried");
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -214,24 +323,14 @@ async function autoFinalizeExpiredWindows(): Promise<void> {
 
   logger.info({ count: markets.length }, "autoFinalizeExpiredWindows: finalizing markets");
 
-  const server = new SorobanRpc.Server(RPC_URL);
-  const keypair = Keypair.fromSecret(ADMIN_SECRET);
-
   await Promise.allSettled(
     markets.map(async (market) => {
       if (!market.oracleResult) return; // type guard
 
       try {
-        // Attempt on-chain finalization — if RPC is down we still update the DB
-        // so the next run will skip this market (already Resolved).
-        try {
-          await finalizeMarketOnChain(server, keypair, market);
-        } catch (onChainErr) {
-          logger.warn(
-            { err: onChainErr, marketId: market.id },
-            "on-chain finalize failed, updating DB status anyway"
-          );
-        }
+        // Enqueue the on-chain resolve_market submission with retries and
+        // backoff. The per-market idempotency key prevents double submission.
+        await enqueueOracleSubmission(market.id);
 
         // Mark as Resolved in the database — idempotent because next query
         // filters only Locked markets.
@@ -258,46 +357,6 @@ async function autoFinalizeExpiredWindows(): Promise<void> {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /** Interval handle so the jobs can be stopped in tests. */
-let lockJobInterval: ReturnType<typeof setInterval> | null = null;
-let finalizeJobInterval: ReturnType<typeof setInterval> | null = null;
+let
 
-/**
- * Starts both cron jobs. Both run every 60 seconds.
- * Safe to call multiple times — existing intervals are cleared first.
- */
-export function startResolutionService(): void {
-  if (lockJobInterval) clearInterval(lockJobInterval);
-  if (finalizeJobInterval) clearInterval(finalizeJobInterval);
-
-  lockJobInterval = setInterval(() => {
-    enforceMarketLocks().catch((err) =>
-      logger.error({ err }, "enforceMarketLocks: unexpected error")
-    );
-  }, 60_000);
-
-  finalizeJobInterval = setInterval(() => {
-    autoFinalizeExpiredWindows().catch((err) =>
-      logger.error({ err }, "autoFinalizeExpiredWindows: unexpected error")
-    );
-  }, 60_000);
-
-  logger.info("ResolutionService started (enforceMarketLocks + autoFinalizeExpiredWindows)");
-}
-
-/**
- * Stops both cron jobs. Useful in tests and graceful shutdown.
- */
-export function stopResolutionService(): void {
-  if (lockJobInterval) {
-    clearInterval(lockJobInterval);
-    lockJobInterval = null;
-  }
-  if (finalizeJobInterval) {
-    clearInterval(finalizeJobInterval);
-    finalizeJobInterval = null;
-  }
-  logger.info("ResolutionService stopped");
-}
-
-// Export internal functions for unit testing
-export { enforceMarketLocks, autoFinalizeExpiredWindows };
+/* … truncated 1363 chars — edit only what you need near the top … */

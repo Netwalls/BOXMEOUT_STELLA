@@ -25,6 +25,26 @@ export interface PortfolioSummary {
   roi: number;
 }
 
+export type LeaderboardPeriod = "7d" | "30d" | "all";
+
+export interface LeaderboardEntry {
+  rank: number;
+  bettor: string;
+  realisedProfit: bigint;
+  totalStaked: bigint;
+  totalPayout: bigint;
+  settledBets: number;
+  wonBets: number;
+  winRate: number;
+}
+
+export interface LeaderboardResult {
+  period: LeaderboardPeriod;
+  limit: number;
+  generatedAt: Date;
+  entries: LeaderboardEntry[];
+}
+
 export async function getBetsByAddress(
   address: string,
   filters?: BetFilters
@@ -217,4 +237,151 @@ export async function getPortfolioSummary(address: string): Promise<PortfolioSum
     completedBets,
     roi,
   };
+}
+
+const LEADERBOARD_PERIOD_MS: Record<Exclude<LeaderboardPeriod, "all">, number> = {
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+};
+
+const LEADERBOARD_CACHE_TTL_MS = 30 * 1000;
+const LEADERBOARD_DEFAULT_LIMIT = 50;
+const LEADERBOARD_MAX_LIMIT = 100;
+
+interface LeaderboardCacheEntry {
+  expiresAt: number;
+  result: LeaderboardResult;
+}
+
+const leaderboardCache = new Map<string, LeaderboardCacheEntry>();
+
+/**
+ * Normalises the period query param, defaulting to "all" for unknown values.
+ */
+export function parseLeaderboardPeriod(period?: string): LeaderboardPeriod {
+  if (period === "7d" || period === "30d" || period === "all") {
+    return period;
+  }
+  return "all";
+}
+
+/**
+ * Normalises the limit query param, clamping to [1, LEADERBOARD_MAX_LIMIT].
+ */
+export function parseLeaderboardLimit(limit?: string | number): number {
+  const parsed = typeof limit === "number" ? limit : Number(limit);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return LEADERBOARD_DEFAULT_LIMIT;
+  }
+  return Math.min(Math.floor(parsed), LEADERBOARD_MAX_LIMIT);
+}
+
+/**
+ * Computes the leaderboard from claimed payouts minus stakes (realised profit).
+ *
+ * Only settled bets (claimed) contribute to realised profit and win rate:
+ * - realisedProfit = sum(payout) - sum(amount) over claimed bets
+ * - winRate = wonBets / settledBets * 100
+ *
+ * Results are cached per (period, limit) for a short TTL.
+ */
+export async function getLeaderboard(
+  period: LeaderboardPeriod = "all",
+  limit: number = LEADERBOARD_DEFAULT_LIMIT
+): Promise<LeaderboardResult> {
+  const normalisedLimit = parseLeaderboardLimit(limit);
+  const cacheKey = `${period}:${normalisedLimit}`;
+  const now = Date.now();
+
+  const cached = leaderboardCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.result;
+  }
+
+  const where: Record<string, unknown> = { claimed: true };
+  if (period !== "all") {
+    where.claimedAt = { gte: new Date(now - LEADERBOARD_PERIOD_MS[period]) };
+  }
+
+  const bets = await db.bet.findMany({
+    where,
+    include: { market: true },
+  });
+
+  const stats = new Map<
+    string,
+    {
+      realisedProfit: bigint;
+      totalStaked: bigint;
+      totalPayout: bigint;
+      settledBets: number;
+      wonBets: number;
+    }
+  >();
+
+  for (const bet of bets) {
+    const payout = bet.payout ?? 0n;
+    const entry = stats.get(bet.bettor) ?? {
+      realisedProfit: 0n,
+      totalStaked: 0n,
+      totalPayout: 0n,
+      settledBets: 0,
+      wonBets: 0,
+    };
+
+    entry.totalStaked += bet.amount;
+    entry.totalPayout += payout;
+    entry.realisedProfit += payout - bet.amount;
+    entry.settledBets += 1;
+    if (bet.market.outcome !== null && bet.market.outcome === bet.side) {
+      entry.wonBets += 1;
+    }
+
+    stats.set(bet.bettor, entry);
+  }
+
+  const entries: LeaderboardEntry[] = Array.from(stats.entries())
+    .map(([bettor, s]) => ({
+      rank: 0,
+      bettor,
+      realisedProfit: s.realisedProfit,
+      totalStaked: s.totalStaked,
+      totalPayout: s.totalPayout,
+      settledBets: s.settledBets,
+      wonBets: s.wonBets,
+      winRate:
+        s.settledBets > 0 ? (s.wonBets / s.settledBets) * 100 : 0,
+    }))
+    .sort((a, b) => {
+      if (a.realisedProfit !== b.realisedProfit) {
+        return a.realisedProfit > b.realisedProfit ? -1 : 1;
+      }
+      if (a.winRate !== b.winRate) {
+        return b.winRate - a.winRate;
+      }
+      return a.bettor.localeCompare(b.bettor);
+    })
+    .slice(0, normalisedLimit)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+
+  const result: LeaderboardResult = {
+    period,
+    limit: normalisedLimit,
+    generatedAt: new Date(now),
+    entries,
+  };
+
+  leaderboardCache.set(cacheKey, {
+    expiresAt: now + LEADERBOARD_CACHE_TTL_MS,
+    result,
+  });
+
+  return result;
+}
+
+/**
+ * Clears the leaderboard cache. Useful for tests and after settlement events.
+ */
+export function clearLeaderboardCache(): void {
+  leaderboardCache.clear();
 }

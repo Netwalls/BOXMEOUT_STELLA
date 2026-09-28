@@ -78,7 +78,7 @@ describe("#1219 — /api/admin/* protected by adminAuth", () => {
     test.each(adminRoutes)("$method $path", async ({ method, path }) => {
       const res = await (request(app) as any)
         [method](path)
-        .set("Authorization", "Bearer wrong-key");
+        .set("X-Admin-Key", "wrong-key");
       expect(res.status).toBe(401);
       expect(res.body).toMatchObject({ code: "UNAUTHORIZED" });
     });
@@ -87,21 +87,21 @@ describe("#1219 — /api/admin/* protected by adminAuth", () => {
   it("GET /api/admin/oracles with valid credentials → 200", async () => {
     const res = await request(app)
       .get("/api/admin/oracles")
-      .set("Authorization", `Bearer ${ADMIN_KEY}`);
+      .set("X-Admin-Key", ADMIN_KEY);
     expect(res.status).toBe(200);
   });
 
   it("GET /api/admin/markets/pending with valid credentials → 200", async () => {
     const res = await request(app)
       .get("/api/admin/markets/pending")
-      .set("Authorization", `Bearer ${ADMIN_KEY}`);
+      .set("X-Admin-Key", ADMIN_KEY);
     expect(res.status).toBe(200);
   });
 
   it("GET /api/admin/audit-logs with valid credentials → 200", async () => {
     const res = await request(app)
       .get("/api/admin/audit-logs")
-      .set("Authorization", `Bearer ${ADMIN_KEY}`);
+      .set("X-Admin-Key", ADMIN_KEY);
     expect(res.status).toBe(200);
   });
 });
@@ -154,7 +154,7 @@ describe("#1221 — /api/oracle/* mounted and protected", () => {
     it("returns 401 with wrong oracle key", async () => {
       const res = await request(app)
         .post("/api/oracle/submit")
-        .set("Authorization", "Bearer wrong-key")
+        .set("X-Oracle-Key", "wrong-key")
         .send({ market_id: "m1", outcome: "fighter_a", source: "api" });
 
       expect(res.status).toBe(401);
@@ -164,7 +164,7 @@ describe("#1221 — /api/oracle/* mounted and protected", () => {
     it("returns 201 with valid oracle key and body", async () => {
       const res = await request(app)
         .post("/api/oracle/submit")
-        .set("Authorization", `Bearer ${ORACLE_KEY}`)
+        .set("X-Oracle-Key", ORACLE_KEY)
         .send({ market_id: "m1", outcome: "fighter_a", source: "api" });
 
       expect(res.status).toBe(201);

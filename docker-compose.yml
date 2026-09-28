@@ -40,11 +40,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Backend API / Indexer ───────────────────────────────────────────────────
+  # ── Backend API ─────────────────────────────────────────────────────────────
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: api
     restart: unless-stopped
     env_file:
       - ./backend/.env
@@ -69,6 +70,29 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+
+  # ── Indexer ──────────────────────────────────────────────────────────────────
+  # B-54: Runs the Soroban event-polling loop as a managed process separate
+  # from the API server, sharing the same compiled Docker image.
+  indexer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: indexer
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://boxmeout:boxmeout@postgres:5432/boxmeout
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -141,6 +141,35 @@ curl http://localhost:3001/health
 
 ---
 
+## 7 — Run the indexer
+
+The indexer is a separate process that polls Soroban RPC for on-chain events and
+writes them to the database. It must be running alongside the API server to keep
+market and bet data in sync with the Stellar blockchain.
+
+**Development (hot-reload):**
+```bash
+# In a second terminal, from the backend/ directory:
+npm run indexer:dev
+```
+
+**Production (compiled):**
+```bash
+npm run build
+npm run indexer
+```
+
+**Docker Compose (recommended):**
+```bash
+# From the repo root — starts postgres, redis, api, and indexer together:
+docker-compose up --build
+```
+
+The `indexer` service in docker-compose shares the same compiled image as the
+`api` service and restarts automatically if it crashes.
+
+---
+
 ## Testnet Quick Start (TL;DR)
 
 ```bash
