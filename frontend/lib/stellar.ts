@@ -1,4 +1,5 @@
 import type { Transaction } from "@stellar/stellar-sdk";
+import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
@@ -52,6 +53,22 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
+/**
+ * Base URL for the stellar.expert explorer, derived from the configured network.
+ * Used to link a transaction hash to its on-chain record.
+ */
+export const STELLAR_EXPERT_BASE_URL =
+  NETWORK_NAME.toUpperCase() === "PUBLIC" || NETWORK_NAME.toUpperCase() === "MAINNET"
+    ? "https://stellar.expert/explorer/public"
+    : "https://stellar.expert/explorer/testnet";
+
+/**
+ * Builds a stellar.expert URL for a given transaction hash.
+ */
+export function stellarExpertTxUrl(txHash: string): string {
+  return `${STELLAR_EXPERT_BASE_URL}/tx/${txHash}`;
+}
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 export interface SorobanInvokeParams {
@@ -65,6 +82,67 @@ export interface TransactionResult {
   txHash: string;
   ledger: number;
   returnValue: unknown;
+}
+
+/**
+ * Lifecycle states reported while waiting for a transaction to confirm.
+ * - `pending`: submitted, not yet included in a ledger
+ * - `success`: included in a ledger and executed successfully
+ * - `failed`: included in a ledger but execution failed
+ * - `timeout`: not confirmed within the bounded wait window
+ */
+export type TransactionStatus = "pending" | "success" | "failed" | "timeout";
+
+export interface TransactionStatusUpdate {
+  status: TransactionStatus;
+  txHash: string;
+  ledger?: number;
+  error?: string;
+}
+
+/**
+ * Thrown when a transaction is not confirmed within the bounded timeout.
+ * Carries the tx hash so callers can still surface an explorer link.
+ */
+export class TransactionTimeoutError extends Error {
+  readonly txHash: string;
+
+  constructor(txHash: string, timeoutMs: number) {
+    super(`Transaction ${txHash} was not confirmed within ${timeoutMs}ms`);
+    this.name = "TransactionTimeoutError";
+    this.txHash = txHash;
+  }
+}
+
+// ─── ERROR DECODING ───────────────────────────────────────────────────────────
+
+/**
+ * Decodes a raw Soroban host error into a friendly `ContractErrorException`.
+ * Non-contract errors are returned unchanged so callers can rethrow them.
+ */
+function decodeContractError(error: unknown): unknown {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const code = parseContractErrorCode(raw);
+
+  if (code !== null) {
+    return new ContractErrorException(code);
+  }
+
+  return error;
+}
+
+/**
+ * Extracts the raw error string from a failed simulation result.
+ */
+function simulationErrorText(simResult: unknown): string {
+  const result = simResult as { error?: unknown };
+  const err = result?.error;
+
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") return JSON.stringify(err);
+
+  return "Transaction simulation failed";
 }
 
 // ─── FUNCTIONS ────────────────────────────────────────────────────────────────
@@ -137,14 +215,19 @@ export async function buildSorobanInvocation(
     return finalTx.toXDR();
   }
 
-  throw new Error("Transaction simulation failed");
+  throw decodeContractError(new Error(simulationErrorText(simResult)));
 }
 
 /**
  * Submits a signed XDR transaction to Soroban RPC and waits for ledger confirmation.
+ * Polls `getTransaction` with exponential backoff, bounded to a 30s timeout, and
+ * reports each state transition (pending/success/failed/timeout) via `onStatus`.
  * Returns the TransactionResult containing txHash, ledger, and return value.
  */
-export async function submitTransaction(signedXdr: string): Promise<TransactionResult> {
+export async function submitTransaction(
+  signedXdr: string,
+  onStatus?: (update: TransactionStatusUpdate) => void
+): Promise<TransactionResult> {
   const { SorobanRpc, TransactionBuilder } = await loadSdk();
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
     allowHttp: true,
@@ -155,35 +238,49 @@ export async function submitTransaction(signedXdr: string): Promise<TransactionR
     NETWORK_PASSPHRASE
   ) as Transaction;
 
+  const hash = transaction.hash();
+  const txHash = hash.toString("hex");
+
   const response = await server.sendTransaction(transaction);
 
   if (response.status !== "PENDING") {
-    throw new Error(`Transaction submission failed with status: ${response.status}`);
+    const error = `Transaction submission failed with status: ${response.status}`;
+    onStatus?.({ status: "failed", txHash, error });
+    throw decodeContractError(new Error(error));
   }
 
-  const hash = transaction.hash();
+  onStatus?.({ status: "pending", txHash });
+
+  const TIMEOUT_MS = 30_000;
+  const INITIAL_DELAY_MS = 1_000;
+  const MAX_DELAY_MS = 5_000;
+  const startedAt = Date.now();
+  let delay = INITIAL_DELAY_MS;
+
   let result = await server.getTransaction(hash);
 
-  const maxAttempts = 10;
-  let attempts = 0;
-
   while (result.status === "PENDING" || result.status === "NOT_FOUND") {
-    attempts++;
-    if (attempts > maxAttempts) {
-      throw new Error(`Transaction submission timed out after ${maxAttempts} attempts`);
+    if (Date.now() - startedAt >= TIMEOUT_MS) {
+      onStatus?.({ status: "timeout", txHash });
+      throw new TransactionTimeoutError(txHash, TIMEOUT_MS);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    delay = Math.min(delay * 2, MAX_DELAY_MS);
 
     result = await server.getTransaction(hash);
   }
 
   if (result.status !== "SUCCESS") {
-    throw new Error(`Transaction failed with status: ${result.status}`);
+    const error = `Transaction failed with status: ${result.status}`;
+    onStatus?.({ status: "failed", txHash, error });
+    throw decodeContractError(new Error(error));
   }
 
+  onStatus?.({ status: "success", txHash, ledger: result.ledger });
+
   return {
-    txHash: hash.toString("hex"),
+    txHash,
     ledger: result.ledger,
     returnValue: result.returnValue,
   };
