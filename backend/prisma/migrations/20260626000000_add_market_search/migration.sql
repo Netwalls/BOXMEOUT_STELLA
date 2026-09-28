@@ -23,3 +23,10 @@ CREATE TRIGGER market_tsvector_trigger
 
 -- GIN index for fast full-text search
 CREATE INDEX IF NOT EXISTS "Market_tsVector_idx" ON "Market" USING GIN ("tsVector");
+
+-- B-65: index Bet by bettor for address/portfolio queries
+-- (bettor is not the leading column of the existing [marketId, bettor] index)
+CREATE INDEX IF NOT EXISTS "Bet_bettor_placedAt_idx" ON "Bet" ("bettor", "placedAt");
+
+-- B-65: index Market by status for list queries
+CREATE INDEX IF NOT EXISTS "Market_status_scheduledAt_idx" ON "Market" ("status", "scheduledAt");

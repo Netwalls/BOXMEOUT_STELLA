@@ -10,6 +10,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { db } from "../db";
 import { logger } from "../logger";
+import { redis } from "../redis";
 
 export interface MarketFilters {
   status?: MarketStatus;
@@ -29,6 +30,79 @@ export interface PaginatedResult<T> {
 }
 
 export const MAX_PAGE_SIZE = 100;
+
+/**
+ * Short TTL (seconds) for cached market list and stats responses.
+ * Kept small so the 4s frontend poll still sees fresh data while
+ * absorbing bursts of concurrent viewers.
+ */
+export const MARKET_CACHE_TTL_SECONDS = 5;
+
+const MARKET_LIST_CACHE_PREFIX = "market:list:";
+const MARKET_STATS_CACHE_PREFIX = "market:stats:";
+
+// Cache hit/miss counters used to log the hit ratio.
+let cacheHits = 0;
+let cacheMisses = 0;
+
+function logCacheHitRatio(): void {
+  const total = cacheHits + cacheMisses;
+  if (total === 0) return;
+  logger.info(
+    {
+      cacheHits,
+      cacheMisses,
+      hitRatio: Number((cacheHits / total).toFixed(4)),
+    },
+    "Market cache hit ratio"
+  );
+}
+
+function recordCacheHit(): void {
+  cacheHits += 1;
+  logCacheHitRatio();
+}
+
+function recordCacheMiss(): void {
+  cacheMisses += 1;
+  logCacheHitRatio();
+}
+
+function listCacheKey(filters?: MarketFilters, pagination?: Pagination): string {
+  const status = filters?.status ?? "all";
+  const weightClass = filters?.weightClass ?? "all";
+  const page = pagination?.page ?? 1;
+  const pageSize = Math.min(pagination?.pageSize ?? 20, MAX_PAGE_SIZE);
+  return `${MARKET_LIST_CACHE_PREFIX}${status}:${weightClass}:${page}:${pageSize}`;
+}
+
+function statsCacheKey(marketId: string): string {
+  return `${MARKET_STATS_CACHE_PREFIX}${marketId}`;
+}
+
+/**
+ * Invalidates cached market list and stats entries.
+ * Called by the indexer on BetPlaced and market status events so the
+ * next poll re-reads fresh data from Postgres.
+ */
+export async function invalidateMarketCache(marketId?: string): Promise<void> {
+  try {
+    const keys: string[] = [];
+    if (marketId) {
+      keys.push(statsCacheKey(marketId));
+    }
+
+    // Invalidate all list variants (status/weightClass/page/pageSize combos).
+    const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
+    keys.push(...listKeys);
+
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  } catch (err) {
+    logger.warn({ err, marketId }, "Failed to invalidate market cache");
+  }
+}
 
 export interface MarketStats {
   totalBets: number;
@@ -99,6 +173,20 @@ export async function getAllMarkets(
   filters?: MarketFilters,
   pagination?: Pagination
 ): Promise<Market[]> {
+  const cacheKey = listCacheKey(filters, pagination);
+
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      recordCacheHit();
+      return JSON.parse(cached) as Market[];
+    }
+  } catch (err) {
+    logger.warn({ err, cacheKey }, "Market list cache read failed");
+  }
+
+  recordCacheMiss();
+
   const where: Record<string, unknown> = {};
 
   if (filters?.status) {
@@ -111,12 +199,25 @@ export async function getAllMarkets(
   const page = pagination?.page ?? 1;
   const limit = Math.min(pagination?.pageSize ?? 20, MAX_PAGE_SIZE);
 
-  return db.market.findMany({
+  const markets = await db.market.findMany({
     where,
     orderBy: { scheduledAt: "asc" },
     skip: (page - 1) * limit,
     take: limit,
   });
+
+  try {
+    await redis.set(
+      cacheKey,
+      JSON.stringify(markets),
+      "EX",
+      MARKET_CACHE_TTL_SECONDS
+    );
+  } catch (err) {
+    logger.warn({ err, cacheKey }, "Market list cache write failed");
+  }
+
+  return markets;
 }
 
 /**

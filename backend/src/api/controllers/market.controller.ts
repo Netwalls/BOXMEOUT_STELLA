@@ -17,7 +17,7 @@ const marketsQuerySchema = z.object({
 });
 
 const marketBetsQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
+  cursor: z.string().optional(),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
@@ -182,7 +182,8 @@ export async function getMarketStatsHandler(req: Request, res: Response): Promis
 
 /**
  * GET /api/markets/:id/bets
- * Returns leaderboard/bets for a market with pagination.
+ * Returns leaderboard/bets for a market with cursor pagination.
+ * Query params: cursor, limit (max 100). Response includes nextCursor.
  */
 export async function getMarketBetsHandler(req: Request, res: Response): Promise<void> {
   const parsed = marketBetsQuerySchema.safeParse(req.query);
@@ -196,9 +197,12 @@ export async function getMarketBetsHandler(req: Request, res: Response): Promise
   }
 
   try {
-    const { page, limit } = parsed.data;
-    const bets = await marketService.getMarketLeaderboard(req.params.id, { page, limit });
-    res.json({ data: bets, page, limit });
+    const { cursor, limit } = parsed.data;
+    const { data, nextCursor } = await marketService.getMarketLeaderboard(req.params.id, {
+      cursor,
+      limit,
+    });
+    res.json({ data, nextCursor, limit });
   } catch (err) {
     logger.error({ err }, "getMarketBetsHandler failed");
     res.status(500).json({ error: "Internal server error" });

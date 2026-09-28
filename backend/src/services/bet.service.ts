@@ -60,7 +60,7 @@ export async function getBetsByAddress(
     where.claimed = true;
     return db.bet.findMany({
       where,
-      orderBy: { placedAt: "desc" },
+      orderBy: [{ placedAt: "desc" }, { id: "desc" }],
     });
   }
 
@@ -69,7 +69,7 @@ export async function getBetsByAddress(
     const bets = await db.bet.findMany({
       where,
       include: { market: true },
-      orderBy: { placedAt: "desc" },
+      orderBy: [{ placedAt: "desc" }, { id: "desc" }],
     });
     return bets.filter((bet) => bet.market.outcome === null);
   }
@@ -80,7 +80,7 @@ export async function getBetsByAddress(
     const bets = await db.bet.findMany({
       where,
       include: { market: true },
-      orderBy: { placedAt: "desc" },
+      orderBy: [{ placedAt: "desc" }, { id: "desc" }],
     });
     return bets.filter((bet) => {
       if (!bet.market.outcome) return false;
@@ -92,12 +92,39 @@ export async function getBetsByAddress(
   // No status filter — return all bets for the address
   return db.bet.findMany({
     where,
-    orderBy: { placedAt: "desc" },
+    orderBy: [{ placedAt: "desc" }, { id: "desc" }],
   });
 }
 
+/**
+ * Cursor-paginated bets for a Stellar address, ordered by (placedAt, id).
+ */
+export async function getBetsByAddressPaginated(
+  address: string,
+  options?: { cursor?: string | null; limit?: number | string | null }
+): Promise<PaginatedBets> {
+  const limit = normalizeBetLimit(options?.limit);
+  const cursor = decodeBetCursor(options?.cursor);
+  return fetchBetPage({ bettor: address }, limit, cursor);
+}
+
 export async function getBetsByMarket(market_id: string): Promise<Bet[]> {
-  return db.bet.findMany({ where: { marketId: market_id } });
+  return db.bet.findMany({
+    where: { marketId: market_id },
+    orderBy: [{ placedAt: "desc" }, { id: "desc" }],
+  });
+}
+
+/**
+ * Cursor-paginated bets for a market, ordered by (placedAt, id).
+ */
+export async function getBetsByMarketPaginated(
+  market_id: string,
+  options?: { cursor?: string | null; limit?: number | string | null }
+): Promise<PaginatedBets> {
+  const limit = normalizeBetLimit(options?.limit);
+  const cursor = decodeBetCursor(options?.cursor);
+  return fetchBetPage({ marketId: market_id }, limit, cursor);
 }
 
 export async function recordBet(betData: CreateBetDTO): Promise<Bet> {
