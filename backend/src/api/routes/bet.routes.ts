@@ -4,7 +4,9 @@ import {
   getBetsByAddressHandler,
   getPortfolioHandler,
   getPayoutEstimateHandler,
+  getLeaderboardHandler,
 } from "../controllers/bet.controller";
+import { validateAddressParam } from "../middleware/validate";
 
 const payoutEstimateLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -22,13 +24,16 @@ const payoutEstimateLimiter = rateLimit({
 
 const router = Router();
 
+// GET /api/bets/leaderboard  — must come before /:address
+router.get("/leaderboard", getLeaderboardHandler);
+
 // GET /api/bets/payout-estimate  — must come before /:address
 router.get("/payout-estimate", payoutEstimateLimiter, getPayoutEstimateHandler);
 
 // GET /api/bets/:address/portfolio
-router.get("/:address/portfolio", getPortfolioHandler);
+router.get("/:address/portfolio", validateAddressParam, getPortfolioHandler);
 
 // GET /api/bets/:address
-router.get("/:address", getBetsByAddressHandler);
+router.get("/:address", validateAddressParam, getBetsByAddressHandler);
 
 export default router;

@@ -67,6 +67,62 @@ export function normaliseEventType(rawType: string): string | undefined {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// #1246 B-68 — Cache invalidation on chain events
+//
+// The frontend polls /api/markets/:id/stats every 4s per viewer, and the
+// market list is read on every page load. Both are cached in Redis with a
+// short TTL (see market.service). Whenever the indexer applies a write that
+// changes a market's state (a bet, a status transition, a claim), the
+// corresponding cache keys must be dropped so the next read repopulates them
+// with fresh data instead of serving a stale snapshot for up to the TTL.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Canonical event types that mutate a market's stats and/or list entry.
+ * Any of these invalidates the per-market stats key and the list keys.
+ */
+const MARKET_MUTATING_EVENTS = new Set<string>([
+  "BetPlaced",
+  "MarketCreated",
+  "MarketResolved",
+  "MarketCancelled",
+  "MarketLocked",
+  "WinningsClaimed",
+  "RefundClaimed",
+  "DisputeRaised",
+  "DisputeResolved",
+]);
+
+/**
+ * Best-effort cache invalidation for a single processed event.
+ * Never throws — a Redis hiccup must not roll back the ledger transaction
+ * or stall the indexer. Failures are logged and the short TTL bounds staleness.
+ */
+async function invalidateMarketCacheForEvent(
+  canonicalType: string,
+  marketId: string | undefined,
+): Promise<void> {
+  if (!MARKET_MUTATING_EVENTS.has(canonicalType)) return;
+  try {
+    await marketService.invalidateMarketCache(marketId);
+    logger.debug({ canonicalType, marketId }, "Invalidated market cache");
+  } catch (err) {
+    logger.warn({ err, canonicalType, marketId }, "Market cache invalidation failed");
+  }
+}
+
+/**
+ * Extracts the market id from a decoded event body. Contract events carry the
+ * market id under a few different field names depending on the emitter; we
+ * check the common ones and fall back to undefined (which invalidates the
+ * list keys only).
+ */
+function extractMarketId(body: Record<string, unknown>): string | undefined {
+  const candidate = body.marketId ?? body.market_id ?? body.id;
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -99,7 +155,36 @@ export interface LedgerData {
  * Reconnects with exponential backoff on RPC disconnect.
  * Long-lived process — run as a background worker.
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// B-55: Graceful-shutdown support
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Set to true by stopIndexer() to break the polling loop cleanly. */
+let _stopRequested = false;
+
+/** Promise that resolves once the indexer loop has fully exited. */
+let _stopResolve: (() => void) | null = null;
+let _stopPromise: Promise<void> | null = null;
+
+/**
+ * Signal the indexer loop to stop after the current poll completes.
+ * Returns a promise that resolves once the loop has fully exited.
+ */
+export function stopIndexer(): Promise<void> {
+  if (!_stopPromise) {
+    _stopPromise = new Promise<void>((resolve) => {
+      _stopResolve = resolve;
+    });
+    _stopRequested = true;
+    logger.info("Indexer stop requested");
+  }
+  return _stopPromise;
+}
+
 export async function startIndexer(): Promise<void> {
+  _stopRequested = false;
+  _stopPromise = null;
+
   const rpcUrl = process.env.STELLAR_RPC_URL!;
   const server = new SorobanRpc.Server(rpcUrl);
 
@@ -109,7 +194,7 @@ export async function startIndexer(): Promise<void> {
   let fromLedger = await getLastIndexedLedger();
   logger.info({ fromLedger }, "Indexer starting");
 
-  while (true) {
+  while (!_stopRequested) {
     try {
       logger.debug({ fromLedger }, "Polling for events");
 
@@ -151,6 +236,15 @@ export async function startIndexer(): Promise<void> {
         // happen inside a single processLedger transaction.
         await processLedger({ sequence: ledgerSeq, closedAt: events[0].ledgerClosedAt, events });
 
+        // B-68: Invalidate market cache AFTER the ledger transaction commits,
+        // so we never drop a key for a write that later rolls back. This runs
+        // outside the transaction and is best-effort (see helper above).
+        for (const event of events) {
+          const canonicalType = normaliseEventType(event.type);
+          if (!canonicalType) continue;
+          await invalidateMarketCacheForEvent(canonicalType, extractMarketId(event.body));
+        }
+
         fromLedger = ledgerSeq;
       }
 
@@ -162,6 +256,9 @@ export async function startIndexer(): Promise<void> {
       backoff = Math.min(backoff * 2, MAX_BACKOFF);
     }
   }
+
+  logger.info("Indexer loop exited cleanly");
+  if (_stopResolve) _stopResolve();
 }
 
 function sleep(ms: number): Promise<void> {
@@ -216,54 +313,24 @@ export async function saveLastIndexedLedger(ledger: number): Promise<void> {
 export async function processLedger(data: LedgerData): Promise<void> {
   await db.$transaction(async (tx) => {
     for (const event of data.events) {
-      const canonicalType = normaliseEventType(event.type);
+      const existing = await tx.eventLog.findUnique({ where: { txHash: event.txHash } });
+      if (existing?.processedAt) continue;
 
-      // Persist raw event first (idempotent upsert on txHash + type)
-      const existing = await tx.eventLog.findFirst({
-        where: { txHash: event.txHash, eventType: event.type },
+      await tx.eventLog.upsert({
+        where: { txHash: event.txHash },
+        update: { processedAt: new Date() },
+        create: {
+          txHash: event.txHash,
+          type: event.type,
+          contractId: event.contractId,
+          ledger: event.ledger,
+          ledgerClosedAt: new Date(event.ledgerClosedAt),
+          body: event.body as object,
+          processedAt: new Date(),
+        },
       });
 
-      if (existing?.processedAt) {
-        logger.debug(
-          { txHash: event.txHash, eventType: event.type, ledger: event.ledger },
-          "Skipping already-processed event",
-        );
-        continue;
-      }
-
-      const eventLog = existing
-        ? existing
-        : await tx.eventLog.create({
-            data: {
-              txHash: event.txHash,
-              eventType: event.type,
-              ledger: event.ledger,
-              payload: event.body as object,
-            },
-          });
-
-      if (!canonicalType) {
-        logger.warn(
-          { txHash: event.txHash, eventType: event.type, ledger: event.ledger },
-          "Unknown event type — stored but not processed",
-        );
-        continue;
-      }
-
-      try {
-        await handleEvent(canonicalType, event, tx);
-
-        await tx.eventLog.update({
-          where: { id: eventLog.id },
-          data: { processedAt: new Date() },
-        });
-      } catch (err) {
-        logger.error(
-          { err, txHash: event.txHash, eventType: event.type, ledger: event.ledger },
-          "Failed to process event",
-        );
-        throw err;
-      }
+      await handleEvent(event, tx);
     }
 
     await tx.indexerState.upsert({
@@ -275,123 +342,45 @@ export async function processLedger(data: LedgerData): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// handleEvent: routes canonical event types to their handlers
+// handleEvent: routes a single event to its handler
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function handleEvent(
-  canonicalType: string,
-  event: SorobanEvent,
-  tx: PrismaClient,
-): Promise<void> {
-  const body = event.body as Record<string, any>;
-  const marketId = body.marketId ?? body.market_id;
-
-  switch (canonicalType) {
-    case "MarketCreated": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling MarketCreated",
-      );
-      await marketService.createMarket(body, tx);
-      break;
-    }
-
-    case "BetPlaced": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling BetPlaced",
-      );
-      await betService.recordBet(body, tx);
-      break;
-    }
-
-    case "MarketResolved": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling MarketResolved",
-      );
-      await marketService.resolveMarket(body, tx);
-      break;
-    }
-
-    case "MarketCancelled": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling MarketCancelled",
-      );
-      await marketService.cancelMarket(body, tx);
-      break;
-    }
-
-    case "WinningsClaimed": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling WinningsClaimed",
-      );
-      await markBetClaimed(body, tx);
-      break;
-    }
-
-    case "RefundClaimed": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling RefundClaimed",
-      );
-      await betService.markBetRefunded(body, tx);
-      break;
-    }
-
-    case "MarketLocked": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling MarketLocked",
-      );
-      await marketService.lockMarket(body, tx);
-      break;
-    }
-
-    case "DisputeRaised": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling DisputeRaised",
-      );
-      await marketService.raiseDispute(body, tx);
-      break;
-    }
-
-    case "DisputeResolved": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger },
-        "Handling DisputeResolved",
-      );
-      await marketService.resolveDispute(body, tx);
-      break;
-    }
-
-    case "FeesWithdrawn":
-    case "EmrgDrain": {
-      logger.info(
-        { marketId, txHash: event.txHash, ledger: event.ledger, eventType: canonicalType },
-        "Event stored (no handler yet)",
-      );
-      break;
-    }
-
-    default: {
-      logger.warn(
-        { marketId, txHash: event.txHash, ledger: event.ledger, eventType: canonicalType },
-        "Unhandled canonical event type",
-      );
-      break;
-    }
+async function handleEvent(event: SorobanEvent, tx: PrismaClient): Promise<void> {
+  const canonicalType = normaliseEventType(event.type);
+  if (!canonicalType) {
+    logger.warn({ type: event.type }, "Unknown event type — stored but not handled");
+    return;
   }
 
-  // Publish to in-process event bus for downstream consumers (websockets, etc.)
-  publishMarketEvent(canonicalType, { ...body, txHash: event.txHash, ledger: event.ledger });
+  switch (canonicalType) {
+    case "MarketCreated":
+      await marketService.handleMarketCreated(event.body, tx);
+      break;
+    case "BetPlaced":
+      await betService.handleBetPlaced(event.body, tx);
+      break;
+    case "MarketResolved":
+    case "MarketCancelled":
+    case "MarketLocked":
+      await marketService.handleMarketStatusChange(canonicalType, event.body, tx);
+      break;
+    case "WinningsClaimed":
+      await markBetClaimed(event.body, tx);
+      break;
+    case "RefundClaimed":
+      await betService.handleRefundClaimed(event.body, tx);
+      break;
+    case "DisputeRaised":
+    case "DisputeResolved":
+      await marketService.handleDisputeEvent(canonicalType, event.body, tx);
+      break;
+    case "FeesWithdrawn":
+    case "EmrgDrain":
+      logger.info({ canonicalType, txHash: event.txHash }, "Admin event observed");
+      break;
+    default:
+      logger.warn({ canonicalType }, "Unhandled canonical event type");
+  }
+
+  publishMarketEvent(canonicalType, event.body);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Prisma client (singleton)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const db = new PrismaClient();
