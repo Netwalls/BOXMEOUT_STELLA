@@ -8,12 +8,46 @@ const loadSdk = (): Promise<typeof import("@stellar/stellar-sdk")> => import("@s
 
 /**
  * The Stellar network this app is configured to operate against.
+ * Single source of truth for the configured network name. Normalized to
+ * lowercase so case-sensitive comparisons (e.g. against Freighter's network
+ * string) don't trigger a false mismatch banner.
+ */
+export const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet").toLowerCase();
+
+/**
+ * Canonical network passphrases keyed by normalized network name.
+ * Used to derive the passphrase from the network name when an explicit
+ * NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE is not provided.
+ */
+const NETWORK_PASSPHRASES: Record<string, string> = {
+  testnet: "Test SDF Network ; September 2015",
+  mainnet: "Public Global Stellar Network ; September 2015",
+  futurenet: "Test SDF Future Network ; October 2022",
+};
+
+/**
+ * The Stellar network passphrase this app is configured to operate against.
  * Wallet network mismatches are detected by comparing against this passphrase.
+ * Falls back to the passphrase derived from NETWORK when not explicitly set.
  */
 export const NETWORK_PASSPHRASE =
-  process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015";
+  process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ??
+  NETWORK_PASSPHRASES[NETWORK] ??
+  NETWORK_PASSPHRASES.testnet;
 
-export const NETWORK_NAME = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "TESTNET";
+export const NETWORK_NAME = NETWORK;
+
+/**
+ * Compares two network names case-insensitively.
+ * Returns true when both refer to the same network regardless of casing.
+ */
+export function isSameNetwork(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) {
+    return false;
+  }
+
+  return a.toLowerCase() === b.toLowerCase();
+}
 
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
