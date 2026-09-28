@@ -111,3 +111,8 @@ All functions are stubbed with `todo!()` (Rust) or `throw new Error("Not impleme
 ## License
 
 MIT
+
+## Handsoff notes
+
+<!-- handsoff-issue-1262 -->
+- #1262: F-44: Stop tracking frontend/.next build output
