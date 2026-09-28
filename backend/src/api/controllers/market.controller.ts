@@ -21,11 +21,7 @@ const marketBetsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
-const oddsHistoryQuerySchema = z.object({
-  interval: z.enum(["5m", "1h"]).optional(),
-});
-
-const createMarketSchema = z.object({
+export const createMarketSchema = z.object({
   id: z.string().min(1),
   contractAddress: z.string().min(1),
   fighterA: z.record(z.unknown()),
@@ -141,21 +137,13 @@ export async function getMarketOddsHistoryHandler(
 
 /**
  * POST /api/markets
- * Creates a new market record. Body validated via zod.
+ * Creates a new market record.
+ * Auth: walletAuthMiddleware (challenge/response, caller proves wallet ownership).
+ * Body: validated by validate(createMarketSchema) middleware before this handler runs.
  */
 export async function createMarketHandler(req: Request, res: Response): Promise<void> {
-  const parsed = createMarketSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: "Validation failed",
-      code: "VALIDATION_ERROR",
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
-
   try {
-    const data = parsed.data;
+    const data = req.body as z.infer<typeof createMarketSchema>;
     const market = await marketService.createMarketRecord({
       id: data.id,
       contractAddress: data.contractAddress,

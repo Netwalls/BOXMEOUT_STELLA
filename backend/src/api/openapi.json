@@ -10,6 +10,8 @@
   ],
   "tags": [
     { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Users" },
     { "name": "Markets" },
     { "name": "Bets" },
     { "name": "Oracle" },
@@ -21,20 +23,23 @@
   ],
   "components": {
     "securitySchemes": {
-      "AdminBearer": {
-        "type": "http",
-        "scheme": "bearer",
-        "description": "ADMIN_API_KEY — required for /api/admin/* routes"
+      "AdminKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Admin-Key",
+        "description": "ADMIN_API_KEY — required for /api/admin/* routes and GET /api/oracle/results"
       },
-      "OracleBearer": {
-        "type": "http",
-        "scheme": "bearer",
+      "OracleKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Oracle-Key",
         "description": "ORACLE_API_KEY — required for POST /api/oracle/submit"
       },
-      "UserBearer": {
-        "type": "http",
-        "scheme": "bearer",
-        "description": "JWT — required for authenticated /api/users/* routes"
+      "WalletSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-wallet-signature",
+        "description": "Base64 Ed25519 signature over a server-issued challenge. Also requires x-wallet-address header. Obtain a challenge via GET /api/auth/challenge."
       }
     },
     "schemas": {
@@ -154,43 +159,10 @@
       "User": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
           "address": { "type": "string", "example": "GABC..." },
-          "username": { "type": "string", "nullable": true },
+          "displayName": { "type": "string", "nullable": true, "example": "Satoshi" },
+          "avatarUrl": { "type": "string", "nullable": true, "example": "https://..." },
           "createdAt": { "type": "string", "format": "date-time" }
-        }
-      },
-      "AuthChallenge": {
-        "type": "object",
-        "properties": {
-          "challenge": { "type": "string" },
-          "expiresAt": { "type": "string", "format": "date-time" }
-        }
-      },
-      "AuthToken": {
-        "type": "object",
-        "properties": {
-          "token": { "type": "string" },
-          "user": { "$ref": "#/components/schemas/User" }
-        }
-      },
-      "SearchResults": {
-        "type": "object",
-        "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Market" } },
-          "total": { "type": "integer" },
-          "page": { "type": "integer" },
-          "limit": { "type": "integer" }
-        }
-      },
-      "PlatformStats": {
-        "type": "object",
-        "properties": {
-          "totalMarkets": { "type": "integer", "example": 128 },
-          "openMarkets": { "type": "integer", "example": 12 },
-          "totalVolume": { "type": "string", "example": "98000000000" },
-          "totalBets": { "type": "integer", "example": 5400 },
-          "uniqueUsers": { "type": "integer", "example": 2100 }
         }
       }
     }
@@ -257,6 +229,184 @@
               }
             }
           }
+        }
+      },
+      "post": {
+        "tags": ["Markets"],
+        "summary": "Create a market",
+        "description": "Creates a new boxing market record. Caller must prove wallet ownership via the challenge/response flow (see GET /api/auth/challenge).",
+        "security": [{ "WalletSignature": [] }],
+        "parameters": [
+          { "in": "header", "name": "x-wallet-address", "required": true, "schema": { "type": "string" }, "description": "Caller's Stellar public key" },
+          { "in": "header", "name": "x-wallet-signature", "required": true, "schema": { "type": "string" }, "description": "Base64 signature over the server-issued challenge" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id", "contractAddress", "fighterA", "fighterB", "scheduledAt", "bettingEndsAt", "createdBy", "oracleAddress"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "contractAddress": { "type": "string" },
+                  "fighterA": { "type": "object" },
+                  "fighterB": { "type": "object" },
+                  "scheduledAt": { "type": "string", "format": "date-time" },
+                  "bettingEndsAt": { "type": "string", "format": "date-time" },
+                  "createdBy": { "type": "string" },
+                  "oracleAddress": { "type": "string" },
+                  "txHash": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Market created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "data": { "$ref": "#/components/schemas/Market" } }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          },
+          "401": {
+            "description": "Wallet signature required or challenge expired",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/challenge": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Obtain a wallet-auth challenge",
+        "description": "Issues a short-lived challenge string the caller must sign with their Stellar keypair. Challenges are stored in Redis and expire after 5 minutes (one-time use).",
+        "parameters": [
+          { "name": "address", "in": "query", "required": true, "schema": { "type": "string" }, "description": "Stellar public key (G...)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Challenge issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challenge": { "type": "string", "example": "BOXMEOUT-AUTH:GABC...:abc123nonce" },
+                    "expiresAt": { "type": "integer", "description": "Unix ms timestamp" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Stellar address",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/api/users/{address}": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get user profile",
+        "parameters": [
+          { "name": "address", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Stellar public key" }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "user": { "$ref": "#/components/schemas/User" } }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update user profile",
+        "description": "Update display name or avatar URL. Requires wallet-signature auth matching :address.",
+        "security": [{ "WalletSignature": [] }],
+        "parameters": [
+          { "name": "address", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "in": "header", "name": "x-wallet-signature", "required": true, "schema": { "type": "string" } },
+          { "in": "header", "name": "x-wallet-message", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": { "type": "string" },
+                  "avatarUrl": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "user": { "$ref": "#/components/schemas/User" } }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid wallet auth",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/api/users/{address}/bets": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get bets by user address",
+        "parameters": [
+          { "name": "address", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated bet history", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Bet" } } } } }
+        }
+      }
+    },
+    "/api/users/{address}/positions": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get open positions by user address",
+        "parameters": [
+          { "name": "address", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated open positions", "content": { "application/json": { "schema": { "type": "array", "items": { "type": "object" } } } } }
         }
       }
     },
@@ -353,8 +503,9 @@
     },
     "/api/auth/verify": {
       "post": {
-        "tags": ["Auth"],
-        "summary": "Verify a signed challenge and issue a JWT",
+        "tags": ["Oracle"],
+        "summary": "Submit a fight result",
+        "security": [{ "OracleKey": [] }],
         "requestBody": {
           "required": true,
           "content": {
@@ -370,6 +521,23 @@
             }
           }
         },
+        "responses": {
+          "201": {
+            "description": "Oracle result created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OracleResult" } } }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/api/oracle/results": {
+      "get": {
+        "tags": ["Oracle"],
+        "summary": "List all oracle submissions (admin)",
+        "security": [{ "AdminKey": [] }],
         "responses": {
           "200": {
             "description": "Authenticated",
@@ -388,9 +556,9 @@
     },
     "/api/users/me": {
       "get": {
-        "tags": ["Users"],
-        "summary": "Get the authenticated user",
-        "security": [{ "UserBearer": [] }],
+        "tags": ["Admin"],
+        "summary": "List markets pending resolution",
+        "security": [{ "AdminKey": [] }],
         "responses": {
           "200": {
             "description": "Current user",
@@ -407,13 +575,25 @@
         }
       }
     },
-    "/api/users/{address}": {
-      "get": {
-        "tags": ["Users"],
-        "summary": "Get a public user profile",
-        "parameters": [
-          { "name": "address", "in": "path", "required": true, "schema": { "type": "string" } }
-        ],
+    "/api/admin/markets/resolve": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Confirm oracle result and trigger on-chain resolution",
+        "security": [{ "AdminKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["oracle_result_id"],
+                "properties": {
+                  "oracle_result_id": { "type": "integer", "example": 42 }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "User profile",
@@ -430,15 +610,26 @@
         }
       }
     },
-    "/api/oracle/results": {
-      "get": {
-        "tags": ["Oracle"],
-        "summary": "List reported oracle results",
-        "parameters": [
-          { "name": "marketId", "in": "query", "schema": { "type": "string" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
-        ],
+    "/api/admin/markets/dispute/resolve": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Resolve a disputed market with admin override",
+        "security": [{ "AdminKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["dispute_id", "override_outcome"],
+                "properties": {
+                  "dispute_id": { "type": "string", "format": "uuid" },
+                  "override_outcome": { "type": "string", "enum": ["FighterA", "FighterB", "Draw", "NoContest"] }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Oracle results",
@@ -454,11 +645,30 @@
         }
       }
     },
-    "/api/oracle/submit": {
+    "/api/admin/oracles": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "List all registered oracles",
+        "security": [{ "AdminKey": [] }],
+        "responses": {
+          "200": {
+            "description": "Oracle list",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Oracle" } }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      },
       "post": {
-        "tags": ["Oracle"],
-        "summary": "Submit a market result",
-        "security": [{ "OracleBearer": [] }],
+        "tags": ["Admin"],
+        "summary": "Register a new oracle",
+        "security": [{ "AdminKey": [] }],
         "requestBody": {
           "required": true,
           "content": {
@@ -477,12 +687,67 @@
         },
         "responses": {
           "201": {
-            "description": "Result recorded",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/OracleResult" }
+            "description": "Oracle created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Oracle" } } }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/api/admin/oracles/{id}": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Update oracle name or active status",
+        "security": [{ "AdminKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "active": { "type": "boolean" }
+                }
               }
             }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Oracle updated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Oracle" } } }
+          },
+          "400": {
+            "description": "No fields provided",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Admin"],
+        "summary": "Deactivate (soft-delete) an oracle",
+        "security": [{ "AdminKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Oracle deactivated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Oracle" } } }
           },
           "401": {
             "description": "Unauthorized",
@@ -494,8 +759,8 @@
     "/api/admin/audit-logs": {
       "get": {
         "tags": ["Admin"],
-        "summary": "List audit logs",
-        "security": [{ "AdminBearer": [] }],
+        "summary": "Get audit logs",
+        "security": [{ "AdminKey": [] }],
         "parameters": [
           { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
           { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }

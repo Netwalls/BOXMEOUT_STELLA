@@ -2,14 +2,15 @@ import { Router, type Request, type Response } from "express";
 import {
   searchMarketsHandler,
   getMarketsHandler,
-  getMarketsByCreatorHandler,
   getMarketByIdHandler,
   getMarketStatsHandler,
   getMarketBetsHandler,
   getMarketOddsHistoryHandler,
   createMarketHandler,
+  createMarketSchema,
 } from "../controllers/market.controller";
-import { marketEvents } from "../../events/marketEvents";
+import { walletAuthMiddleware } from "../middleware/walletAuth.middleware";
+import { validate } from "../middleware/validate";
 
 const router = Router();
 
@@ -19,9 +20,17 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 router.get("/search", searchMarketsHandler);
 
 // GET  /api/markets
-// POST /api/markets
 router.get("/", getMarketsHandler);
-router.post("/", createMarketHandler);
+
+// POST /api/markets
+// Creator must prove wallet ownership via challenge/response (#1225 B-47).
+// Body is validated with zod before the handler runs.
+router.post(
+  "/",
+  walletAuthMiddleware(),
+  validate({ body: createMarketSchema }),
+  createMarketHandler,
+);
 
 // GET /api/markets/:id/stream — Server-Sent Events for live pool/status updates
 router.get("/:id/stream", (req: Request, res: Response) => {

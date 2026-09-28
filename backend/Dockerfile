@@ -14,8 +14,9 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-# ── Stage 3: runtime ─────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+# ── Stage 3: runtime base ────────────────────────────────────────────────────
+# Shared layer used by both the API and the indexer targets below.
+FROM node:20-alpine AS runtime-base
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -36,9 +37,15 @@ RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 apiuser
 USER apiuser
 
+# ── Stage 4: API server ──────────────────────────────────────────────────────
+FROM runtime-base AS api
 EXPOSE 3001
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:3001/health || exit 1
-
 CMD ["node", "dist/index.js"]
+
+# ── Stage 5: indexer ─────────────────────────────────────────────────────────
+# B-54: Separate target so the indexer can be deployed independently.
+# Uses the same compiled image — no extra build cost.
+FROM runtime-base AS indexer
+CMD ["node", "dist/indexer/index.js"]
