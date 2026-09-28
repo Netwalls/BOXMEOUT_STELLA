@@ -71,6 +71,9 @@ export function createApp(): express.Application {
   // #1221: Mount oracle routes (X-Oracle-Key auth on submit, X-Admin-Key on results).
   app.use("/api/oracle", oracleRoutes);
 
+  // #1249: Mount leaderboard routes (rank bettors by realised profit / win rate).
+  app.use("/api/leaderboard", leaderboardRoutes);
+
   // B-37: Swagger UI — dev mode only (Issue #1095)
   if (process.env.NODE_ENV !== "production") {
     app.use("/docs", docsRoutes);

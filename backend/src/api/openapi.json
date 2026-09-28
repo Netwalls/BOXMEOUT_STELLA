@@ -15,7 +15,11 @@
     { "name": "Markets" },
     { "name": "Bets" },
     { "name": "Oracle" },
-    { "name": "Admin" }
+    { "name": "Admin" },
+    { "name": "Auth" },
+    { "name": "Users" },
+    { "name": "Search" },
+    { "name": "Stats" }
   ],
   "components": {
     "securitySchemes": {
@@ -408,181 +412,85 @@
     },
     "/api/markets/search": {
       "get": {
-        "tags": ["Markets"],
+        "tags": ["Markets", "Search"],
         "summary": "Full-text market search",
         "parameters": [
           { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
           { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching markets",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SearchResults" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "tags": ["Search"],
+        "summary": "Search markets and users",
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["markets", "users", "all"], "default": "all" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
         ],
         "responses": {
           "200": {
             "description": "Search results",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PaginatedMarkets" }
-              }
-            }
-          },
-          "400": {
-            "description": "q parameter missing",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
-          }
-        }
-      }
-    },
-    "/api/markets/{id}": {
-      "get": {
-        "tags": ["Markets"],
-        "summary": "Get market by ID",
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "Market detail",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": { "data": { "$ref": "#/components/schemas/Market" } }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
-          }
-        }
-      }
-    },
-    "/api/markets/{id}/stats": {
-      "get": {
-        "tags": ["Markets"],
-        "summary": "Get market stats",
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "Aggregate stats",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": { "data": { "$ref": "#/components/schemas/MarketStats" } }
-                }
+                "schema": { "$ref": "#/components/schemas/SearchResults" }
               }
             }
           }
         }
       }
     },
-    "/api/markets/{id}/bets": {
+    "/api/stats": {
       "get": {
-        "tags": ["Markets"],
-        "summary": "Get bets for a market",
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
-        ],
+        "tags": ["Stats"],
+        "summary": "Platform-wide statistics",
         "responses": {
           "200": {
-            "description": "List of bets",
+            "description": "Aggregate platform stats",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Bet" } },
-                    "page": { "type": "integer" },
-                    "limit": { "type": "integer" }
-                  }
-                }
+                "schema": { "$ref": "#/components/schemas/PlatformStats" }
               }
             }
           }
         }
       }
     },
-    "/api/bets/payout-estimate": {
-      "get": {
-        "tags": ["Bets"],
-        "summary": "Estimate payout",
-        "description": "Returns a hypothetical payout. Does not place a real bet. Rate-limited to 30 req/min.",
-        "parameters": [
-          { "name": "market_id", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "side", "in": "query", "required": true, "schema": { "type": "string", "enum": ["FighterA", "FighterB"] } },
-          { "name": "amount", "in": "query", "required": true, "schema": { "type": "string", "description": "Stake in stroops" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "Estimated payout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": { "estimatedPayout": { "type": "string", "example": "18600000" } }
-                    }
-                  }
-                }
+    "/api/auth/challenge": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Request a sign-in challenge",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["address"],
+                "properties": { "address": { "type": "string", "example": "GABC..." } }
               }
             }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
-          },
-          "429": {
-            "description": "Rate limited",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
           }
-        }
-      }
-    },
-    "/api/bets/{address}": {
-      "get": {
-        "tags": ["Bets"],
-        "summary": "Get bets by wallet address",
-        "parameters": [
-          { "name": "address", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Stellar public key (G...)" },
-          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "won", "lost", "claimed"] } },
-          { "name": "marketId", "in": "query", "schema": { "type": "string" } }
-        ],
+        },
         "responses": {
           "200": {
-            "description": "Bets for address",
+            "description": "Challenge issued",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Bet" } }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid Stellar address",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
-          }
-        }
-      }
-    },
-    "/api/bets/{address}/portfolio": {
-      "get": {
-        "tags": ["Bets"],
-        "summary": "Get portfolio summary for a wallet",
-        "parameters": [
-          { "name": "address", "in": "path", "required": true, "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "Portfolio summary (zero-value for unknown addresses)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Portfolio" }
+                "schema": { "$ref": "#/components/schemas/AuthChallenge" }
               }
             }
           },
@@ -593,7 +501,7 @@
         }
       }
     },
-    "/api/oracle/submit": {
+    "/api/auth/verify": {
       "post": {
         "tags": ["Oracle"],
         "summary": "Submit a fight result",
@@ -604,11 +512,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["market_id", "outcome", "source"],
+                "required": ["address", "signature"],
                 "properties": {
-                  "market_id": { "type": "string" },
-                  "outcome": { "type": "string", "enum": ["FighterA", "FighterB", "Draw", "NoContest"] },
-                  "source": { "type": "string", "example": "BoxRec" }
+                  "address": { "type": "string", "example": "GABC..." },
+                  "signature": { "type": "string" }
                 }
               }
             }
@@ -633,36 +540,31 @@
         "security": [{ "AdminKey": [] }],
         "responses": {
           "200": {
-            "description": "List of oracle results",
+            "description": "Authenticated",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/OracleResult" } }
+                "schema": { "$ref": "#/components/schemas/AuthToken" }
               }
             }
           },
           "401": {
-            "description": "Unauthorized",
+            "description": "Invalid signature",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
           }
         }
       }
     },
-    "/api/admin/markets/pending": {
+    "/api/users/me": {
       "get": {
         "tags": ["Admin"],
         "summary": "List markets pending resolution",
         "security": [{ "AdminKey": [] }],
         "responses": {
           "200": {
-            "description": "Locked markets without confirmed oracle results",
+            "description": "Current user",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Market" } }
-                  }
-                }
+                "schema": { "$ref": "#/components/schemas/User" }
               }
             }
           },
@@ -694,22 +596,15 @@
         },
         "responses": {
           "200": {
-            "description": "Resolution triggered",
+            "description": "User profile",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": { "status": { "type": "string", "example": "ok" } }
-                }
+                "schema": { "$ref": "#/components/schemas/User" }
               }
             }
           },
-          "400": {
-            "description": "Validation error",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
-          },
-          "401": {
-            "description": "Unauthorized",
+          "404": {
+            "description": "User not found",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
           }
         }
@@ -737,19 +632,15 @@
         },
         "responses": {
           "200": {
-            "description": "Dispute resolved",
+            "description": "Oracle results",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": { "status": { "type": "string", "example": "ok" } }
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/OracleResult" }
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
           }
         }
       }
@@ -784,10 +675,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["address", "name"],
+                "required": ["marketId", "outcome"],
                 "properties": {
-                  "address": { "type": "string", "example": "GABC..." },
-                  "name": { "type": "string", "example": "BoxRec Bot" }
+                  "marketId": { "type": "string" },
+                  "outcome": { "type": "string", "enum": ["FighterA", "FighterB", "Draw", "NoContest"] },
+                  "source": { "type": "string", "example": "BoxRec" }
                 }
               }
             }
@@ -871,32 +763,19 @@
         "security": [{ "AdminKey": [] }],
         "parameters": [
           { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } },
-          { "name": "userId", "in": "query", "schema": { "type": "string" } },
-          { "name": "actionType", "in": "query", "schema": { "type": "string" } },
-          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
         ],
         "responses": {
           "200": {
-            "description": "Paginated audit logs",
+            "description": "Audit log entries",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/AuditLog" } },
-                    "page": { "type": "integer" },
-                    "limit": { "type": "integer" },
-                    "total": { "type": "integer" }
-                  }
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/AuditLog" }
                 }
               }
             }
-          },
-          "400": {
-            "description": "Invalid date format",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
           },
           "401": {
             "description": "Unauthorized",
