@@ -18,6 +18,9 @@ import docsRoutes from "./api/routes/docs.routes";
 export function createApp(): express.Application {
   const app = express();
 
+  // B-58: trust proxy so req.ip reflects the real client behind a load balancer
+  app.set("trust proxy", config.trustProxy);
+
   app.set("json replacer", (_key: string, value: unknown) =>
     typeof value === "bigint" ? value.toString() : value
   );
@@ -34,7 +37,8 @@ export function createApp(): express.Application {
   // B-59: attach / echo X-Request-Id before any logging or routing
   app.use(requestIdMiddleware);
 
-  app.use(express.json());
+  // B-57: cap JSON body size to mitigate oversized-payload abuse
+  app.use(express.json({ limit: "100kb" }));
   app.use(httpLogger);
 
   // B-61: Prometheus HTTP histogram — record every request after it completes

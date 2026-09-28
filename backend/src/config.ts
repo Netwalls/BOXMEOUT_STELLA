@@ -1,5 +1,27 @@
 import { z } from "zod";
 
+/**
+ * Parse the TRUST_PROXY env var into a value suitable for Express's
+ * `trust proxy` setting. Accepts:
+ *   - "true" / "false"  -> boolean
+ *   - a non-negative integer (e.g. "1") -> hop count
+ *   - any other string (e.g. "loopback", "10.0.0.0/8") -> passed through
+ */
+const trustProxySchema = z
+  .string()
+  .default("false")
+  .transform((value): boolean | number | string => {
+    const trimmed = value.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (lower === "true") return true;
+    if (lower === "false") return false;
+
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+
+    return trimmed;
+  });
+
 const configSchema = z.object({
   /** TCP port the Express server listens on */
   PORT: z.coerce.number().int().positive().default(3001),
@@ -8,6 +30,15 @@ const configSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
+
+  /**
+   * Express `trust proxy` setting. Controls how `req.ip` is derived when the
+   * app runs behind a load balancer / reverse proxy, so rate limiting buckets
+   * per real client IP instead of the proxy IP.
+   *
+   * Accepts: "true" | "false" | hop count (e.g. "1") | subnet/name (e.g. "loopback").
+   */
+  TRUST_PROXY: trustProxySchema,
 
   /** PostgreSQL connection string */
   DATABASE_URL: z
