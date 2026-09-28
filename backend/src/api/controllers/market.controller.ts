@@ -21,7 +21,7 @@ const marketBetsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
-const createMarketSchema = z.object({
+export const createMarketSchema = z.object({
   id: z.string().min(1),
   contractAddress: z.string().min(1),
   fighterA: z.record(z.unknown()),
@@ -100,11 +100,16 @@ export async function getMarketByIdHandler(req: Request, res: Response): Promise
 }
 
 /**
- * POST /api/markets
- * Creates a new market record. Body validated via zod.
+ * GET /api/markets/:id/odds-history
+ * Optional query param: interval=5m|1h
+ * Returns an array of OddsSnapshot { timestamp, poolA, poolB, oddsA, oddsB }
+ * derived from bets. When interval is omitted, raw per-bet snapshots are returned.
  */
-export async function createMarketHandler(req: Request, res: Response): Promise<void> {
-  const parsed = createMarketSchema.safeParse(req.body);
+export async function getMarketOddsHistoryHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const parsed = oddsHistoryQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
       error: "Validation failed",
@@ -115,7 +120,30 @@ export async function createMarketHandler(req: Request, res: Response): Promise<
   }
 
   try {
-    const data = parsed.data;
+    const snapshots = await marketService.getMarketOddsHistory(
+      req.params.id,
+      parsed.data.interval
+    );
+    res.json({ data: snapshots });
+  } catch (err: any) {
+    if (err?.code === "NOT_FOUND") {
+      res.status(404).json({ error: "Market not found" });
+      return;
+    }
+    logger.error({ err }, "getMarketOddsHistoryHandler failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * POST /api/markets
+ * Creates a new market record.
+ * Auth: walletAuthMiddleware (challenge/response, caller proves wallet ownership).
+ * Body: validated by validate(createMarketSchema) middleware before this handler runs.
+ */
+export async function createMarketHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const data = req.body as z.infer<typeof createMarketSchema>;
     const market = await marketService.createMarketRecord({
       id: data.id,
       contractAddress: data.contractAddress,
@@ -263,5 +291,3 @@ export async function resolveDisputeHandler(
  * POST /api/admin/markets/:marketId/resolve
  * Body: { outcome, source }
  * Admin-protected. Resolves a market by ID and writes an 
-
-/* … truncated 3066 chars — edit only what you need near the top … */

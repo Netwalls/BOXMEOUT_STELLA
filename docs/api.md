@@ -1,16 +1,97 @@
-# Backend API Reference
+# API Documentation
 
-Base URL (local): `http://localhost:3001`
+This document describes the HTTP API exposed by the backend. The canonical machine-readable
+specification lives in [`backend/src/api/openapi.json`](../backend/src/api/openapi.json) and is
+served at `GET /api/docs` (Swagger UI) and `GET /api/openapi.json`.
 
-All responses are JSON. All amounts are serialized as strings to preserve BigInt precision.
+All routes are mounted under the `/api` prefix. Every mounted Express route is documented in the
+OpenAPI spec, and a test (`backend/src/api/__tests__/openapi.test.ts`) fails if a mounted route is
+missing from the spec.
 
 ---
 
 ## Authentication
 
+### Schemes
+
+| Scheme | Header | Used for |
+|---|---|---|
+| **Admin key** | `X-Admin-Key: <ADMIN_API_KEY>` | `/api/admin/*` routes and `GET /api/oracle/results` |
+| **Oracle key** | `X-Oracle-Key: <ORACLE_API_KEY>` | `POST /api/oracle/submit` |
+| **Wallet signature** | `x-wallet-address` + `x-wallet-signature` | End-user routes requiring wallet ownership (e.g. `PUT /api/users/:address`, `POST /api/markets`) |
+
 Public endpoints require no authentication.
-Admin endpoints require the `Authorization: Bearer <ADMIN_API_KEY>` header.
-Oracle submit endpoint requires `Authorization: Bearer <ORACLE_API_KEY>`.
+
+### Wallet challenge/response flow
+
+Routes protected by wallet auth require the caller to prove they control a Stellar keypair:
+
+1. `GET /api/auth/challenge?address=G...` — obtain a one-time challenge string
+2. Sign the challenge with your Stellar secret key (Ed25519)
+3. Send the protected request with:
+   - `x-wallet-address: G...`
+   - `x-wallet-signature: <base64 encoded signature>`
+
+Challenges expire after 5 minutes and are one-time use.
+
+### Header consistency
+
+The environment variable names and header names are consistent across code and configuration:
+
+| Variable | Header | Description |
+|---|---|---|
+| `ADMIN_API_KEY` | `X-Admin-Key` | Admin routes |
+| `ORACLE_API_KEY` | `X-Oracle-Key` | Oracle submit |
+
+---
+
+## Users
+
+### `GET /api/users/:address`
+
+Returns user profile data for the given wallet address.
+
+**Response `200`**
+```json
+{ "user": { "address": "GABC...", "displayName": "Satoshi", "avatarUrl": null } }
+```
+
+**Response `404`** — `{ "error": "User not found", "code": "NOT_FOUND" }`
+
+---
+
+### `PUT /api/users/:address`
+
+Update profile fields. Requires wallet-signature auth matching `:address`.
+
+**Headers required:** `x-wallet-address`, `x-wallet-message`, `x-wallet-signature`
+
+**Body**
+```json
+{ "displayName": "New Name", "avatarUrl": "https://..." }
+```
+
+**Response `200`** — `{ "user": { ... } }`
+
+---
+
+### `GET /api/users/:address/bets`
+
+Paginated bet history for a wallet.
+
+**Query params:** `page`, `limit`
+
+**Response `200`** — array of Bet objects
+
+---
+
+### `GET /api/users/:address/positions`
+
+Paginated open positions for a wallet.
+
+**Query params:** `page`, `limit`
+
+**Response `200`** — array of position objects
 
 ---
 
@@ -51,6 +132,33 @@ Returns a paginated list of boxing markets.
 
 ---
 
+### `POST /api/markets`
+
+Creates a new market record. Requires wallet-signature auth (creator must prove wallet ownership via the challenge/response flow).
+
+**Headers required:** `x-wallet-address`, `x-wallet-signature` (obtained via `GET /api/auth/challenge`)
+
+**Body**
+```json
+{
+  "id": "abc123",
+  "contractAddress": "CABC...",
+  "fighterA": { "name": "Canelo Alvarez", "record": "60-2-2" },
+  "fighterB": { "name": "David Benavidez", "record": "29-0-0" },
+  "scheduledAt": "2027-01-01T20:00:00Z",
+  "bettingEndsAt": "2027-01-01T18:00:00Z",
+  "createdBy": "GABC...",
+  "oracleAddress": "GABC...",
+  "txHash": "optional-tx-hash"
+}
+```
+
+**Response `201`** — `{ "data": { ...market } }`
+**Response `400`** — `{ "error": "Validation failed", "code": "VALIDATION_ERROR", "details": {...} }`
+**Response `401`** — `{ "error": "Wallet signature required", "code": "WALLET_AUTH_REQUIRED" }`
+
+---
+
 ### `GET /api/markets/:id`
 
 Returns full detail for a single market.
@@ -83,199 +191,83 @@ Returns aggregate stats for a market.
 
 Returns all bets placed on a market.
 
-**Query params:** `page`, `limit`
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/health` | Liveness/readiness probe. Returns `{ status, uptime, timestamp }`. |
 
-**Response `200`**
-```json
-[
-  {
-    "id": "bet_xyz",
-    "marketId": "abc123",
-    "bettor": "GABC...",
-    "side": "FighterA",
-    "amount": "10000000",
-    "placedAt": "2026-09-10T14:00:00Z",
-    "claimed": false,
-    "payout": null
-  }
-]
-```
+## Auth
 
----
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| POST | `/api/auth/register` | Register a new user. Body: `{ email, password, username? }`. Returns the created user and a session token. |
+| POST | `/api/auth/login` | Authenticate an existing user. Body: `{ email, password }`. Returns a session token. |
+| POST | `/api/auth/logout` | Invalidate the current session. Requires authentication. |
+| GET | `/api/auth/me` | Return the currently authenticated user. Requires authentication. |
 
-### `GET /api/markets/:id/odds-history`
+## Users
 
-Returns historical odds snapshots for the market chart.
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/users/:id` | Fetch a user profile by id. |
+| PATCH | `/api/users/:id` | Update the authenticated user's profile. Requires authentication. |
+| GET | `/api/users/:id/bets` | List bets placed by a user. |
 
-**Response `200`**
-```json
-[
-  {
-    "timestamp": "2026-09-10T14:00:00Z",
-    "poolA": "100000000",
-    "poolB": "50000000",
-    "oddsA": 66.7,
-    "oddsB": 33.3
-  }
-]
-```
+## Markets
 
----
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/markets` | List markets. Supports `status`, `category`, `limit`, and `offset` query parameters. |
+| GET | `/api/markets/:id` | Fetch a single market by id. |
+| POST | `/api/markets` | Create a market. Requires authentication. |
+| GET | `/api/markets/:id/odds-history` | Return the historical odds series for a market. |
+| GET | `/api/markets/:id/stream` | Server-Sent Events stream of live market updates. |
 
 ## Bets
 
-### `GET /api/bets/:address`
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/bets` | List the authenticated user's bets. Requires authentication. |
+| POST | `/api/bets` | Place a bet. Body: `{ marketId, outcome, amount }`. Requires authentication. |
+| GET | `/api/bets/:id` | Fetch a single bet by id. Requires authentication. |
 
-Returns all bets for a Stellar wallet address.
+## Oracle
 
-**Query params**
-| Param | Type | Description |
-|---|---|---|
-| `status` | string | `pending`, `won`, `lost`, `claimed` |
-| `marketId` | string | Filter to a specific market |
-| `page`, `limit` | number | Pagination |
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/oracle/feeds` | List available oracle price feeds. |
+| GET | `/api/oracle/feeds/:symbol` | Fetch the latest value for a feed symbol. |
+| POST | `/api/oracle/resolve` | Resolve a market using an oracle value. Requires authentication. |
 
-**Response `200`** — array of Bet objects (same shape as above).
+## Search
 
----
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/search` | Full-text search across markets and users. Query: `q`, `type?`, `limit?`, `offset?`. |
 
-### `GET /api/bets/:address/portfolio`
+## Stats
 
-Returns portfolio summary for a wallet.
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/stats` | Aggregate platform statistics. |
+| GET | `/api/stats/leaderboard` | Top users by volume or profit. Query: `period?`, `limit?`. |
 
-**Response `200`**
-```json
-{
-  "totalStaked": "1500000000",
-  "totalWinnings": "2100000000",
-  "pendingClaims": "350000000",
-  "activeBets": 3,
-  "completedBets": 12,
-  "roi": 40.0
-}
-```
+## Admin
 
----
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/admin/users` | List all users. Requires admin authentication. |
+| PATCH | `/api/admin/users/:id` | Update a user's role or status. Requires admin authentication. |
+| POST | `/api/admin/markets/:id/resolve` | Force-resolve a market. Requires admin authentication. |
 
-### `GET /api/bets/payout-estimate`
+## Docs
 
-Returns estimated payout for a hypothetical bet. Does not place a real bet.
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/docs` | Swagger UI for the OpenAPI spec. |
+| GET | `/api/openapi.json` | Raw OpenAPI specification. |
 
-**Query params**
-| Param | Type | Required | Description |
-|---|---|---|---|
-| `market_id` | string | yes | Target market |
-| `side` | `FighterA` \| `FighterB` | yes | Side to bet on |
-| `amount` | string (stroops) | yes | Stake amount |
+## Keeping the spec in sync
 
-**Response `200`**
-```json
-{ "estimate": "18600000" }
-```
-
-**Response `400`** — `{ "error": "amount below minimum bet" }`
-
----
-
-## Oracle (authorized)
-
-### `POST /api/oracle/submit`
-
-Submit a fight result. Requires `Authorization: Bearer <ORACLE_API_KEY>`.
-
-**Body**
-```json
-{
-  "market_id": "abc123",
-  "outcome": "FighterA",
-  "source": "BoxRec"
-}
-```
-
-**Response `201`**
-```json
-{
-  "id": "uuid",
-  "marketId": "abc123",
-  "outcome": "FighterA",
-  "source": "BoxRec",
-  "reportedBy": "GABC...",
-  "reportedAt": "2026-09-16T01:00:00Z",
-  "confirmed": false
-}
-```
-
----
-
-### `GET /api/oracle/results` (admin)
-
-Lists all oracle submissions.
-
-**Response `200`** — array of OracleResult objects.
-
----
-
-## Admin (protected)
-
-### `POST /api/admin/markets/resolve`
-
-Confirms an oracle result and triggers on-chain resolution.
-
-**Body**
-```json
-{
-  "oracle_result_id": "uuid"
-}
-```
-
-**Response `200`** — `{ "status": "ok" }`
-
----
-
-### `POST /api/admin/markets/dispute/resolve`
-
-Resolves a disputed market with an admin override outcome.
-
-**Body**
-```json
-{
-  "dispute_id": "uuid",
-  "override_outcome": "FighterB"
-}
-```
-
-**Response `200`** — `{ "status": "ok" }`
-
----
-
-### `GET /api/admin/markets/pending`
-
-Returns all markets in `Locked` status without a confirmed oracle result.
-
-**Response `200`** — array of Market objects.
-
----
-
-## Health
-
-### `GET /health`
-
-**Response `200`**
-```json
-{ "status": "ok", "db": "connected" }
-```
-
----
-
-## Error Format
-
-All errors follow this shape:
-
-```json
-{
-  "error": "Human-readable message",
-  "code": "MACHINE_READABLE_CODE"
-}
-```
-
-Common codes: `NOT_FOUND`, `UNAUTHORIZED`, `VALIDATION_ERROR`, `RATE_LIMITED`, `INTERNAL_ERROR`
+When you mount a new Express route, add it to `backend/src/api/openapi.json` with its request and
+response schemas. The `openapi.test.ts` suite enumerates the mounted router stack and asserts that
+every route is present in the spec, so CI fails on drift.

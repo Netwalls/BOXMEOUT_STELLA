@@ -1,22 +1,21 @@
 import { Request, Response, NextFunction } from "express";
 import { Keypair } from "@stellar/stellar-sdk";
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  const key = req.headers["x-admin-api-key"];
-  if (!process.env.ADMIN_API_KEY || key !== process.env.ADMIN_API_KEY) {
-    res.status(403).json({ error: "Forbidden", code: "INVALID_ADMIN_KEY" });
-    return;
-  }
-  next();
-}
-
 /**
- * Middleware that verifies a Stellar wallet signature to prove ownership
- * of the address in req.params.address.
+ * End-user wallet authentication middleware.
  *
- * Expects headers:
- *   x-wallet-signature: base64-encoded signature
- *   x-wallet-message: the message that was signed (must contain a recent 13-digit epoch timestamp)
+ * Scheme: Stellar keypair signature over a timestamped message.
+ *
+ * The client must provide:
+ *   x-wallet-signature  — base64-encoded Ed25519 signature
+ *   x-wallet-message    — the exact string that was signed
+ *                         (must contain a 13-digit epoch ms timestamp for replay protection)
+ *
+ * The address being authenticated is taken from `req.params.address`.
+ *
+ * Used on routes where the caller must prove ownership of their own wallet
+ * (e.g. PUT /api/users/:address).  For admin/oracle routes that use a
+ * whitelisted address and a server-issued challenge, see walletAuth.middleware.ts.
  */
 export function requireWalletAuth(req: Request, res: Response, next: NextFunction): void {
   const address = req.params.address;

@@ -155,7 +155,36 @@ export interface LedgerData {
  * Reconnects with exponential backoff on RPC disconnect.
  * Long-lived process — run as a background worker.
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// B-55: Graceful-shutdown support
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Set to true by stopIndexer() to break the polling loop cleanly. */
+let _stopRequested = false;
+
+/** Promise that resolves once the indexer loop has fully exited. */
+let _stopResolve: (() => void) | null = null;
+let _stopPromise: Promise<void> | null = null;
+
+/**
+ * Signal the indexer loop to stop after the current poll completes.
+ * Returns a promise that resolves once the loop has fully exited.
+ */
+export function stopIndexer(): Promise<void> {
+  if (!_stopPromise) {
+    _stopPromise = new Promise<void>((resolve) => {
+      _stopResolve = resolve;
+    });
+    _stopRequested = true;
+    logger.info("Indexer stop requested");
+  }
+  return _stopPromise;
+}
+
 export async function startIndexer(): Promise<void> {
+  _stopRequested = false;
+  _stopPromise = null;
+
   const rpcUrl = process.env.STELLAR_RPC_URL!;
   const server = new SorobanRpc.Server(rpcUrl);
 
@@ -165,7 +194,7 @@ export async function startIndexer(): Promise<void> {
   let fromLedger = await getLastIndexedLedger();
   logger.info({ fromLedger }, "Indexer starting");
 
-  while (true) {
+  while (!_stopRequested) {
     try {
       logger.debug({ fromLedger }, "Polling for events");
 
@@ -227,6 +256,9 @@ export async function startIndexer(): Promise<void> {
       backoff = Math.min(backoff * 2, MAX_BACKOFF);
     }
   }
+
+  logger.info("Indexer loop exited cleanly");
+  if (_stopResolve) _stopResolve();
 }
 
 function sleep(ms: number): Promise<void> {

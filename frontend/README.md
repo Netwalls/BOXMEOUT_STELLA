@@ -6,7 +6,7 @@ Next.js 14 frontend for the BOXMEOUT boxing prediction market on Stellar.
 
 | Tool | Version | Notes |
 |---|---|---|
-| Node.js | 20+ | Use [nvm](https://github.com/nvm-sh/nvm) to manage versions |
+| Node.js | 20+ | Use [nvm](https://github.com/nvmhq/nvm) to manage versions |
 | npm | bundled with Node | |
 | [Freighter](https://www.freighter.app/) | latest | Browser extension wallet for Stellar |
 
@@ -29,11 +29,13 @@ npm install
 
 ### 3. Configure environment variables
 
+Copy the example environment file and fill in the values described in the [Environment Variables](#environment-variables) section below:
+
 ```bash
 cp .env.example .env.local
 ```
 
-Edit `.env.local` and fill in the values described in the [Environment Variables](#environment-variables) section below.
+See [`frontend/.env.example`](./.env.example) for the full list of variables with testnet defaults and comments.
 
 ### 4. Start the dev server
 
@@ -49,12 +51,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Environment Variables
 
-Create a `.env.local` file in this directory (never commit it — it is in `.gitignore`).
+Create a `.env.local` file in this directory (never commit it — it is in `.gitignore`). Start from [`frontend/.env.example`](./.env.example), which lists every variable with testnet defaults and comments.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
 | `NEXT_PUBLIC_API_URL` | Yes | Base URL of the backend REST API. No trailing slash. | `http://localhost:3001` |
 | `NEXT_PUBLIC_STELLAR_NETWORK` | Yes | Stellar network to connect to. `testnet` or `mainnet`. | `testnet` |
+| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | Yes | Network passphrase matching `NEXT_PUBLIC_STELLAR_NETWORK`. | `Test SDF Network ; September 2015` |
 | `NEXT_PUBLIC_SOROBAN_RPC_URL` | Yes | Soroban RPC endpoint for building and simulating transactions. | `https://soroban-testnet.stellar.org` |
 | `NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID` | Yes | Contract ID of the deployed `MarketFactory` contract. | `CDXXX...` |
 
@@ -63,6 +66,7 @@ Create a `.env.local` file in this directory (never commit it — it is in `.git
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3001
 NEXT_PUBLIC_STELLAR_NETWORK=testnet
+NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID=CDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```

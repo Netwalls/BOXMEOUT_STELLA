@@ -120,6 +120,16 @@ export interface LeaderboardEntry {
   betCount: number;
 }
 
+export interface OddsSnapshot {
+  timestamp: string;
+  poolA: string;
+  poolB: string;
+  oddsA: number;
+  oddsB: number;
+}
+
+export type OddsHistoryInterval = "5m" | "1h";
+
 export interface CreateMarketDTO {
   id: string;
   contractAddress: string;
@@ -134,6 +144,11 @@ export interface CreateMarketDTO {
 }
 
 const PROTOCOL_FEE_RATE = 0.02; // 2% protocol fee
+
+const INTERVAL_MS: Record<OddsHistoryInterval, number> = {
+  "5m": 5 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+};
 
 /**
  * Calculates the implied odds (payout multiplier) for each side.
@@ -211,6 +226,68 @@ export async function getAllMarkets(
  */
 export async function getMarketById(market_id: string): Promise<Market | null> {
   return db.market.findUnique({ where: { id: market_id } });
+}
+
+/**
+ * Derives odds snapshots for a market from its bets.
+ *
+ * Each bet contributes to a running pool; a snapshot is emitted after every
+ * bet so the frontend can chart how the implied odds evolved over time.
+ * When `interval` is provided, snapshots are bucketed into fixed windows
+ * (5m or 1h) and the last snapshot within each window is kept.
+ *
+ * Returns null when the market does not exist so the route can 404.
+ */
+export async function getOddsHistory(
+  marketId: string,
+  interval?: OddsHistoryInterval
+): Promise<OddsSnapshot[] | null> {
+  const market = await db.market.findUnique({ where: { id: marketId } });
+  if (!market) return null;
+
+  const bets = await db.bet.findMany({
+    where: { marketId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  let poolA = 0n;
+  let poolB = 0n;
+  const snapshots: OddsSnapshot[] = [];
+
+  for (const bet of bets) {
+    const amount = BigInt(bet.amount);
+    if (bet.outcome === "FighterA") {
+      poolA += amount;
+    } else if (bet.outcome === "FighterB") {
+      poolB += amount;
+    } else {
+      // Draw / NoContest bets do not contribute to either side's pool.
+      continue;
+    }
+
+    const { impliedOddsA, impliedOddsB } = calculateImpliedOdds(poolA, poolB);
+    snapshots.push({
+      timestamp: bet.createdAt.toISOString(),
+      poolA: poolA.toString(),
+      poolB: poolB.toString(),
+      oddsA: impliedOddsA,
+      oddsB: impliedOddsB,
+    });
+  }
+
+  if (!interval) return snapshots;
+
+  const bucketMs = INTERVAL_MS[interval];
+  const bucketed = new Map<number, OddsSnapshot>();
+  for (const snapshot of snapshots) {
+    const ts = new Date(snapshot.timestamp).getTime();
+    const bucket = Math.floor(ts / bucketMs) * bucketMs;
+    // Later snapshots in the same bucket overwrite earlier ones, so each
+    // bucket reflects the pool state at the end of its window.
+    bucketed.set(bucket, snapshot);
+  }
+
+  return Array.from(bucketed.values());
 }
 
 /**
@@ -378,8 +455,6 @@ export async function reconcileMarketFromChain(
     },
   });
 
-  // On-chain truth changed — drop any cached list/stats for this market.
-  await invalidateMarketCache(marketId);
-
+  logger.info({ marketId }, "Reconciled market from on-chain state");
   return updated;
 }
