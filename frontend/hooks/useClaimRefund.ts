@@ -5,23 +5,22 @@ import { buildSorobanInvocation, submitTransaction, decodeScVal } from "@/lib/st
 import { fetchMarketById, fetchMarketBets } from "@/lib/api";
 import { useWallet } from "@/hooks/useWallet";
 
-export interface UseClaimWinningsResult {
-  claim: (bet_id: string, market_id: string) => Promise<ClaimReceipt>;
+export interface UseClaimRefundResult {
+  claimRefund: (bet_id: string, market_id: string) => Promise<ClaimReceipt>;
   isLoading: boolean;
   error: Error | null;
 }
 
 /**
- * Detects whether to call claim_winnings() or claim_refund() based on market status.
- * Builds and submits the correct Soroban transaction via the connected wallet.
- * Returns a ClaimReceipt with the final payout amount on success.
+ * Calls claim_refund() on a Cancelled or NoContest market via the connected wallet.
+ * Builds and submits the Soroban transaction, returning a ClaimReceipt on success.
  */
-export function useClaimWinnings(): UseClaimWinningsResult {
+export function useClaimRefund(): UseClaimRefundResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const { address, signTransaction, isNetworkMismatched } = useWallet();
 
-  const claim = async (bet_id: string, market_id: string): Promise<ClaimReceipt> => {
+  const claimRefund = async (bet_id: string, market_id: string): Promise<ClaimReceipt> => {
     if (!address) {
       throw new Error("Wallet not connected");
     }
@@ -33,7 +32,7 @@ export function useClaimWinnings(): UseClaimWinningsResult {
     setError(null);
 
     try {
-      // Fetch market and bet details
+      // Fetch market and bet details to validate state
       const market = await fetchMarketById(market_id);
       const bets = await fetchMarketBets(market_id);
       const bet = bets.find((b) => b.id === bet_id);
@@ -42,20 +41,14 @@ export function useClaimWinnings(): UseClaimWinningsResult {
         throw new Error("Bet not found");
       }
 
-      // Determine which method to call
-      let method: string;
-      if (market.status === "Cancelled") {
-        method = "claim_refund";
-      } else if (market.status === "Resolved") {
-        method = "claim_winnings";
-      } else {
-        throw new Error("Market is not in a claimable state");
+      if (market.status !== "Cancelled" && market.outcome !== "NoContest") {
+        throw new Error("Market is not in a refundable state");
       }
 
-      // Build and submit transaction
+      // Build and submit claim_refund transaction
       const xdr = await buildSorobanInvocation({
         contractId: market_id,
-        method,
+        method: "claim_refund",
         args: [bet_id],
         signerAddress: address,
       });
@@ -63,7 +56,7 @@ export function useClaimWinnings(): UseClaimWinningsResult {
       const signedXdr = await signTransaction(xdr);
       const result = await submitTransaction(signedXdr);
 
-      // Decode payout from return value
+      // Decode refunded amount from return value
       const payout = (await decodeScVal(result.returnValue)) as bigint;
 
       return {
@@ -81,5 +74,5 @@ export function useClaimWinnings(): UseClaimWinningsResult {
     }
   };
 
-  return { claim, isLoading, error };
+  return { claimRefund, isLoading, error };
 }
