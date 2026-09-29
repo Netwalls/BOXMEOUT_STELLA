@@ -46,6 +46,9 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('contracts/**/Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
 
+      - name: Install system deps for stellar-cli
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - name: Install Stellar CLI
         run: cargo install --locked stellar-cli
 
@@ -107,6 +110,9 @@ jobs:
           key: cargo-cov-${{ runner.os }}-${{ hashFiles('contracts/**/Cargo.lock') }}
           restore-keys: cargo-cov-${{ runner.os }}-
 
+      - name: Install system deps for stellar-cli
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
@@ -128,3 +134,23 @@ jobs:
           name: contracts-lcov
           path: contracts/lcov.info
           if-no-files-found: error
+
+  # Branch protection on `main` requires the "Contracts CI" status check to
+  # pass before merging. GitHub matches required checks against the workflow
+  # *name* (or job name), so expose a single stable, always-run check that
+  # aggregates the real jobs. This keeps the required check green only when
+  # every Contracts CI job succeeds, and lets it be selected as a required
+  # status check in the branch protection rule for `main`.
+  contracts-ci:
+    name: Contracts CI
+    runs-on: ubuntu-latest
+    needs: [ci, coverage]
+    if: always()
+    steps:
+      - name: Verify all Contracts CI jobs succeeded
+        run: |
+          if [ "${{ needs.ci.result }}" != "success" ] || [ "${{ needs.coverage.result }}" != "success" ]; then
+            echo "::error::Contracts CI failed (ci=${{ needs.ci.result }}, coverage=${{ needs.coverage.result }})"
+            exit 1
+          fi
+          echo "All Contracts CI jobs passed."
