@@ -46,6 +46,9 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('contracts/**/Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
 
+      - name: Install system deps for stellar-cli
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - name: Install Stellar CLI
         run: cargo install --locked stellar-cli
 
@@ -106,6 +109,9 @@ jobs:
             contracts/target
           key: cargo-cov-${{ runner.os }}-${{ hashFiles('contracts/**/Cargo.lock') }}
           restore-keys: cargo-cov-${{ runner.os }}-
+
+      - name: Install system deps for stellar-cli
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
