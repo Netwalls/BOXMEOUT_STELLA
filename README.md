@@ -59,3 +59,6 @@ MIT
 
 <!-- handsoff-issue-1262 -->
 - #1262: F-44: Stop tracking frontend/.next build output
+
+<!-- handsoff-issue-1333 -->
+- #1333: Frontend CI broken on main: package-lock.json out of sync with package.json
