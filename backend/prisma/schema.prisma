@@ -30,6 +30,19 @@ enum BetSide {
   FighterB
 }
 
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  iconUrl   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  markets   Market[]
+
+  @@index([deletedAt])
+}
+
 model Market {
   id              String       @id
   contractAddress String       @unique
@@ -52,11 +65,15 @@ model Market {
   totalPool       BigInt       @default(0)
   oracleAddress   String
   txHash          String?
+  categoryId      String?
+  category        Category?    @relation(fields: [categoryId], references: [id])
   bets            Bet[]
   disputes        Dispute[]
   oracleResult    OracleResult?
   /// @db.Unsupported("tsvector")
   tsVector        Unsupported("tsvector")?
+
+  @@index([categoryId])
 }
 
 model Bet {
