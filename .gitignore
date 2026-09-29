@@ -60,6 +60,9 @@ junit.xml
 test-results/
 test-report/
 
+# ─── Turbo build cache ───────────────────────────────────────────────────────
+.turbo/
+
 # ─── Playwright artifacts ─────────────────────────────────────────────────────
 playwright-report/
 test-results/
