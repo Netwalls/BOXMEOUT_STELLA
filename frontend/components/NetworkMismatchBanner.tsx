@@ -1,7 +1,7 @@
 "use client";
 
 import { useWallet } from "@/hooks/useWallet";
-import { NETWORK_NAME } from "@/lib/stellar";
+import { NETWORK } from "@/lib/stellar";
 
 export function NetworkMismatchBanner(): JSX.Element | null {
   const { isNetworkMismatched } = useWallet();
@@ -13,7 +13,7 @@ export function NetworkMismatchBanner(): JSX.Element | null {
       role="alert"
       className="w-full bg-red-600 text-white text-sm font-medium px-4 py-2 text-center"
     >
-      Your wallet is connected to the wrong network. Switch to {NETWORK_NAME} to continue betting.
+      Your wallet is connected to the wrong network. Switch to {NETWORK} to continue betting.
     </div>
   );
 }

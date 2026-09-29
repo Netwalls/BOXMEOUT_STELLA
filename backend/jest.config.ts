@@ -4,16 +4,17 @@ const config: Config = {
   preset: "ts-jest",
   testEnvironment: "node",
   rootDir: ".",
-  roots: ["<rootDir>/src", "<rootDir>/__tests__", "<rootDir>/tests"],
+  roots: ["<rootDir>/src", "<rootDir>/__tests__"],
   testMatch: [
     "**/__tests__/**/*.test.ts",
-    "**/tests/**/*.test.ts",
     "**/*.test.ts",
   ],
   moduleFileExtensions: ["ts", "js", "json"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
   },
+  globalSetup: "<rootDir>/__tests__/globalSetup.ts",
+  setupFiles: ["<rootDir>/__tests__/setupEnv.ts"],
   clearMocks: true,
   restoreMocks: true,
   collectCoverageFrom: [

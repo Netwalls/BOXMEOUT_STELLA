@@ -1,31 +1,31 @@
 import { Request, Response, NextFunction } from "express";
-import { ZodSchema } from "zod";
+import { z, ZodTypeAny } from "zod";
+import { StrKey } from "@stellar/stellar-sdk";
 
-interface ValidateTarget {
-  body?: ZodSchema;
-  query?: ZodSchema;
-  params?: ZodSchema;
-}
+/**
+ * Shared zod schema for Stellar Ed25519 public keys (G... addresses).
+ */
+export const stellarAddress = z
+  .string()
+  .refine((value) => StrKey.isValidEd25519PublicKey(value), {
+    message: "INVALID_ADDRESS",
+  });
 
-export function validate(schemas: ValidateTarget) {
+/**
+ * Validates a single route param against the given zod schema.
+ * Responds with 400 and the schema's error code on failure.
+ */
+export function validateParam(
+  paramName: string,
+  schema: ZodTypeAny,
+) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    for (const key of ["body", "query", "params"] as const) {
-      const schema = schemas[key];
-      if (!schema) continue;
-
-      const result = schema.safeParse(req[key]);
-      if (!result.success) {
-        res.status(400).json({
-          error: "Validation failed",
-          code: "VALIDATION_ERROR",
-          details: result.error.flatten(),
-        });
-        return;
-      }
-
-      (req as Record<string, unknown>)[key] = result.data;
+    const result = schema.safeParse(req.params[paramName]);
+    if (!result.success) {
+      const code = result.error.issues[0]?.message ?? "INVALID_ADDRESS";
+      res.status(400).json({ error: code });
+      return;
     }
-
     next();
   };
 }

@@ -1,6 +1,12 @@
 name: Frontend CI
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
   pull_request:
     paths:
       - "frontend/**"
@@ -59,6 +65,10 @@ jobs:
           NEXT_PUBLIC_STELLAR_NETWORK: "testnet"
           NEXT_PUBLIC_SOROBAN_RPC_URL: "https://soroban-testnet.stellar.org"
           NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID: "CDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+      # ── Storybook build ──────────────────────────────────────────────────────
+      - name: Build Storybook
+        run: npm run build-storybook
 
   e2e:
     name: E2E (Playwright)

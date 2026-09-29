@@ -1,6 +1,12 @@
 name: Backend CI
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/**"
@@ -61,6 +67,9 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+
+      - name: Check Prisma schema drift
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$DATABASE_URL" --exit-code
 
       - name: Apply database migrations
         run: npx prisma migrate deploy
