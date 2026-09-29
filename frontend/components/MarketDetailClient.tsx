@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useMarket } from "@/hooks/useMarket";
 import { useMarketBets } from "@/hooks/useMarketBets";
 import { useMarketEvents } from "@/hooks/useMarketEvents";
+import { useToast } from "@/components/ToastProvider";
 import { Market, Bet } from "@/lib/api";
 import { FighterCard } from "@/components/FighterCard";
 import { BetForm } from "@/components/BetForm";
@@ -61,6 +62,7 @@ export function MarketDetailClient({
   const { market } = useMarket(marketId);
   const { bets: liveBets } = useMarketBets(marketId);
   const { poolA: livePoolA, poolB: livePoolB } = useMarketEvents(marketId);
+  const { addToast } = useToast();
   const [justPlaced, setJustPlaced] = useState<Bet[]>([]);
   const [showDispute, setShowDispute] = useState(false);
 
@@ -79,6 +81,29 @@ export function MarketDetailClient({
   const oddsA = total === BigInt(0) ? 50 : Number((poolA * BigInt(100)) / total);
   const oddsB = 100 - oddsA;
 
+  const handleShare = useCallback(async () => {
+    const url = window.location.href;
+    const title = `${m.fighterA.name} vs ${m.fighterB.name}`;
+    const text = `Check out this boxing prediction market on BOXMEOUT: ${title}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+      } catch {
+        // User cancelled — no feedback needed
+      }
+      return;
+    }
+
+    // Fallback: copy link to clipboard
+    try {
+      await navigator.clipboard.writeText(url);
+      addToast("Link copied to clipboard!", "success");
+    } catch {
+      addToast("Could not copy link.", "error");
+    }
+  }, [m.fighterA.name, m.fighterB.name, addToast]);
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -87,6 +112,24 @@ export function MarketDetailClient({
           {m.fighterA.name} vs {m.fighterB.name}
         </h1>
         <MarketStatusBadge status={m.status} />
+        <button
+          onClick={handleShare}
+          aria-label="Share this market"
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-gray-400 hover:text-white transition-colors"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-3.5 w-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          Share
+        </button>
       </div>
 
       <CountdownTimer

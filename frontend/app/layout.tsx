@@ -5,6 +5,7 @@ import { NetworkMismatchBanner } from '@/components/NetworkMismatchBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeScript } from '@/components/ThemeScript';
 import { MotionConfigProvider } from '@/components/MotionConfigProvider';
+import { WalletProvider } from '@/hooks/useWallet';
 import '@/app/globals.css';
 
 export const metadata: Metadata = {
@@ -30,13 +31,15 @@ export default function RootLayout({
         */}
         <MotionConfigProvider>
           <ErrorBoundary>
-            <ToastProvider>
-              <NetworkMismatchBanner />
-              <Navbar />
-              <main className="min-w-0 overflow-x-hidden">
-                {children}
-              </main>
-            </ToastProvider>
+            <WalletProvider>
+              <ToastProvider>
+                <NetworkMismatchBanner />
+                <Navbar />
+                <main className="min-w-0 overflow-x-hidden">
+                  {children}
+                </main>
+              </ToastProvider>
+            </WalletProvider>
           </ErrorBoundary>
         </MotionConfigProvider>
       </body>

@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState, useEffect, useRef, useCallback } from "react";
+import { useId, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Bet, BetSide, Market } from "@/lib/api";
@@ -10,6 +10,25 @@ import { useToast } from "@/components/ToastProvider";
 export interface BettingInterfaceProps {
   market: Market;
   onBetPlaced: (bet: Bet) => void;
+}
+
+// Protocol fee applied on top of the staked amount, expressed in basis points.
+const PROTOCOL_FEE_BPS = 200; // 2%
+// Flat network fee estimate (in XLM) for a Soroban bet transaction.
+const NETWORK_FEE_XLM = 0.01;
+// Debounce window for refreshing the fee/payout estimate as the amount changes.
+const ESTIMATE_DEBOUNCE_MS = 400;
+
+function formatXlm(value: number): string {
+  return value.toFixed(7).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+interface FeeEstimate {
+  stake: number;
+  protocolFee: number;
+  networkFee: number;
+  total: number;
+  payout: number;
 }
 
 // ─── Shared form content ──────────────────────────────────────────────────────
@@ -26,6 +45,7 @@ interface BetFormBodyProps {
   onSubmit: () => void;
   headingId: string;
   sideGroupId: string;
+  estimate: FeeEstimate | null;
 }
 
 const focusRing =
@@ -43,6 +63,7 @@ function BetFormBody({
   onSubmit,
   headingId,
   sideGroupId,
+  estimate,
 }: BetFormBodyProps) {
   return (
     <section aria-labelledby={headingId} className="space-y-4">
@@ -118,9 +139,40 @@ function BetFormBody({
         }}
         min={1}
         max={10000}
-        estimatedPayout={null}
+        estimatedPayout={estimate ? estimate.payout : null}
         disabled={allDisabled}
       />
+
+      {/* Fee and resource estimate shown before signing */}
+      <div
+        aria-live="polite"
+        className="rounded-lg bg-gray-900/60 p-3 text-sm text-gray-300 space-y-1"
+      >
+        <div className="flex justify-between">
+          <span>Network fee</span>
+          <span className="text-white">
+            {estimate ? `${formatXlm(estimate.networkFee)} XLM` : "—"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Protocol fee ({(PROTOCOL_FEE_BPS / 100).toFixed(2)}%)</span>
+          <span className="text-white">
+            {estimate ? `${formatXlm(estimate.protocolFee)} XLM` : "—"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Estimated payout</span>
+          <span className="text-white">
+            {estimate ? `${formatXlm(estimate.payout)} XLM` : "—"}
+          </span>
+        </div>
+        <div className="flex justify-between border-t border-gray-700 pt-1 font-medium">
+          <span>Total cost</span>
+          <span className="text-amber-400">
+            {estimate ? `${formatXlm(estimate.total)} XLM` : "—"}
+          </span>
+        </div>
+      </div>
 
       <button
         type="button"
@@ -189,6 +241,7 @@ export function BettingInterface({ market, onBetPlaced }: BettingInterfaceProps)
 
   const [side, setSide] = useState<BetSide | null>(null);
   const [amount, setAmount] = useState<string>("");
+  const [debouncedAmount, setDebouncedAmount] = useState<string>("");
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const { placeBet, isLoading } = usePlaceBet(market.id);
@@ -199,6 +252,24 @@ export function BettingInterface({ market, onBetPlaced }: BettingInterfaceProps)
 
   const marketClosed = market.status !== "Open";
   const allDisabled = marketClosed || isLoading;
+
+  // Debounce the amount so the estimate only refreshes once typing settles.
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedAmount(amount), ESTIMATE_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [amount]);
+
+  const estimate = useMemo<FeeEstimate | null>(() => {
+    const parsed = parseFloat(debouncedAmount);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    const stake = parsed;
+    const protocolFee = (stake * PROTOCOL_FEE_BPS) / 10000;
+    const networkFee = NETWORK_FEE_XLM;
+    const total = stake + protocolFee + networkFee;
+    // Payout estimate: stake returned plus winnings, minus protocol fee.
+    const payout = stake * 2 - protocolFee;
+    return { stake, protocolFee, networkFee, total, payout };
+  }, [debouncedAmount]);
 
   const handleSubmit = useCallback(async () => {
     if (!side || !amount || allDisabled) return;
@@ -248,6 +319,7 @@ export function BettingInterface({ market, onBetPlaced }: BettingInterfaceProps)
     isLoading,
     marketClosed,
     onSubmit: handleSubmit,
+    estimate,
   };
 
   return (

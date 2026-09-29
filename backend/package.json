@@ -1,25 +1,31 @@
 {
   "name": "boxmeout-backend",
   "version": "0.1.0",
-  "description": "BOXMEOUT backend — indexer + API for the boxing prediction market on Stellar",
+  "description": "BOXMEOUT backend — indexer + REST API for the boxing prediction market on Stellar",
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "indexer": "node dist/indexer/index.js",
+    "indexer:dev": "ts-node-dev --respawn src/indexer/index.ts",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
     "test": "jest --runInBand",
+    "test:setup": "prisma migrate reset --force",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:check-drift": "prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url $SHADOW_DATABASE_URL --exit-code"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",
     "@stellar/stellar-sdk": "^12.0.0",
     "bullmq": "^5.0.0",
+    "cors": "^2.8.5",
     "express": "^4.18.0",
     "express-rate-limit": "^7.0.0",
+    "helmet": "^7.1.0",
     "ioredis": "^5.0.0",
     "pino": "^8.0.0",
     "pino-http": "^9.0.0",
@@ -29,7 +35,9 @@
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
     "@types/express": "^4.17.0",
+    "@types/helmet": "^4.0.0",
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
     "@types/supertest": "^6.0.0",

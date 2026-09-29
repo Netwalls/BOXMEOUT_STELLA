@@ -20,6 +20,42 @@ export const logger = pino({
   }),
 });
 
+/**
+ * B-74: Structured logging helpers for background jobs and services.
+ *
+ * Jobs previously used `console.log` / `console.warn`, which bypasses the
+ * structured pino logger. These helpers route job logs through pino and
+ * consistently attach the `marketId` and `txHash` fields whenever they are
+ * available, so log lines can be correlated across the indexer pipeline.
+ */
+export interface JobLogContext {
+  marketId?: string;
+  txHash?: string;
+  [key: string]: unknown;
+}
+
+function withJobContext(context: JobLogContext = {}): JobLogContext {
+  const fields: JobLogContext = { ...context };
+  if (fields.marketId === undefined) delete fields.marketId;
+  if (fields.txHash === undefined) delete fields.txHash;
+  return fields;
+}
+
+export const jobLogger = {
+  debug(message: string, context?: JobLogContext): void {
+    logger.debug(withJobContext(context), message);
+  },
+  info(message: string, context?: JobLogContext): void {
+    logger.info(withJobContext(context), message);
+  },
+  warn(message: string, context?: JobLogContext): void {
+    logger.warn(withJobContext(context), message);
+  },
+  error(message: string, context?: JobLogContext): void {
+    logger.error(withJobContext(context), message);
+  },
+};
+
 export const httpLogger = pinoHttp({
   logger,
   // B-59: Carry the request ID (set by requestIdMiddleware) into every log line

@@ -1,7 +1,7 @@
 #![no_std]
 use shared::{events, types::ProtocolConfig};
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, Bytes, Env, String, Symbol,
+    contract, contractimpl, token, Address, Bytes, Env, String, Symbol,
     Vec,
 };
 
@@ -727,10 +727,7 @@ impl Treasury {
             .persistent()
             .remove(&key_pending_admin(&env));
 
-        env.events().publish(
-            (Symbol::new(&env, "admin_transferred"),),
-            (old_admin, pending_admin, env.ledger().timestamp()),
-        );
+        events::emit_admin_transferred(&env, old_admin, pending_admin);
     }
 
     /// Updates the address that receives protocol fees.
@@ -811,12 +808,7 @@ impl Treasury {
 
         env.storage().persistent().set(&key_fee_bps(&env), &bps);
 
-        // Emit config_updated with param name "fee_bps" and the new value cast
-        // to i128 so it fits the shared event schema (param_name: String, new_value: i128).
-        env.events().publish(
-            (Symbol::new(&env, "config_updated"),),
-            (String::from_str(&env, "fee_bps"), bps as i128),
-        );
+        events::emit_config_updated(&env, String::from_str(&env, "fee_bps"), bps as i128);
     }
 }
 
@@ -1167,5 +1159,52 @@ mod tests {
         let (client, _, _) = setup_treasury_with_balance(&env, 0);
         let random = create_test_address(&env);
         client.set_fee_bps(&random, &100u32);
+    }
+
+    // ─── C-60: Treasury events via shared helpers ──────────────────────────────
+
+    #[test]
+    fn test_accept_admin_emits_admin_transferred_via_shared_helper() {
+        use shared::test_utils::{event_count, last_event_name};
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let (client, admin, _) = setup_treasury_with_balance(&env, 0);
+        let new_admin = create_test_address(&env);
+
+        client.propose_admin(&admin, &new_admin);
+        client.accept_admin(&new_admin);
+
+        // The last event must carry the shared `admin_transferred` topic name.
+        assert_eq!(last_event_name(&env), soroban_sdk::Symbol::new(&env, "admin_transferred"));
+
+        // Confirm the data payload is (old_admin, new_admin) — exactly what
+        // emit_admin_transferred emits — not the three-tuple the old ad-hoc
+        // publish produced (old, new, timestamp).
+        let (_, data) = shared::test_utils::last_event(&env);
+        let (ev_old, ev_new): (soroban_sdk::Address, soroban_sdk::Address) =
+            soroban_sdk::TryFromVal::try_from_val(&env, &data).expect("wrong data shape");
+        assert_eq!(ev_new, new_admin);
+        let _ = ev_old; // old_admin existed; type-check is sufficient
+    }
+
+    #[test]
+    fn test_set_fee_bps_emits_config_updated_via_shared_helper() {
+        use shared::test_utils::{event_count, last_event_name};
+        let env = create_test_env();
+        env.mock_all_auths();
+
+        let (client, admin, _) = setup_treasury_with_balance(&env, 0);
+        client.set_fee_bps(&admin, &350u32);
+
+        // The emitted event must carry the shared `config_updated` topic name.
+        assert_eq!(last_event_name(&env), soroban_sdk::Symbol::new(&env, "config_updated"));
+
+        // Confirm the data is (param_name: String, new_value: i128).
+        let (_, data) = shared::test_utils::last_event(&env);
+        let (param, value): (soroban_sdk::String, i128) =
+            soroban_sdk::TryFromVal::try_from_val(&env, &data).expect("wrong data shape");
+        assert_eq!(param, soroban_sdk::String::from_str(&env, "fee_bps"));
+        assert_eq!(value, 350_i128);
     }
 }

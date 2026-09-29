@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Bet, Market } from "@/lib/api";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
+import { useClaimRefund } from "@/hooks/useClaimRefund";
 
 export interface ClaimReceipt {
   betId: string;
@@ -12,17 +13,22 @@ export interface ClaimReceipt {
 
 export interface ClaimButtonProps {
   bet: Bet;
-  market: Market;
+  market: Market | undefined;
   onClaimed: (receipt: ClaimReceipt) => void;
 }
 
 export function ClaimButton({ bet, market, onClaimed }: ClaimButtonProps): JSX.Element | null {
   const [loading, setLoading] = useState(false);
   const { claim } = useClaimWinnings();
+  const { claimRefund } = useClaimRefund();
+
+  // Can't determine claim eligibility without market data
+  if (!market) return null;
 
   const isWinner = market.status === "Resolved" && market.outcome === bet.side;
-  const isCancelled = market.status === "Cancelled";
-  const showButton = (isWinner || isCancelled) && !bet.claimed;
+  const isRefundable =
+    (market.status === "Cancelled" || market.outcome === "NoContest") && !bet.claimed;
+  const showButton = (isWinner || isRefundable) && !bet.claimed;
 
   if (bet.claimed) {
     return (
@@ -37,13 +43,18 @@ export function ClaimButton({ bet, market, onClaimed }: ClaimButtonProps): JSX.E
 
   if (!showButton) return null;
 
-  const label = isCancelled ? "Claim Refund" : "Claim Winnings";
+  const label = isRefundable ? "Claim Refund" : "Claim Winnings";
 
   async function handleClaim() {
-    if (loading) return;
+    if (loading || !market) return;
     setLoading(true);
     try {
-      const receipt = await claim(bet.id, market.id);
+      let receipt: ClaimReceipt;
+      if (isRefundable) {
+        receipt = await claimRefund(bet.id, market.id);
+      } else {
+        receipt = await claim(bet.id, market.id);
+      }
       onClaimed(receipt);
     } catch {
       // error handled by hook
@@ -60,8 +71,19 @@ export function ClaimButton({ bet, market, onClaimed }: ClaimButtonProps): JSX.E
     >
       {loading && (
         <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          />
         </svg>
       )}
       {label}

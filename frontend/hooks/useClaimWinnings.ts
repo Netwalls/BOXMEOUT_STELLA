@@ -1,16 +1,9 @@
 "use client";
 import { useState } from "react";
-import { ClaimReceipt } from "@/components/ClaimButton";
+import type { ClaimReceipt } from "@/components/ClaimButton";
 import { buildSorobanInvocation, submitTransaction, decodeScVal } from "@/lib/stellar";
 import { fetchMarketById, fetchMarketBets } from "@/lib/api";
 import { useWallet } from "@/hooks/useWallet";
-
-export interface ClaimReceipt {
-  betId: string;
-  bettor: string;
-  payout: bigint;
-  claimedAt: string;
-}
 
 export interface UseClaimWinningsResult {
   claim: (bet_id: string, market_id: string) => Promise<ClaimReceipt>;
@@ -19,7 +12,7 @@ export interface UseClaimWinningsResult {
 }
 
 /**
- * Detects whether to call claim_winnings() or claim_refund() based on market outcome.
+ * Detects whether to call claim_winnings() or claim_refund() based on market status.
  * Builds and submits the correct Soroban transaction via the connected wallet.
  * Returns a ClaimReceipt with the final payout amount on success.
  */
