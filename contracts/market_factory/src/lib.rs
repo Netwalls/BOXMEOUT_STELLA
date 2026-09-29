@@ -851,4 +851,137 @@ mod tests {
         assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
         assert!(!client.is_paused());
     }
+
+    // ── C-57: oracle whitelist events ─────────────────────────────────────────
+
+    #[test]
+    fn add_oracle_emits_oracle_added_event() {
+        use soroban_sdk::{testutils::Events as _, Symbol, TryFromVal};
+
+        let (env, client, admin, treasury) = setup();
+        init(&env, &client, &admin, &treasury);
+
+        let oracle = Address::generate(&env);
+        client.add_oracle(&admin, &oracle);
+
+        let all = env.events().all();
+        assert!(!all.is_empty(), "expected at least one event");
+        // The last event must be oracle_added.
+        let last = all.events().last().expect("event list was empty");
+        use soroban_sdk::xdr::ContractEventBody;
+        let ContractEventBody::V0(body) = &last.body;
+        let first_topic = body.topics.first().expect("no topics");
+        let sym = Symbol::try_from_val(&env, first_topic).expect("topic 0 not a Symbol");
+        assert_eq!(sym, Symbol::new(&env, "oracle_added"));
+        let ev_oracle: Address = TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
+        assert_eq!(ev_oracle, oracle);
+    }
+
+    #[test]
+    fn remove_oracle_emits_oracle_removed_event() {
+        use soroban_sdk::{testutils::Events as _, Symbol, TryFromVal};
+
+        let (env, client, admin, treasury) = setup();
+        init(&env, &client, &admin, &treasury);
+
+        let oracle = whitelisted_oracle(&env, &client);
+        client.remove_oracle(&admin, &oracle);
+
+        let all = env.events().all();
+        let last = all.events().last().expect("event list was empty");
+        use soroban_sdk::xdr::ContractEventBody;
+        let ContractEventBody::V0(body) = &last.body;
+        let sym = Symbol::try_from_val(&env, body.topics.first().expect("no topics"))
+            .expect("topic 0 not a Symbol");
+        assert_eq!(sym, Symbol::new(&env, "oracle_removed"));
+        let ev_oracle: Address = TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
+        assert_eq!(ev_oracle, oracle);
+    }
+
+    // ── C-58: accept_admin emits admin_transferred event ──────────────────────
+
+    #[test]
+    fn accept_admin_emits_admin_transferred_event() {
+        use soroban_sdk::{testutils::Events as _, Symbol, TryFromVal};
+
+        let (env, client, admin, treasury) = setup();
+        init(&env, &client, &admin, &treasury);
+
+        let new_admin = Address::generate(&env);
+        client.propose_admin(&admin, &new_admin);
+        client.accept_admin(&new_admin);
+
+        let all = env.events().all();
+        let last = all.events().last().expect("event list was empty");
+        use soroban_sdk::xdr::ContractEventBody;
+        let ContractEventBody::V0(body) = &last.body;
+        let sym = Symbol::try_from_val(&env, body.topics.first().expect("no topics"))
+            .expect("topic 0 not a Symbol");
+        assert_eq!(sym, Symbol::new(&env, "admin_transferred"));
+        let (ev_old, ev_new): (Address, Address) =
+            TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
+        assert_eq!(ev_old, admin);
+        assert_eq!(ev_new, new_admin);
+    }
+
+    // ── C-59: pause/unpause/upgrade_market_wasm events ────────────────────────
+
+    #[test]
+    fn pause_factory_emits_protocol_paused_event() {
+        use soroban_sdk::{testutils::Events as _, Symbol, TryFromVal};
+
+        let (env, client, admin, treasury) = setup();
+        init(&env, &client, &admin, &treasury);
+
+        client.pause_factory(&admin);
+
+        let all = env.events().all();
+        let last = all.events().last().expect("event list was empty");
+        use soroban_sdk::xdr::ContractEventBody;
+        let ContractEventBody::V0(body) = &last.body;
+        let sym = Symbol::try_from_val(&env, body.topics.first().expect("no topics"))
+            .expect("topic 0 not a Symbol");
+        assert_eq!(sym, Symbol::new(&env, "protocol_paused"));
+    }
+
+    #[test]
+    fn unpause_factory_emits_protocol_unpaused_event() {
+        use soroban_sdk::{testutils::Events as _, Symbol, TryFromVal};
+
+        let (env, client, admin, treasury) = setup();
+        init(&env, &client, &admin, &treasury);
+
+        client.pause_factory(&admin);
+        client.unpause_factory(&admin);
+
+        let all = env.events().all();
+        let last = all.events().last().expect("event list was empty");
+        use soroban_sdk::xdr::ContractEventBody;
+        let ContractEventBody::V0(body) = &last.body;
+        let sym = Symbol::try_from_val(&env, body.topics.first().expect("no topics"))
+            .expect("topic 0 not a Symbol");
+        assert_eq!(sym, Symbol::new(&env, "protocol_unpaused"));
+    }
+
+    #[test]
+    fn upgrade_market_wasm_emits_contract_upgraded_event() {
+        use soroban_sdk::{testutils::Events as _, Symbol, TryFromVal};
+
+        let (env, client, admin, treasury) = setup();
+        init(&env, &client, &admin, &treasury);
+
+        let new_hash = env.deployer().upload_contract_wasm(DUMMY_WASM);
+        client.upgrade_market_wasm(&admin, &new_hash);
+
+        let all = env.events().all();
+        let last = all.events().last().expect("event list was empty");
+        use soroban_sdk::xdr::ContractEventBody;
+        let ContractEventBody::V0(body) = &last.body;
+        let sym = Symbol::try_from_val(&env, body.topics.first().expect("no topics"))
+            .expect("topic 0 not a Symbol");
+        assert_eq!(sym, Symbol::new(&env, "contract_upgraded"));
+        let ev_hash: BytesN<32> =
+            TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
+        assert_eq!(ev_hash, new_hash);
+    }
 }

@@ -767,15 +767,22 @@ All events are emitted via `env.events().publish()` and indexed by topic. Events
 
 All Treasury events are emitted through the `shared::events` helpers so the
 backend indexer sees one consistent set of snake_case topic names. The legacy
-ad-hoc topics `BetDeposited`, `FeesDeposited`, `FeesWithdrawn` and `EmrgDrain`
-are no longer emitted.
+ad-hoc topics `BetDeposited`, `FeesDeposited`, `FeesWithdrawn`, `EmrgDrain`,
+and the three-argument inline `admin_transferred` publish are no longer emitted.
 
-| Treasury function | Helper | Topic |
+| Treasury function | Shared helper | Topic |
 |---|---|---|
 | `deposit()` | `emit_bet_deposited` | `bet_deposited` |
 | `deposit_fees()` | `emit_fee_deposited` | `fee_deposited` |
 | `withdraw_fees()` | `emit_fee_withdrawn` | `fee_withdrawn` |
 | `emergency_drain()` | `emit_emergency_drain` | `emergency_drain` |
+| `accept_admin()` | `emit_admin_transferred` | `admin_transferred` |
+| `set_fee_bps()` | `emit_config_updated` | `config_updated` |
+
+> **Note for indexers:** `admin_transferred` from the Treasury carries the same
+> two-field data payload `(old_admin: Address, new_admin: Address)` as the
+> MarketFactory version. `config_updated` carries `(param_name: String,
+> new_value: i128)` — for `set_fee_bps` the param name is always `"fee_bps"`.
 
 #### 14a. `bet_deposited`
 **Emitted by:** `deposit()`  
@@ -821,6 +828,24 @@ are no longer emitted.
 **Emitted when:** All treasury funds are drained  
 **Condition:** Only callable when protocol is paused  
 **Security:** Emergency-only operation; signals protocol shutdown
+
+#### 17a. `admin_transferred` (Treasury)
+**Emitted by:** `Treasury::accept_admin()`  
+**Topics:** `Symbol("admin_transferred")`  
+**Data fields:**
+- `old_admin: Address` - Previous treasury admin
+- `new_admin: Address` - New treasury admin
+
+**Emitted when:** A two-step treasury admin transfer is completed via `accept_admin()`
+
+#### 17b. `config_updated` (Treasury — fee_bps)
+**Emitted by:** `Treasury::set_fee_bps()`  
+**Topics:** `Symbol("config_updated")`  
+**Data fields:**
+- `param_name: String` - Always `"fee_bps"` when emitted by Treasury
+- `new_value: i128` - New fee rate in basis points
+
+**Emitted when:** Admin updates the protocol fee rate
 
 #### 18. `contract_upgraded`
 **Emitted by:** `MarketFactory::upgrade_market_wasm()`  
