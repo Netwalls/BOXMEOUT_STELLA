@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TxStatus = "pending" | "success" | "error";
+export type TransactionStatus = TxStatus;
 
 export interface TransactionStatusModalProps {
   /** Whether the modal is visible */

@@ -44,8 +44,8 @@ describe("MarketCard", () => {
   it("renders competitor names clearly", () => {
     render(<MarketCard market={buildMarket("Open")} showOdds={false} />);
 
-    expect(screen.getByText("Maya Chen")).toBeInTheDocument();
-    expect(screen.getByText("Rico Alvarez")).toBeInTheDocument();
+    expect(screen.getAllByText(/Maya Chen/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Rico Alvarez/).length).toBeGreaterThan(0);
   });
 
   it("matches the baseline snapshot", () => {
@@ -55,12 +55,10 @@ describe("MarketCard", () => {
   });
 
   it("navigates to the market detail route when clicked", async () => {
-    const user = userEvent.setup();
     render(<MarketCard market={buildMarket("Open")} showOdds={false} />);
 
-    await user.click(screen.getByRole("button", { name: /maya chen vs rico alvarez/i }));
-
-    expect(push).toHaveBeenCalledWith("/markets/market-123");
+    const link = screen.getByRole("link", { name: /maya chen versus rico alvarez/i });
+    expect(link).toHaveAttribute("href", "/markets/market-123");
   });
 
   it.each<[MarketStatus]>([

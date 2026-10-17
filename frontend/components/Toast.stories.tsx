@@ -1,8 +1,8 @@
 import React from 'react';
-import { ComponentStory, ComponentMeta } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { Toast, ToastType } from './Toast';
 
-export default {
+const meta: Meta<typeof Toast> = {
   title: 'Components/Toast',
   component: Toast,
   parameters: {
@@ -22,45 +22,54 @@ export default {
       description: 'Callback when toast is dismissed',
     },
   },
-} as ComponentMeta<typeof Toast>;
+};
 
-const Template: ComponentStory<typeof Toast> = (args) => <Toast {...args} />;
+export default meta;
+type Story = StoryObj<typeof Toast>;
 
-export const Success = Template.bind({});
-Success.args = {
-  toast: {
-    id: 'success-1',
-    type: 'success' as ToastType,
-    title: 'Success',
-    message: 'Your action was completed successfully!',
+export const Success: Story = {
+  args: {
+    toast: {
+      id: 'success-1',
+      type: 'success' as ToastType,
+      title: 'Success',
+      message: 'Your action was completed successfully!',
+    },
+    onDismiss: () => {},
   },
 };
 
-export const Error = Template.bind({});
-Error.args = {
-  toast: {
-    id: 'error-1',
-    type: 'error' as ToastType,
-    title: 'Error',
-    message: 'Something went wrong. Please try again.',
+export const ErrorStory: Story = {
+  args: {
+    toast: {
+      id: 'error-1',
+      type: 'error' as ToastType,
+      title: 'Error',
+      message: 'Something went wrong. Please try again.',
+    },
+    onDismiss: () => {},
   },
 };
 
-export const Info = Template.bind({});
-Info.args = {
-  toast: {
-    id: 'info-1',
-    type: 'info' as ToastType,
-    title: 'Information',
-    message: 'This is an informational message.',
+export const Info: Story = {
+  args: {
+    toast: {
+      id: 'info-1',
+      type: 'info' as ToastType,
+      title: 'Information',
+      message: 'This is an informational message.',
+    },
+    onDismiss: () => {},
   },
 };
 
-export const ErrorWithoutTitle = Template.bind({});
-ErrorWithoutTitle.args = {
-  toast: {
-    id: 'error-2',
-    type: 'error' as ToastType,
-    message: 'Error occurred without title.',
+export const ErrorWithoutTitle: Story = {
+  args: {
+    toast: {
+      id: 'error-2',
+      type: 'error' as ToastType,
+      message: 'Error occurred without title.',
+    },
+    onDismiss: () => {},
   },
 };

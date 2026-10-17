@@ -14,20 +14,20 @@ export interface MarketFilterBarProps {
   statusTab: StatusTab;
   weightClass: string;
   weightClasses: string[];
-  sort: SortOption;
+  sort?: SortOption;
   onStatusChange: (status: StatusTab) => void;
   onWeightClassChange: (weightClass: string) => void;
-  onSortChange: (sort: SortOption) => void;
+  onSortChange?: (sort: SortOption) => void;
 }
 
 export function MarketFilterBar({
   statusTab,
   weightClass,
   weightClasses,
-  sort,
+  sort = "newest",
   onStatusChange,
   onWeightClassChange,
-  onSortChange,
+  onSortChange = () => {},
 }: MarketFilterBarProps): JSX.Element {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">

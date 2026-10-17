@@ -6,7 +6,7 @@ test("happy path: connect sets address and isConnected", async () => {
   expect(result.current.address).toBeNull();
   expect(result.current.isConnected).toBe(false);
   await act(async () => { await result.current.connect(); });
-  expect(result.current.address).toBe("GABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  expect(result.current.address).toBe("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF");
   expect(result.current.isConnected).toBe(true);
 });
 

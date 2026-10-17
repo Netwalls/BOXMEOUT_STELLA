@@ -23,6 +23,7 @@ export const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet").to
 const NETWORK_PASSPHRASES: Record<string, string> = {
   testnet: "Test SDF Network ; September 2015",
   mainnet: "Public Global Stellar Network ; September 2015",
+  public: "Public Global Stellar Network ; September 2015",
   futurenet: "Test SDF Future Network ; October 2022",
 };
 
@@ -48,6 +49,17 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
   }
 
   return a.toLowerCase() === b.toLowerCase();
+}
+
+export function getNetworkPassphrase(networkName?: string | null): string {
+  if (!networkName) return NETWORK_PASSPHRASE;
+  const normalized = networkName.toLowerCase();
+  return NETWORK_PASSPHRASES[normalized] ?? NETWORK_PASSPHRASES.testnet;
+}
+
+export function isNetworkMismatch(walletNetwork?: string | null): boolean {
+  if (!walletNetwork) return false;
+  return !isSameNetwork(walletNetwork, NETWORK);
 }
 
 export const SOROBAN_RPC_URL =
@@ -155,33 +167,30 @@ function simulationErrorText(simResult: unknown): string {
 export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
-  const { Operation, SorobanRpc, TransactionBuilder, Timeout, nativeToScVal, addressToScVal } =
+  const { Contract, SorobanRpc, TransactionBuilder, nativeToScVal, Address } =
     await loadSdk();
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
     allowHttp: true,
   });
 
-  const operation = Operation.invokeHostFunction({
-    hostFunction: {
-      functionName: params.method,
-      args: params.args.map((arg) => {
-        if (typeof arg === "bigint") return nativeToScVal(arg);
-        if (typeof arg === "string") {
-          try {
-            return addressToScVal(arg);
-          } catch {
-            return nativeToScVal(Number(arg));
-          }
-        }
-        if (typeof arg === "number") return nativeToScVal(arg);
-        if (Array.isArray(arg)) {
-          return nativeToScVal(arg);
-        }
-        return arg as any;
-      }),
-    },
-    auth: [],
+  const scVals = params.args.map((arg) => {
+    if (typeof arg === "bigint") return nativeToScVal(arg);
+    if (typeof arg === "string") {
+      try {
+        return new Address(arg).toScVal();
+      } catch {
+        return nativeToScVal(arg);
+      }
+    }
+    if (typeof arg === "number") return nativeToScVal(arg);
+    if (Array.isArray(arg)) {
+      return nativeToScVal(arg);
+    }
+    return arg as any;
   });
+
+  const contract = new Contract(params.contractId);
+  const operation = contract.call(params.method, ...scVals);
 
   const account = await server.getAccount(params.signerAddress);
 
@@ -191,28 +200,15 @@ export async function buildSorobanInvocation(
   });
 
   transaction.addOperation(operation);
-  transaction.setTimeout(Timeout.INFINITE);
+  transaction.setTimeout(30);
 
   const tx = transaction.build();
 
   const simResult = await server.simulateTransaction(tx);
 
   if (SorobanRpc.Api.isSimulationSuccess(simResult)) {
-    const fee = simResult.minResourceFee;
-    const preparedTx = SorobanRpc.assembleTransaction(tx, simResult);
-
-    const withFee = new TransactionBuilder(account, {
-      networkPassphrase: NETWORK_PASSPHRASE,
-      fee: fee,
-    });
-
-    withFee.addOperation(preparedTx.operations[0]);
-    withFee.setTimeout(Timeout.INFINITE);
-
-    const finalTx = withFee.build();
-    finalTx.addSignature(params.signerAddress, Buffer.alloc(64).fill(0));
-
-    return finalTx.toXDR();
+    const preparedTx = SorobanRpc.assembleTransaction(tx, simResult).build();
+    return preparedTx.toXDR();
   }
 
   throw decodeContractError(new Error(simulationErrorText(simResult)));
@@ -257,9 +253,9 @@ export async function submitTransaction(
   const startedAt = Date.now();
   let delay = INITIAL_DELAY_MS;
 
-  let result = await server.getTransaction(hash);
+  let result = await server.getTransaction(txHash);
 
-  while (result.status === "PENDING" || result.status === "NOT_FOUND") {
+  while (result.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND) {
     if (Date.now() - startedAt >= TIMEOUT_MS) {
       onStatus?.({ status: "timeout", txHash });
       throw new TransactionTimeoutError(txHash, TIMEOUT_MS);
@@ -268,21 +264,21 @@ export async function submitTransaction(
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, MAX_DELAY_MS);
 
-    result = await server.getTransaction(hash);
+    result = await server.getTransaction(txHash);
   }
 
-  if (result.status !== "SUCCESS") {
+  if (result.status !== SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
     const error = `Transaction failed with status: ${result.status}`;
     onStatus?.({ status: "failed", txHash, error });
     throw decodeContractError(new Error(error));
   }
 
-  onStatus?.({ status: "success", txHash, ledger: result.ledger });
+  onStatus?.({ status: "success", txHash, ledger: result.latestLedger });
 
   return {
     txHash,
-    ledger: result.ledger,
-    returnValue: result.returnValue,
+    ledger: result.latestLedger,
+    returnValue: (result as any).returnValue,
   };
 }
 

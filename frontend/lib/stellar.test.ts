@@ -1,4 +1,3 @@
-import { describe, it, expect } from "vitest";
 import { NETWORK, getNetworkPassphrase, isNetworkMismatch } from "./stellar";
 
 describe("network normalization", () => {

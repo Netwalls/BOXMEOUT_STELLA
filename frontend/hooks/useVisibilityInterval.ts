@@ -31,9 +31,11 @@ export function useVisibilityInterval(
       callbackRef.current();
     };
 
-    const start = () => {
+    const start = (fireImmediately = false) => {
       if (interval !== null) return;
-      tick();
+      if (fireImmediately) {
+        tick();
+      }
       interval = setInterval(tick, delay);
     };
 
@@ -48,14 +50,14 @@ export function useVisibilityInterval(
       if (document.hidden) {
         stop();
       } else {
-        start();
+        start(true);
       }
     };
 
     if (typeof document !== "undefined" && document.hidden) {
       // Tab is already hidden; wait for it to become visible before starting.
     } else {
-      start();
+      start(false);
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);

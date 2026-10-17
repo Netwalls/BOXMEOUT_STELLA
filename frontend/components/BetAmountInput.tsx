@@ -6,7 +6,7 @@ export interface BetAmountInputProps {
   onChange: (val: string) => void;
   min: number;
   max: number;
-  estimatedPayout: bigint | null;
+  estimatedPayout: bigint | number | null;
   disabled?: boolean;
   /** Connected account's public key; when set, the XLM balance is fetched from Horizon. */
   account?: string | null;

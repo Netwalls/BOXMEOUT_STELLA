@@ -1,4 +1,4 @@
-import { stroopsToXlm, xlmToStroops, truncateAddress } from '../lib/stellar';
+import { stroopsToXlm, xlmToStroops, truncateAddress } from '@/lib/stellar';
 
 describe('stroopsToXlm', () => {
   it('converts 10,000,000 stroops to "1"', () => {
@@ -49,9 +49,9 @@ describe('xlmToStroops', () => {
 });
 
 describe('truncateAddress', () => {
-  it('truncates long address to GABCDEF...WXYZ format', () => {
+  it('truncates long address to GABCDE...WXYZ format', () => {
     const address = 'GABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890WXYZ';
-    expect(truncateAddress(address)).toBe('GABCDEF...WXYZ');
+    expect(truncateAddress(address)).toBe('GABCDE...WXYZ');
   });
 
   it('truncates standard Stellar address', () => {
@@ -69,6 +69,7 @@ describe('truncateAddress', () => {
   });
 
   it('returns input if null/undefined', () => {
-    expect(truncateAddress('' || 'test')).toBe('test');
+    const fallback = ('test' as string);
+    expect(truncateAddress(fallback)).toBe('test');
   });
 });

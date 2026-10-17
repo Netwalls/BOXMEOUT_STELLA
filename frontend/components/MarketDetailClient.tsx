@@ -191,7 +191,12 @@ export function MarketDetailClient({
       )}
 
       {showDispute && (
-        <DisputeModal market={m} onDisputed={() => setShowDispute(false)} />
+        <DisputeModal
+          market={m}
+          isOpen={showDispute}
+          onClose={() => setShowDispute(false)}
+          onDisputed={() => setShowDispute(false)}
+        />
       )}
     </div>
   );

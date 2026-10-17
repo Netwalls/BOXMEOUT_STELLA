@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import CreateMarketPage from "@/app/create/page";
 import { useWallet } from "@/hooks/useWallet";
 import { useCreateMarket } from "@/hooks/useCreateMarket";
-import { useToastProvider } from "@/components/ToastProvider";
+import { useToast, useToastProvider } from "@/components/ToastProvider";
 
 jest.mock("@/hooks/useWallet");
 jest.mock("@/hooks/useCreateMarket");
@@ -12,6 +12,11 @@ jest.mock("@/components/ToastProvider");
 jest.mock("@/components/WalletConnectButton", () => ({
   WalletConnectButton: ({ onConnected }: { onConnected: (a: string) => void }) => (
     <button onClick={() => onConnected("GADDR")}>Connect Wallet</button>
+  ),
+}));
+jest.mock("@/components/CreateMarketForm", () => ({
+  CreateMarketForm: ({ onSubmit }: { onSubmit: (data: any) => Promise<void> }) => (
+    <button onClick={() => onSubmit({} as any)}>Create Market</button>
   ),
 }));
 
@@ -30,6 +35,7 @@ const baseWallet = {
 describe("CreateMarketPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (useToast as jest.Mock).mockReturnValue({ addToast: jest.fn(), toasts: [], removeToast: jest.fn() });
     (useToastProvider as jest.Mock).mockReturnValue({ addToast: jest.fn(), toasts: [], removeToast: jest.fn() });
   });
 
@@ -51,6 +57,7 @@ describe("CreateMarketPage", () => {
   it("navigates to market page and shows success toast on successful creation", async () => {
     const user = userEvent.setup();
     const addToast = jest.fn();
+    (useToast as jest.Mock).mockReturnValue({ addToast, toasts: [], removeToast: jest.fn() });
     (useToastProvider as jest.Mock).mockReturnValue({ addToast, toasts: [], removeToast: jest.fn() });
     (useWallet as jest.Mock).mockReturnValue({ ...baseWallet, isConnected: true, address: "GADDR" });
     (useCreateMarket as jest.Mock).mockReturnValue({
@@ -71,6 +78,7 @@ describe("CreateMarketPage", () => {
   it("shows error toast on failed creation", async () => {
     const user = userEvent.setup();
     const addToast = jest.fn();
+    (useToast as jest.Mock).mockReturnValue({ addToast, toasts: [], removeToast: jest.fn() });
     (useToastProvider as jest.Mock).mockReturnValue({ addToast, toasts: [], removeToast: jest.fn() });
     (useWallet as jest.Mock).mockReturnValue({ ...baseWallet, isConnected: true, address: "GADDR" });
     (useCreateMarket as jest.Mock).mockReturnValue({

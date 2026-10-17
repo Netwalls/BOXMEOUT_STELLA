@@ -2,7 +2,25 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DisputeModal } from "./DisputeModal";
-import { Market } from "@/lib/api";
+import { Market, Bet } from "@/lib/api";
+import { useWallet } from "@/hooks/useWallet";
+import { useToast } from "@/components/ToastProvider";
+import * as stellar from "@/lib/stellar";
+
+jest.mock("@/hooks/useWallet");
+jest.mock("@/components/ToastProvider");
+jest.mock("@/lib/stellar");
+
+const mockBet: Bet = {
+  id: "b1",
+  marketId: "m1",
+  bettor: "G_USER",
+  side: "FighterA",
+  amount: "100",
+  placedAt: new Date().toISOString(),
+  claimed: false,
+  payout: null,
+};
 
 const now = Date.now();
 
@@ -25,6 +43,19 @@ const buildMarket = (overrides: Partial<Market> = {}): Market => ({
 });
 
 describe("DisputeModal", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useWallet as jest.Mock).mockReturnValue({
+      address: "G_USER",
+      signTransaction: jest.fn().mockResolvedValue("signedXdr"),
+      isNetworkMismatched: false,
+    });
+    (useToast as jest.Mock).mockReturnValue({
+      addToast: jest.fn(),
+    });
+    (stellar.buildSorobanInvocation as jest.Mock).mockResolvedValue("xdr");
+    (stellar.submitTransaction as jest.Mock).mockResolvedValue({ txHash: "0x123" });
+  });
   it("renders nothing when market is not Resolved", () => {
     const { container } = render(
       <DisputeModal market={buildMarket({ status: "Open" })} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
@@ -70,7 +101,7 @@ describe("DisputeModal", () => {
   it("shows validation error when reason is too short", async () => {
     const user = userEvent.setup();
     render(
-      <DisputeModal market={buildMarket()} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
+      <DisputeModal market={buildMarket()} userBets={[mockBet]} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
     );
     await user.type(screen.getByRole("textbox"), "Too short");
     await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
@@ -81,7 +112,7 @@ describe("DisputeModal", () => {
     const user = userEvent.setup();
     const onDisputed = jest.fn();
     render(
-      <DisputeModal market={buildMarket()} isOpen onDisputed={onDisputed} onClose={jest.fn()} />
+      <DisputeModal market={buildMarket()} userBets={[mockBet]} isOpen onDisputed={onDisputed} onClose={jest.fn()} />
     );
     await user.type(screen.getByRole("textbox"), "This is a valid reason with enough characters.");
     await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
@@ -106,11 +137,17 @@ describe("DisputeModal", () => {
   });
 
   it("matches snapshot when open within window", () => {
-    const market = buildMarket();
+    jest.useFakeTimers();
+    const fixedNow = 1700000000000;
+    jest.setSystemTime(fixedNow);
+    const market = buildMarket({
+      scheduledAt: new Date(fixedNow - (3600 + 1) * 1000).toISOString(),
+    });
     const { baseElement } = render(
       <DisputeModal market={market} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
     );
     expect(document.body.querySelector('[role="dialog"]')).toMatchSnapshot();
+    jest.useRealTimers();
   });
 
   it("matches snapshot when not visible (outside window)", () => {

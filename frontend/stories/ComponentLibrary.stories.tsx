@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/react";
 import MarketCard from "../components/MarketCard";
 import { BettingInterface } from "../components/BettingInterface";
 import { ClaimButton } from "../components/ClaimButton";
@@ -80,7 +80,7 @@ export const ClaimButtonPreview: Story = {
 };
 
 export const ToastPreview: Story = {
-  render: () => <Toast id="toast-1" message="Bet placed successfully" type="success" onDismiss={() => undefined} />,
+  render: () => <Toast toast={{ id: "toast-1", message: "Bet placed successfully", type: "success" }} onDismiss={() => undefined} />,
 };
 
 export const WalletConnectButtonPreview: Story = {
@@ -96,7 +96,7 @@ export const CreateMarketFormPreview: Story = {
 };
 
 export const DisputeModalPreview: Story = {
-  render: () => <DisputeModal market={market} onDisputed={() => undefined} />,
+  render: () => <DisputeModal market={market} isOpen={true} onClose={() => undefined} onDisputed={() => undefined} />,
 };
 
 export const LoadingSkeletonPreview: Story = {

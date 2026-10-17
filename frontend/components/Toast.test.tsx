@@ -2,13 +2,13 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { Toast } from './Toast';
 
-const renderToast = (toast, onDismiss = () => {}) => {
+const renderToast = (toast: any, onDismiss = () => {}) => {
   return render(
     <Toast toast={toast} onDismiss={onDismiss} />
   );
 };
 
-desc('Toast', () => {
+describe('Toast', () => {
   const successToast = {
     id: 'success-1',
     type: 'success' as const,

@@ -216,8 +216,8 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
         <TransactionStatusModal
           isOpen
           status={txStatus}
-          txHash={txHash}
-          errorMessage={txError}
+          txHash={txHash ?? undefined}
+          errorMessage={txError ?? undefined}
           onClose={() => setTxStatus(null)}
         />
       )}

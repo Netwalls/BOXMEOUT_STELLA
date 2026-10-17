@@ -81,7 +81,7 @@ export function MarketList({
     return (
       <div className="text-center py-16 text-gray-500">
         <p className="text-4xl mb-3">🥊</p>
-        <p className="mb-6">No {filter?.toLowerCase() ?? "active"} markets yet.</p>
+        <p className="mb-6">No {filter ? `${filter.toLowerCase()} ` : ""}markets yet.</p>
         <Link
           href="/create"
           className="inline-flex items-center px-4 py-2 rounded-md bg-amber-500 hover:bg-amber-400 text-black text-sm font-semibold transition-colors"

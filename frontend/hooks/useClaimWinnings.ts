@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { ClaimReceipt } from "@/components/ClaimButton";
+export type { ClaimReceipt };
 import { buildSorobanInvocation, submitTransaction, decodeScVal } from "@/lib/stellar";
 import { fetchMarketById, fetchMarketBets } from "@/lib/api";
 import { useWallet } from "@/hooks/useWallet";

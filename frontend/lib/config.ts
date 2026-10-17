@@ -25,8 +25,8 @@ export type EnvConfig = z.infer<typeof envSchema>;
 
 function loadConfig(): EnvConfig {
   const parsed = envSchema.safeParse({
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-    NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
+    NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK || "testnet",
     NEXT_PUBLIC_SOROBAN_RPC_URL: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL,
     NEXT_PUBLIC_MARKET_CONTRACT_ID: process.env.NEXT_PUBLIC_MARKET_CONTRACT_ID,
   });
