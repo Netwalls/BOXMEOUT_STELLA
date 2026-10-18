@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { logger } from "../../logger";
-import { AppError } from "../../errors";
+import { AppError, toConflictError } from "../../errors";
 
 /**
  * Centralized error-to-HTTP mapping. Must be registered last, after all routes.
@@ -9,6 +9,7 @@ import { AppError } from "../../errors";
  * - ZodError                -> 400 VALIDATION_ERROR (with field-level details)
  * - AppError (and subclasses, e.g. ContractError, NotFoundError) -> its own statusCode/code
  * - OracleAuthorizationError -> 403 FORBIDDEN
+ * - database integrity violations (unique / CHECK, #1395) -> 409 CONFLICT
  * - anything else            -> 500 INTERNAL_ERROR, generic message only — never the stack
  *   or the raw error message, so internals can't leak into a client response.
  *
@@ -46,6 +47,12 @@ export function errorHandlerMiddleware(
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ error: err.message, code: err.code, requestId });
+    return;
+  }
+
+  const conflict = toConflictError(err);
+  if (conflict) {
+    res.status(409).json({ error: conflict.message, code: conflict.code, requestId });
     return;
   }
 
