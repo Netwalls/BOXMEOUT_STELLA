@@ -10,7 +10,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { db } from "../db";
 import { logger } from "../logger";
-import { redis } from "../redis";
+import { redis } from "../lib/redis";
 
 export interface MarketFilters {
   status?: MarketStatus;
@@ -193,7 +193,16 @@ export async function getAllMarkets(
     where.status = filters.status;
   }
   if (filters?.weightClass) {
-    where.weightClass = filters.weightClass;
+    // #1394: weight class lives in the fighter JSON, not a column. A market matches
+    // when either fighter has it. The containment check is served by the GIN
+    // indexes on fighterA and fighterB.
+    const weightClassJson = JSON.stringify({ weightClass: filters.weightClass });
+    const matches = await db.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "Market"
+      WHERE "fighterA" @> ${weightClassJson}::jsonb
+         OR "fighterB" @> ${weightClassJson}::jsonb
+    `;
+    where.id = { in: matches.map((row) => row.id) };
   }
 
   const page = pagination?.page ?? 1;
@@ -247,7 +256,7 @@ export async function getOddsHistory(
 
   const bets = await db.bet.findMany({
     where: { marketId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { placedAt: "asc" },
   });
 
   let poolA = 0n;
@@ -256,9 +265,9 @@ export async function getOddsHistory(
 
   for (const bet of bets) {
     const amount = BigInt(bet.amount);
-    if (bet.outcome === "FighterA") {
+    if (bet.side === "FighterA") {
       poolA += amount;
-    } else if (bet.outcome === "FighterB") {
+    } else if (bet.side === "FighterB") {
       poolB += amount;
     } else {
       // Draw / NoContest bets do not contribute to either side's pool.
@@ -267,7 +276,7 @@ export async function getOddsHistory(
 
     const { impliedOddsA, impliedOddsB } = calculateImpliedOdds(poolA, poolB);
     snapshots.push({
-      timestamp: bet.createdAt.toISOString(),
+      timestamp: bet.placedAt.toISOString(),
       poolA: poolA.toString(),
       poolB: poolB.toString(),
       oddsA: impliedOddsA,

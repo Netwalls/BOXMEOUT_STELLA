@@ -74,6 +74,9 @@ model Market {
   tsVector        Unsupported("tsvector")?
 
   @@index([categoryId])
+  @@index([oracleAddress])
+  @@index([fighterA(ops: JsonbPathOps)], type: Gin)
+  @@index([fighterB(ops: JsonbPathOps)], type: Gin)
   @@index([tsVector(ops: raw("tsvector_ops"))], type: Gin)
 }
 
@@ -103,6 +106,8 @@ model Dispute {
   raisedAt   DateTime  @default(now())
   resolvedAt DateTime?
   resolution String?
+
+  @@index([marketId])
 }
 
 model OracleResult {
