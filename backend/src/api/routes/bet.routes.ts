@@ -1,5 +1,4 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import {
   getBetsByAddressHandler,
   getPortfolioHandler,
@@ -7,19 +6,12 @@ import {
   getLeaderboardHandler,
 } from "../controllers/bet.controller";
 import { validateAddressParam } from "../middleware/validate";
+import { RATE_LIMITS, rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 
-const payoutEstimateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (_req, res) => {
-    res.status(429).json({
-      error: "Too many requests",
-      code: "RATE_LIMITED",
-      retryAfter: 60,
-    });
-  },
+const payoutEstimateLimiter = rateLimitMiddleware({
+  windowMs: RATE_LIMITS.payoutEstimate.windowMs,
+  max: RATE_LIMITS.payoutEstimate.max,
+  keyPrefix: "bets:payout-estimate",
 });
 
 const router = Router();

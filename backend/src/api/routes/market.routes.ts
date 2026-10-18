@@ -11,13 +11,46 @@ import {
 } from "../controllers/market.controller";
 import { walletAuthMiddleware } from "../middleware/walletAuth.middleware";
 import { validate } from "../middleware/validate";
+import {
+  RATE_LIMITS,
+  keyByIp,
+  rateLimitMiddleware,
+  sseConnectionLimit,
+} from "../middleware/rateLimit.middleware";
 
 const router = Router();
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
+const searchLimiter = rateLimitMiddleware({
+  windowMs: RATE_LIMITS.marketSearch.windowMs,
+  max: RATE_LIMITS.marketSearch.max,
+  keyPrefix: "markets:search",
+});
+
+// Market creation is limited per IP before auth (stops unauthenticated floods)
+// and per wallet after auth (the wallet is only known once walletAuth has run).
+const createByIpLimiter = rateLimitMiddleware({
+  windowMs: RATE_LIMITS.createMarketByIp.windowMs,
+  max: RATE_LIMITS.createMarketByIp.max,
+  keyPrefix: "markets:create:ip",
+  keyGenerator: keyByIp,
+});
+
+const createByWalletLimiter = rateLimitMiddleware({
+  windowMs: RATE_LIMITS.createMarketByWallet.windowMs,
+  max: RATE_LIMITS.createMarketByWallet.max,
+  keyPrefix: "markets:create:wallet",
+});
+
+const streamLimiter = sseConnectionLimit({
+  max: RATE_LIMITS.sseConcurrentPerIp.max,
+  ttlSeconds: RATE_LIMITS.sseConcurrentPerIp.ttlSeconds,
+  keyPrefix: "markets:stream",
+});
+
 // GET /api/markets/search?q=...  — must come before /:id
-router.get("/search", searchMarketsHandler);
+router.get("/search", searchLimiter, searchMarketsHandler);
 
 // GET  /api/markets
 router.get("/", getMarketsHandler);
@@ -27,15 +60,15 @@ router.get("/", getMarketsHandler);
 // Body is validated with zod before the handler runs.
 router.post(
   "/",
+  createByIpLimiter,
   walletAuthMiddleware(),
+  createByWalletLimiter,
   validate({ body: createMarketSchema }),
   createMarketHandler,
 );
 
 // GET /api/markets/:id/stream — Server-Sent Events for live pool/status updates
-router.get("/:id/stream", (req: Request, res: Response) => {
-  const { id } = req.params;
-
+router.get("/:id/stream", streamLimiter, (req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
