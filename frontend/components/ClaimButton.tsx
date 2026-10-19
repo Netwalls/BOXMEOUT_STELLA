@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Bet, Market } from "@/lib/api";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
 import { useClaimRefund } from "@/hooks/useClaimRefund";
+import { getClaimBlockReason, getResolutionStage } from "@/lib/resolution";
 
 export interface ClaimReceipt {
   betId: string;
@@ -25,10 +26,13 @@ export function ClaimButton({ bet, market, onClaimed }: ClaimButtonProps): JSX.E
   // Can't determine claim eligibility without market data
   if (!market) return null;
 
-  const isWinner = market.status === "Resolved" && market.outcome === bet.side;
+  // A disputed market still has an outcome; its claim is blocked by getClaimBlockReason
+  const hasOutcome = market.status === "Resolved" || market.status === "Disputed";
+  const isWinner = hasOutcome && market.outcome === bet.side;
   const isRefundable =
     (market.status === "Cancelled" || market.outcome === "NoContest") && !bet.claimed;
   const showButton = (isWinner || isRefundable) && !bet.claimed;
+  const blockReason = showButton ? getClaimBlockReason(getResolutionStage(market)) : null;
 
   if (bet.claimed) {
     return (
@@ -44,6 +48,20 @@ export function ClaimButton({ bet, market, onClaimed }: ClaimButtonProps): JSX.E
   if (!showButton) return null;
 
   const label = isRefundable ? "Claim Refund" : "Claim Winnings";
+
+  if (blockReason) {
+    return (
+      <div className="flex flex-col gap-1">
+        <button
+          disabled
+          className="h-11 px-4 bg-amber-500 text-black text-sm font-semibold rounded-lg opacity-40 cursor-not-allowed"
+        >
+          {label}
+        </button>
+        <p className="text-xs text-gray-400">{blockReason}</p>
+      </div>
+    );
+  }
 
   async function handleClaim() {
     if (loading || !market) return;
