@@ -53,6 +53,44 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
+
+/**
+ * Decides whether the Soroban RPC client may use plain HTTP for `url`.
+ * Plain HTTP is allowed only for localhost/127.0.0.1 outside production and
+ * off mainnet. Any other non-HTTPS URL throws, so transactions cannot be sent
+ * unencrypted by a misconfigured environment variable.
+ */
+export function allowHttpForRpc(
+  url: string,
+  options: { production?: boolean; network?: string } = {}
+): boolean {
+  const production = options.production ?? process.env.NODE_ENV === "production";
+  const network = (options.network ?? NETWORK).toLowerCase();
+  const parsed = new URL(url);
+
+  if (parsed.protocol === "https:") {
+    return false;
+  }
+
+  const isLocalDevelopment =
+    parsed.protocol === "http:" &&
+    LOCAL_HOSTNAMES.has(parsed.hostname) &&
+    !production &&
+    network !== "mainnet";
+
+  if (isLocalDevelopment) {
+    return true;
+  }
+
+  throw new Error(`Insecure Soroban RPC URL rejected (HTTPS required): ${url}`);
+}
+
+/** Options for `new SorobanRpc.Server`, validated against the configured RPC URL. */
+function rpcServerOptions(): { allowHttp: boolean } {
+  return { allowHttp: allowHttpForRpc(SOROBAN_RPC_URL) };
+}
+
 /**
  * Base URL for the stellar.expert explorer, derived from the configured network.
  * Used to link a transaction hash to its on-chain record.
@@ -156,9 +194,7 @@ export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
   const { Operation, SorobanRpc, TransactionBuilder, Timeout } = await loadSdk();
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
-    allowHttp: true,
-  });
+  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const operation = Operation.invokeHostFunction({
     hostFunction: {
@@ -215,9 +251,7 @@ export async function submitTransaction(
   onStatus?: (update: TransactionStatusUpdate) => void
 ): Promise<TransactionResult> {
   const { SorobanRpc, TransactionBuilder } = await loadSdk();
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
-    allowHttp: true,
-  });
+  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const transaction = TransactionBuilder.fromXDR(
     signedXdr,
