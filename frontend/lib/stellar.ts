@@ -1,5 +1,5 @@
 import type { Transaction } from "@stellar/stellar-sdk";
-import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
+import { ContractErrorException, parseContractErrorCode } from "./errors";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
