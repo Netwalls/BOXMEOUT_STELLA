@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Shield, RefreshCw, CheckCircle, Plus, Trash2, Edit2, X, Save, AlertTriangle } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import {
+  ApiError,
   AdminMarketResolution,
   OracleConfig,
   Outcome,
@@ -15,26 +16,6 @@ import {
   updateOracle,
 } from "@/lib/api";
 import { truncateAddress } from "@/lib/stellar";
-
-// ─── Admin access list ────────────────────────────────────────────────────────
-
-/**
- * Comma-separated Stellar addresses that have admin access.
- * Set NEXT_PUBLIC_ADMIN_ADDRESSES in your .env.local file.
- */
-const ADMIN_ADDRESSES: string[] = (
-  process.env.NEXT_PUBLIC_ADMIN_ADDRESSES ?? ""
-)
-  .split(",")
-  .map((a) => a.trim())
-  .filter(Boolean);
-
-function isAdmin(address: string | null): boolean {
-  if (!address) return false;
-  // Allow all addresses in development when no list is configured
-  if (ADMIN_ADDRESSES.length === 0 && process.env.NODE_ENV === "development") return true;
-  return ADMIN_ADDRESSES.includes(address);
-}
 
 // ─── Shared focus ring ────────────────────────────────────────────────────────
 
@@ -50,11 +31,7 @@ const OUTCOMES: { label: string; value: Outcome }[] = [
   { label: "No Contest", value: "NoContest" },
 ];
 
-interface PendingResolutionsProps {
-  adminKey: string;
-}
-
-function PendingResolutions({ adminKey }: PendingResolutionsProps) {
+function PendingResolutions() {
   const [markets, setMarkets] = useState<AdminMarketResolution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +43,14 @@ function PendingResolutions({ adminKey }: PendingResolutionsProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchPendingResolutions(adminKey);
+      const data = await fetchPendingResolutions();
       setMarkets(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch pending markets.");
     } finally {
       setIsLoading(false);
     }
-  }, [adminKey]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -85,7 +62,7 @@ function PendingResolutions({ adminKey }: PendingResolutionsProps) {
       if (!outcome) return;
       setResolvingId(marketId);
       try {
-        await resolveMarket(marketId, outcome, adminKey);
+        await resolveMarket(marketId, outcome);
         setResolvedIds((prev) => new Set([...prev, marketId]));
         setMarkets((prev) => prev.filter((m) => m.marketId !== marketId));
       } catch (e) {
@@ -94,7 +71,7 @@ function PendingResolutions({ adminKey }: PendingResolutionsProps) {
         setResolvingId(null);
       }
     },
-    [adminKey, selectedOutcomes],
+    [selectedOutcomes],
   );
 
   return (
@@ -196,11 +173,7 @@ function PendingResolutions({ adminKey }: PendingResolutionsProps) {
 
 // ─── Oracle CRUD section ──────────────────────────────────────────────────────
 
-interface OracleSectionProps {
-  adminKey: string;
-}
-
-function OracleSection({ adminKey }: OracleSectionProps) {
+function OracleSection() {
   const [oracles, setOracles] = useState<OracleConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -216,14 +189,14 @@ function OracleSection({ adminKey }: OracleSectionProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchOracles(adminKey);
+      const data = await fetchOracles();
       setOracles(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch oracles.");
     } finally {
       setIsLoading(false);
     }
-  }, [adminKey]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -234,7 +207,7 @@ function OracleSection({ adminKey }: OracleSectionProps) {
     setSaving(true);
     setError(null);
     try {
-      const oracle = await createOracle({ address: newAddress.trim(), name: newName.trim() }, adminKey);
+      const oracle = await createOracle({ address: newAddress.trim(), name: newName.trim() });
       setOracles((prev) => [...prev, oracle]);
       setNewAddress("");
       setNewName("");
@@ -244,14 +217,14 @@ function OracleSection({ adminKey }: OracleSectionProps) {
     } finally {
       setSaving(false);
     }
-  }, [newAddress, newName, adminKey]);
+  }, [newAddress, newName]);
 
   const handleDelete = useCallback(
     async (id: string) => {
       setDeletingId(id);
       setError(null);
       try {
-        await deleteOracle(id, adminKey);
+        await deleteOracle(id);
         setOracles((prev) => prev.filter((o) => o.id !== id));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to delete oracle.");
@@ -259,7 +232,7 @@ function OracleSection({ adminKey }: OracleSectionProps) {
         setDeletingId(null);
       }
     },
-    [adminKey],
+    [],
   );
 
   const handleSaveEdit = useCallback(
@@ -268,7 +241,7 @@ function OracleSection({ adminKey }: OracleSectionProps) {
       setSaving(true);
       setError(null);
       try {
-        const updated = await updateOracle(id, { name: editName.trim() }, adminKey);
+        const updated = await updateOracle(id, { name: editName.trim() });
         setOracles((prev) => prev.map((o) => (o.id === id ? updated : o)));
         setEditingId(null);
       } catch (e) {
@@ -277,20 +250,20 @@ function OracleSection({ adminKey }: OracleSectionProps) {
         setSaving(false);
       }
     },
-    [editName, adminKey],
+    [editName],
   );
 
   const handleToggleActive = useCallback(
     async (oracle: OracleConfig) => {
       setError(null);
       try {
-        const updated = await updateOracle(oracle.id, { active: !oracle.active }, adminKey);
+        const updated = await updateOracle(oracle.id, { active: !oracle.active });
         setOracles((prev) => prev.map((o) => (o.id === oracle.id ? updated : o)));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to update oracle.");
       }
     },
-    [adminKey],
+    [],
   );
 
   return (
@@ -497,17 +470,38 @@ function OracleSection({ adminKey }: OracleSectionProps) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+type AdminAccess = "checking" | "granted" | "denied" | "error";
+
 export default function AdminPage(): JSX.Element {
   const { address, isConnected, connect } = useWallet();
-  const authorized = isAdmin(address);
+  const [access, setAccess] = useState<AdminAccess>("checking");
+  const [accessError, setAccessError] = useState<string | null>(null);
 
-  /**
-   * The admin key sent with every request. In this prototype we use the
-   * wallet address itself as the bearer token; a real deployment would
-   * use a signed challenge or a proper JWT. The env var allows overriding
-   * for development/testing.
-   */
-  const adminKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY ?? address ?? "";
+  // The server decides who is an admin. Data sections only render after an
+  // admin-only request succeeds with the wallet's signature.
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    let cancelled = false;
+    setAccess("checking");
+    setAccessError(null);
+    fetchPendingResolutions().then(
+      () => {
+        if (!cancelled) setAccess("granted");
+      },
+      (err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          setAccess("denied");
+        } else {
+          setAccess("error");
+          setAccessError(err instanceof Error ? err.message : "Could not verify admin access.");
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, address]);
 
   if (!isConnected || !address) {
     return (
@@ -526,7 +520,15 @@ export default function AdminPage(): JSX.Element {
     );
   }
 
-  if (!authorized) {
+  if (access === "checking") {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <p role="status" className="text-gray-400">Verifying admin access…</p>
+      </div>
+    );
+  }
+
+  if (access === "denied") {
     return (
       <div className="container mx-auto px-4 py-16 text-center space-y-4">
         <AlertTriangle className="h-12 w-12 mx-auto text-red-400" aria-hidden="true" />
@@ -534,11 +536,21 @@ export default function AdminPage(): JSX.Element {
         <p className="text-gray-400">
           Wallet{" "}
           <span className="font-mono text-gray-300">{truncateAddress(address)}</span>{" "}
-          is not on the admin list.
+          is not authorised for admin access.
         </p>
         <p className="text-xs text-gray-500">
-          Add your address to <code className="text-gray-400">NEXT_PUBLIC_ADMIN_ADDRESSES</code> to grant access.
+          The backend admin allowlist (<code className="text-gray-400">ADMIN_WALLET_ADDRESSES</code>) controls access.
         </p>
+      </div>
+    );
+  }
+
+  if (access === "error") {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center space-y-4">
+        <AlertTriangle className="h-12 w-12 mx-auto text-red-400" aria-hidden="true" />
+        <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+        <p role="alert" className="text-gray-400">{accessError}</p>
       </div>
     );
   }
@@ -558,9 +570,9 @@ export default function AdminPage(): JSX.Element {
       </div>
 
       {/* Sections */}
-      <PendingResolutions adminKey={adminKey} />
+      <PendingResolutions />
       <hr className="border-gray-800" />
-      <OracleSection adminKey={adminKey} />
+      <OracleSection />
     </div>
   );
 }

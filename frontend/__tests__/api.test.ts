@@ -10,6 +10,7 @@ import {
   fetchPayoutEstimate,
   fetchOddsHistory,
   fetchUserPositions,
+  fetchOracles,
   createMarketMeta,
   ApiError,
   DEFAULT_TIMEOUT_MS,
@@ -403,3 +404,22 @@ test("apiFetch: never retries a POST, even on 503", async () => {
   await expect(apiFetch("/api/anything", { method: "POST" })).rejects.toBeInstanceOf(ApiError);
   expect(global.fetch).toHaveBeenCalledTimes(1);
 });
+
+// ─── admin wallet auth (#1433) ───────────────────────────────────────────────
+
+test("admin: requests are wallet-signed and never send an admin key", async () => {
+  global.fetch = jest.fn(async (url: string) => {
+    if (String(url).includes("/api/auth/challenge")) {
+      return mockResponse(200, JSON.stringify({ challenge: "BOXMEOUT-AUTH:GADDR1:n", expiresAt: Date.now() + 300_000 }));
+    }
+    return mockResponse(200, JSON.stringify([]));
+  });
+
+  await fetchOracles();
+
+  const protectedCall = (global.fetch as jest.Mock).mock.calls.find(([url]) => String(url).includes("/api/admin/oracles"));
+  const headers = protectedCall[1].headers as Record<string, string>;
+  expect(headers).toMatchObject({ "x-wallet-address": "GADDR1", "x-wallet-signature": "c2ln" });
+  expect(Object.keys(headers).map((k) => k.toLowerCase())).not.toContain("x-admin-key");
+});
+

@@ -481,6 +481,9 @@ export async function fetchLeaderboard(period: LeaderboardPeriod): Promise<Leade
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
+// Admin routes authenticate with the connected wallet's signature. The server
+// enforces the admin allowlist, so no secret is ever sent from the browser.
+
 
 export interface AdminMarketResolution {
   marketId: string;
@@ -506,96 +509,66 @@ export interface ResolveMarketInput {
 
 /**
  * GET /api/admin/markets/pending
- * Returns markets awaiting resolution. Requires admin auth header.
+ * Returns markets awaiting resolution. Requires wallet auth as an admin.
  */
-export async function fetchPendingResolutions(adminKey: string): Promise<AdminMarketResolution[]> {
-  return apiFetch<AdminMarketResolution[]>(`/api/admin/markets/pending`, {
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
-  });
+export async function fetchPendingResolutions(): Promise<AdminMarketResolution[]> {
+  return apiFetch<AdminMarketResolution[]>(`/api/admin/markets/pending`, { auth: true });
 }
 
 /**
  * POST /api/admin/markets/:id/resolve
- * Resolves a market with the given outcome. Requires admin auth header.
+ * Resolves a market with the given outcome. Requires wallet auth as an admin.
  */
-export async function resolveMarket(
-  marketId: string,
-  outcome: Outcome,
-  adminKey: string,
-): Promise<{ success: boolean }> {
+export async function resolveMarket(marketId: string, outcome: Outcome): Promise<{ success: boolean }> {
   return apiFetch<{ success: boolean }>(`/api/admin/markets/${marketId}/resolve`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
     body: JSON.stringify({ outcome }),
+    auth: true,
   });
 }
 
 /**
  * GET /api/admin/oracles
- * Returns the list of configured oracle addresses. Requires admin auth header.
+ * Returns the list of configured oracle addresses. Requires wallet auth as an admin.
  */
-export async function fetchOracles(adminKey: string): Promise<OracleConfig[]> {
-  return apiFetch<OracleConfig[]>(`/api/admin/oracles`, {
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
-  });
+export async function fetchOracles(): Promise<OracleConfig[]> {
+  return apiFetch<OracleConfig[]>(`/api/admin/oracles`, { auth: true });
 }
 
 /**
  * POST /api/admin/oracles
- * Creates a new oracle config entry. Requires admin auth header.
+ * Creates a new oracle config entry. Requires wallet auth as an admin.
  */
-export async function createOracle(
-  data: { address: string; name: string },
-  adminKey: string,
-): Promise<OracleConfig> {
+export async function createOracle(data: { address: string; name: string }): Promise<OracleConfig> {
   return apiFetch<OracleConfig>(`/api/admin/oracles`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
     body: JSON.stringify(data),
+    auth: true,
   });
 }
 
 /**
  * DELETE /api/admin/oracles/:id
- * Removes an oracle config entry. Requires admin auth header.
+ * Removes an oracle config entry. Requires wallet auth as an admin.
  */
-export async function deleteOracle(id: string, adminKey: string): Promise<{ success: boolean }> {
+export async function deleteOracle(id: string): Promise<{ success: boolean }> {
   return apiFetch<{ success: boolean }>(`/api/admin/oracles/${id}`, {
     method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
+    auth: true,
   });
 }
 
 /**
  * PATCH /api/admin/oracles/:id
- * Updates an oracle's name or active status. Requires admin auth header.
+ * Updates an oracle's name or active status. Requires wallet auth as an admin.
  */
 export async function updateOracle(
   id: string,
   patch: Partial<Pick<OracleConfig, "name" | "active">>,
-  adminKey: string,
 ): Promise<OracleConfig> {
   return apiFetch<OracleConfig>(`/api/admin/oracles/${id}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
     body: JSON.stringify(patch),
+    auth: true,
   });
 }

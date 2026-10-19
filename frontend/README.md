@@ -73,6 +73,14 @@ NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID=CDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 > All `NEXT_PUBLIC_` variables are exposed to the browser. Do not put secrets here. The backend holds sensitive keys (`ADMIN_SECRET_KEY`, database credentials).
 
+### Admin dashboard setup
+
+The admin dashboard at `/admin` does not use an API key. Admin requests are signed with the connected Freighter wallet using the same challenge flow as other authenticated calls (`GET /api/auth/challenge`, then `x-wallet-address` and `x-wallet-signature` headers).
+
+- **Do not** add an admin secret to any `NEXT_PUBLIC_*` variable. Anything with that prefix is shipped to the browser.
+- Access is decided by the backend. Add the admin's Stellar address to the backend `ADMIN_WALLET_ADDRESSES` environment variable (comma-separated). A wallet not on that list sees "Access Denied".
+- The frontend only renders admin data after the server accepts a signed request, so a client-side tamper cannot reveal it.
+
 ---
 
 ## Wallet Requirements
