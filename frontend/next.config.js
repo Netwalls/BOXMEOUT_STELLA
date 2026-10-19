@@ -7,6 +7,8 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Self-contained server bundle for the Docker image (see frontend/Dockerfile)
+  output: "standalone",
   webpack: (config, { webpack }) => {
     // Playwright builds swap the wallet and Soroban layers for mocks (see e2e/mocks)
     if (process.env.NEXT_PUBLIC_E2E === "true") {
