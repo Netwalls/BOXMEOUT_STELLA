@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchMarketStats } from "@/lib/api";
 import { MarketStats } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/config";
 
 export interface UseMarketEventsResult {
   poolA: bigint | null;
@@ -22,7 +23,7 @@ const SSE_RECONNECT_MAX_MS = 30000;
  * Falls back to a relative path when no API base URL is configured.
  */
 function buildMarketEventsUrl(market_id: string): string {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const base = API_BASE_URL;
   return `${base}/markets/${encodeURIComponent(market_id)}/events`;
 }
 

@@ -1,5 +1,10 @@
 import type { Transaction } from "@stellar/stellar-sdk";
 import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
+import {
+  NETWORK_PASSPHRASE,
+  SOROBAN_RPC_URL,
+  STELLAR_NETWORK,
+} from "./config";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
@@ -13,28 +18,14 @@ const loadSdk = (): Promise<typeof import("@stellar/stellar-sdk")> => import("@s
  * lowercase so case-sensitive comparisons (e.g. against Freighter's network
  * string) don't trigger a false mismatch banner.
  */
-export const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet").toLowerCase();
-
-/**
- * Canonical network passphrases keyed by normalized network name.
- * Used to derive the passphrase from the network name when an explicit
- * NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE is not provided.
- */
-const NETWORK_PASSPHRASES: Record<string, string> = {
-  testnet: "Test SDF Network ; September 2015",
-  mainnet: "Public Global Stellar Network ; September 2015",
-  futurenet: "Test SDF Future Network ; October 2022",
-};
+export const NETWORK = STELLAR_NETWORK.toLowerCase();
 
 /**
  * The Stellar network passphrase this app is configured to operate against.
  * Wallet network mismatches are detected by comparing against this passphrase.
- * Falls back to the passphrase derived from NETWORK when not explicitly set.
+ * Read from `lib/config.ts`, which derives it from the network when not set.
  */
-export const NETWORK_PASSPHRASE =
-  process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ??
-  NETWORK_PASSPHRASES[NETWORK] ??
-  NETWORK_PASSPHRASES.testnet;
+export { NETWORK_PASSPHRASE };
 
 export const NETWORK_NAME = NETWORK;
 
@@ -50,8 +41,7 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
   return a.toLowerCase() === b.toLowerCase();
 }
 
-export const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
+export { SOROBAN_RPC_URL };
 
 /**
  * Base URL for the stellar.expert explorer, derived from the configured network.
