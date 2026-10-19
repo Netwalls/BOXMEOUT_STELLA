@@ -52,7 +52,7 @@ export function useMarkets(
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchMarkets(filtersRef.current);
+      const { data } = await fetchMarkets(filtersRef.current);
       setMarkets(data);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Unknown error'));

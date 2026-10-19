@@ -83,7 +83,7 @@ function route(pathname) {
   if ((m = pathname.match(/^\/api\/markets\/([^/]+)\/stats$/))) return markets[m[1]] && stats(markets[m[1]]);
   if ((m = pathname.match(/^\/api\/markets\/([^/]+)\/odds-history$/)))
     return markets[m[1]] && oddsHistory(markets[m[1]]);
-  if (pathname === "/api/bets/payout-estimate") return { estimate: "0" };
+  if (pathname === "/api/bets/payout-estimate") return { estimatedPayout: "0" };
   if (/^\/api\/bets\/[^/]+\/portfolio$/.test(pathname))
     return {
       totalStaked: "100000000",
@@ -109,12 +109,17 @@ createServer((req, res) => {
   }
 
   const { pathname } = new URL(req.url ?? "/", `http://localhost:${PORT}`);
-  const body = route(pathname);
+  const payload = route(pathname);
 
-  if (body === undefined) {
+  if (payload === undefined) {
     res.writeHead(404, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "Not found" }));
     return;
   }
+
+  // Mirror the backend envelope: lists carry page metadata, single values do not.
+  const body = Array.isArray(payload)
+    ? { data: payload, page: 1, limit: 20 }
+    : { data: payload };
 
   res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(body));
 }).listen(PORT, () => {

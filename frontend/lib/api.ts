@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { API_BASE_URL } from "./config";
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 export type MarketStatus = "Open" | "Locked" | "Resolved" | "Cancelled" | "Disputed";
@@ -104,7 +107,7 @@ export interface CreateMarketMetaInput {
   oracleAddress: string;
 }
 
-// ─── ERROR ────────────────────────────────────────────────────────────────────
+// ─── ERRORS ───────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -113,13 +116,164 @@ export class ApiError extends Error {
   }
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+/** Thrown when a 2xx response does not match the schema for its endpoint. */
+export class ApiResponseError extends Error {
+  constructor(public path: string, public issues: z.ZodIssue[]) {
+    const details = issues
+      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+      .join("; ");
+    super(`Unexpected response from ${path}: ${details}`);
+    this.name = "ApiResponseError";
+  }
+}
 
-import { API_BASE_URL } from "./config";
+// ─── RESPONSE SCHEMAS ─────────────────────────────────────────────────────────
+
+/** BigInt values are serialized as non-negative decimal strings by the backend. */
+const bigintString = z.string().regex(/^\d+$/, "expected a non-negative integer string");
+
+const fighterSchema = z.object({
+  name: z.string(),
+  record: z.string(),
+  nationality: z.string(),
+  weightClass: z.string(),
+});
+
+const marketStatusSchema = z.enum(["Open", "Locked", "Resolved", "Cancelled", "Disputed"]);
+const outcomeSchema = z.enum(["FighterA", "FighterB", "Draw", "NoContest"]);
+const betSideSchema = z.enum(["FighterA", "FighterB"]);
+
+const marketSchema = z.object({
+  id: z.string(),
+  contractAddress: z.string(),
+  fighterA: fighterSchema,
+  fighterB: fighterSchema,
+  scheduledAt: z.string(),
+  bettingEndsAt: z.string(),
+  status: marketStatusSchema,
+  outcome: outcomeSchema.nullable(),
+  poolA: bigintString,
+  poolB: bigintString,
+  totalPool: bigintString,
+  oracleAddress: z.string(),
+  createdBy: z.string(),
+}) satisfies z.ZodType<Market>;
+
+const betSchema = z.object({
+  id: z.string(),
+  marketId: z.string(),
+  bettor: z.string(),
+  side: betSideSchema,
+  amount: bigintString,
+  placedAt: z.string(),
+  claimed: z.boolean(),
+  payout: bigintString.nullable(),
+}) satisfies z.ZodType<Bet>;
+
+const marketStatsSchema = z.object({
+  totalBets: z.number().int().nonnegative(),
+  uniqueBettors: z.number().int().nonnegative(),
+  poolA: bigintString,
+  poolB: bigintString,
+  totalVolume: bigintString,
+  impliedOddsA: z.number(),
+  impliedOddsB: z.number(),
+}) satisfies z.ZodType<MarketStats>;
+
+const oddsSnapshotSchema = z.object({
+  timestamp: z.string(),
+  poolA: bigintString,
+  poolB: bigintString,
+  oddsA: z.number(),
+  oddsB: z.number(),
+}) satisfies z.ZodType<OddsSnapshot>;
+
+const portfolioSummarySchema = z.object({
+  totalStaked: bigintString,
+  totalWinnings: bigintString,
+  pendingClaims: bigintString,
+  activeBets: z.number().int().nonnegative(),
+  completedBets: z.number().int().nonnegative(),
+  roi: z.number(),
+}) satisfies z.ZodType<PortfolioSummary>;
+
+const userPositionSchema = z.object({
+  marketId: z.string(),
+  market: marketSchema.optional(),
+  side: betSideSchema,
+  amount: bigintString,
+  avgOdds: z.number(),
+  open: z.boolean(),
+  placedAt: z.string().optional(),
+}) satisfies z.ZodType<UserPosition>;
+
+const payoutEstimateSchema = z.object({ estimatedPayout: bigintString });
+
+const successSchema = z.object({ success: z.boolean() });
+
+const createMarketMetaSchema = z.object({
+  success: z.boolean(),
+  marketId: z.string().optional(),
+});
+
+const leaderboardEntrySchema = z.object({
+  rank: z.number().int().positive(),
+  address: z.string(),
+  totalWinnings: bigintString,
+  totalBets: z.number().int().nonnegative(),
+  winCount: z.number().int().nonnegative(),
+  roi: z.number(),
+});
+
+const adminMarketResolutionSchema = z.object({
+  marketId: z.string(),
+  contractAddress: z.string(),
+  fighterA: fighterSchema,
+  fighterB: fighterSchema,
+  scheduledAt: z.string(),
+  status: marketStatusSchema,
+});
+
+const oracleConfigSchema = z.object({
+  id: z.string(),
+  address: z.string(),
+  name: z.string(),
+  active: z.boolean(),
+  createdAt: z.string(),
+});
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 const BASE = API_BASE_URL;
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+/** Pagination metadata the backend sends alongside `data` on list endpoints. */
+export interface PageMeta {
+  page?: number;
+  limit?: number;
+  nextCursor?: string | null;
+}
+
+export interface Paginated<T> extends PageMeta {
+  data: T;
+}
+
+type Envelope = PageMeta & { data: unknown };
+
+function isEnvelope(body: unknown): body is Envelope {
+  return typeof body === "object" && body !== null && "data" in body;
+}
+
+/**
+ * Fetches `path`, unwraps the `{ data, ...meta }` envelope, and validates `data`
+ * against `schema`. Bodies without an envelope are validated as-is. Any mismatch
+ * throws `ApiResponseError` so a broken contract fails loudly instead of rendering
+ * garbage.
+ */
+async function request<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  options?: RequestInit
+): Promise<Paginated<T>> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
@@ -128,7 +282,25 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const text = await res.text().catch(() => res.statusText);
     throw new ApiError(res.status, text);
   }
-  return res.json() as Promise<T>;
+
+  const body: unknown = await res.json();
+  const envelope: Envelope = isEnvelope(body) ? body : { data: body };
+  const parsed = schema.safeParse(envelope.data);
+
+  if (!parsed.success) {
+    throw new ApiResponseError(path, parsed.error.issues);
+  }
+
+  return {
+    data: parsed.data,
+    page: envelope.page,
+    limit: envelope.limit,
+    nextCursor: envelope.nextCursor,
+  };
+}
+
+async function apiFetch<T>(path: string, schema: z.ZodType<T>, options?: RequestInit): Promise<T> {
+  return (await request(path, schema, options)).data;
 }
 
 function toQueryString(params: Record<string, string | number | undefined>): string {
@@ -140,15 +312,21 @@ function toQueryString(params: Record<string, string | number | undefined>): str
   return s ? `?${s}` : "";
 }
 
+const jsonHeaders = (adminKey: string) => ({
+  "Content-Type": "application/json",
+  "x-admin-key": adminKey,
+});
+
 // ─── API FUNCTIONS ────────────────────────────────────────────────────────────
 
 /**
  * GET /api/markets
- * Fetches the market list with optional filters and pagination.
+ * Fetches the market list with optional filters and pagination. Resolves to the
+ * markets together with the page metadata returned by the backend.
  */
-export async function fetchMarkets(params?: MarketQueryParams): Promise<Market[]> {
+export async function fetchMarkets(params?: MarketQueryParams): Promise<Paginated<Market[]>> {
   const qs = toQueryString(params as Record<string, string | number | undefined> ?? {});
-  return apiFetch<Market[]>(`/api/markets${qs}`);
+  return request(`/api/markets${qs}`, z.array(marketSchema));
 }
 
 /**
@@ -156,7 +334,7 @@ export async function fetchMarkets(params?: MarketQueryParams): Promise<Market[]
  * Fetches a single market by ID. Throws if not found.
  */
 export async function fetchMarketById(market_id: string): Promise<Market> {
-  return apiFetch<Market>(`/api/markets/${market_id}`);
+  return apiFetch(`/api/markets/${market_id}`, marketSchema);
 }
 
 /**
@@ -164,7 +342,7 @@ export async function fetchMarketById(market_id: string): Promise<Market> {
  * Fetches aggregated stats for a market.
  */
 export async function fetchMarketStats(market_id: string): Promise<MarketStats> {
-  return apiFetch<MarketStats>(`/api/markets/${market_id}/stats`);
+  return apiFetch(`/api/markets/${market_id}/stats`, marketStatsSchema);
 }
 
 /**
@@ -173,7 +351,7 @@ export async function fetchMarketStats(market_id: string): Promise<MarketStats> 
  */
 export async function fetchMarketBets(market_id: string, filters?: MarketBetsFilters): Promise<Bet[]> {
   const qs = toQueryString(filters as Record<string, string | number | undefined> ?? {});
-  return apiFetch<Bet[]>(`/api/markets/${market_id}/bets${qs}`);
+  return apiFetch(`/api/markets/${market_id}/bets${qs}`, z.array(betSchema));
 }
 
 /**
@@ -181,7 +359,7 @@ export async function fetchMarketBets(market_id: string, filters?: MarketBetsFil
  * Fetches a user's full bet history.
  */
 export async function fetchBetsByAddress(address: string): Promise<Bet[]> {
-  return apiFetch<Bet[]>(`/api/bets/${address}`);
+  return apiFetch(`/api/bets/${address}`, z.array(betSchema));
 }
 
 /**
@@ -189,7 +367,7 @@ export async function fetchBetsByAddress(address: string): Promise<Bet[]> {
  * Fetches portfolio summary stats for a wallet address.
  */
 export async function fetchPortfolioSummary(address: string): Promise<PortfolioSummary> {
-  return apiFetch<PortfolioSummary>(`/api/bets/${address}/portfolio`);
+  return apiFetch(`/api/bets/${address}/portfolio`, portfolioSummarySchema);
 }
 
 /**
@@ -203,8 +381,8 @@ export async function fetchPayoutEstimate(
   amount: bigint
 ): Promise<bigint> {
   const qs = toQueryString({ market_id, side, amount: amount.toString() });
-  const data = await apiFetch<{ estimate: string }>(`/api/bets/payout-estimate${qs}`);
-  return BigInt(data.estimate);
+  const { estimatedPayout } = await apiFetch(`/api/bets/payout-estimate${qs}`, payoutEstimateSchema);
+  return BigInt(estimatedPayout);
 }
 
 /**
@@ -212,7 +390,7 @@ export async function fetchPayoutEstimate(
  * Fetches historical odds snapshots for the market odds chart.
  */
 export async function fetchOddsHistory(market_id: string): Promise<OddsSnapshot[]> {
-  return apiFetch<OddsSnapshot[]>(`/api/markets/${market_id}/odds-history`);
+  return apiFetch(`/api/markets/${market_id}/odds-history`, z.array(oddsSnapshotSchema));
 }
 
 /**
@@ -220,7 +398,7 @@ export async function fetchOddsHistory(market_id: string): Promise<OddsSnapshot[
  * Fetches user positions for a wallet address.
  */
 export async function fetchUserPositions(address: string): Promise<UserPosition[]> {
-  return apiFetch<UserPosition[]>(`/api/users/${address}/positions`);
+  return apiFetch(`/api/users/${address}/positions`, z.array(userPositionSchema));
 }
 
 /**
@@ -228,7 +406,7 @@ export async function fetchUserPositions(address: string): Promise<UserPosition[
  * Submits created market metadata to the backend for reconciliation.
  */
 export async function createMarketMeta(data: CreateMarketMetaInput): Promise<{ success: boolean; marketId?: string }> {
-  return apiFetch<{ success: boolean; marketId?: string }>(`/api/markets`, {
+  return apiFetch(`/api/markets`, createMarketMetaSchema, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -252,7 +430,7 @@ export interface LeaderboardEntry {
  * Returns the top bettors ranked by total winnings for the given period.
  */
 export async function fetchLeaderboard(period: LeaderboardPeriod): Promise<LeaderboardEntry[]> {
-  return apiFetch<LeaderboardEntry[]>(`/api/leaderboard?period=${period}`);
+  return apiFetch(`/api/leaderboard?period=${period}`, z.array(leaderboardEntrySchema));
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
@@ -284,11 +462,8 @@ export interface ResolveMarketInput {
  * Returns markets awaiting resolution. Requires admin auth header.
  */
 export async function fetchPendingResolutions(adminKey: string): Promise<AdminMarketResolution[]> {
-  return apiFetch<AdminMarketResolution[]>(`/api/admin/markets/pending`, {
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
+  return apiFetch(`/api/admin/markets/pending`, z.array(adminMarketResolutionSchema), {
+    headers: jsonHeaders(adminKey),
   });
 }
 
@@ -301,12 +476,9 @@ export async function resolveMarket(
   outcome: Outcome,
   adminKey: string,
 ): Promise<{ success: boolean }> {
-  return apiFetch<{ success: boolean }>(`/api/admin/markets/${marketId}/resolve`, {
+  return apiFetch(`/api/admin/markets/${marketId}/resolve`, successSchema, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
+    headers: jsonHeaders(adminKey),
     body: JSON.stringify({ outcome }),
   });
 }
@@ -316,11 +488,8 @@ export async function resolveMarket(
  * Returns the list of configured oracle addresses. Requires admin auth header.
  */
 export async function fetchOracles(adminKey: string): Promise<OracleConfig[]> {
-  return apiFetch<OracleConfig[]>(`/api/admin/oracles`, {
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
+  return apiFetch(`/api/admin/oracles`, z.array(oracleConfigSchema), {
+    headers: jsonHeaders(adminKey),
   });
 }
 
@@ -332,12 +501,9 @@ export async function createOracle(
   data: { address: string; name: string },
   adminKey: string,
 ): Promise<OracleConfig> {
-  return apiFetch<OracleConfig>(`/api/admin/oracles`, {
+  return apiFetch(`/api/admin/oracles`, oracleConfigSchema, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
+    headers: jsonHeaders(adminKey),
     body: JSON.stringify(data),
   });
 }
@@ -347,12 +513,9 @@ export async function createOracle(
  * Removes an oracle config entry. Requires admin auth header.
  */
 export async function deleteOracle(id: string, adminKey: string): Promise<{ success: boolean }> {
-  return apiFetch<{ success: boolean }>(`/api/admin/oracles/${id}`, {
+  return apiFetch(`/api/admin/oracles/${id}`, successSchema, {
     method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
+    headers: jsonHeaders(adminKey),
   });
 }
 
@@ -365,12 +528,9 @@ export async function updateOracle(
   patch: Partial<Pick<OracleConfig, "name" | "active">>,
   adminKey: string,
 ): Promise<OracleConfig> {
-  return apiFetch<OracleConfig>(`/api/admin/oracles/${id}`, {
+  return apiFetch(`/api/admin/oracles/${id}`, oracleConfigSchema, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-    },
+    headers: jsonHeaders(adminKey),
     body: JSON.stringify(patch),
   });
 }
