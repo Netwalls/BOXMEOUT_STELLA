@@ -8,7 +8,13 @@ import {
   TransactionBuilder,
   scValToNative,
 } from "@stellar/stellar-sdk";
-import { buildSorobanInvocation, NETWORK_PASSPHRASE } from "@/lib/stellar";
+import {
+  buildSorobanInvocation,
+  NETWORK_PASSPHRASE,
+  submitTransaction,
+  TX_EXPIRED_MESSAGE,
+  TX_TIMEOUT_SECONDS,
+} from "@/lib/stellar";
 
 const mockServer = {
   getAccount: jest.fn(),
@@ -80,5 +86,37 @@ describe("buildSorobanInvocation encoding", () => {
     expect(addressArg.switch().name).toBe("scvAddress");
     expect(Address.fromScVal(addressArg).toString()).toBe(SIGNER);
     expect(scValToNative(amountArg)).toBe(100n);
+  });
+});
+
+describe("transaction validity window", () => {
+  it("sets maxTime to the bounded timeout from the moment of building", async () => {
+    const before = Math.floor(Date.now() / 1000);
+    const tx = await buildAndDecode([]);
+    const after = Math.floor(Date.now() / 1000);
+
+    const maxTime = Number(tx.timeBounds?.maxTime);
+    expect(maxTime).toBeGreaterThanOrEqual(before + TX_TIMEOUT_SECONDS);
+    expect(maxTime).toBeLessThanOrEqual(after + TX_TIMEOUT_SECONDS);
+  });
+
+  it("maps a txTooLate rejection to the friendly expiry message", async () => {
+    const signedXdr = await buildSorobanInvocation({
+      contractId: CONTRACT_ID,
+      method: "place_bet",
+      args: [],
+      signerAddress: SIGNER,
+    });
+
+    mockServer.sendTransaction.mockResolvedValue({
+      status: "ERROR",
+      errorResult: { result: () => ({ switch: () => ({ name: "txTooLate" }) }) },
+    });
+
+    const onStatus = jest.fn();
+    await expect(submitTransaction(signedXdr, onStatus)).rejects.toThrow(TX_EXPIRED_MESSAGE);
+    expect(onStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error: TX_EXPIRED_MESSAGE })
+    );
   });
 });

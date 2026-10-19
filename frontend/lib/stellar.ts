@@ -50,6 +50,16 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
   return a.toLowerCase() === b.toLowerCase();
 }
 
+/**
+ * How long a built transaction stays valid, in seconds. Kept short so a signed
+ * XDR that is logged, copied or left in a wallet popup cannot be submitted much
+ * later against stale market state.
+ */
+export const TX_TIMEOUT_SECONDS = 120;
+
+/** User-facing message for a transaction that expired before it was submitted. */
+export const TX_EXPIRED_MESSAGE = "This transaction expired before it was submitted. Please try again.";
+
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
@@ -132,6 +142,14 @@ function decodeContractError(error: unknown): unknown {
 }
 
 /**
+ * Reports whether the network rejected a transaction because its validity
+ * window had already closed (`txTooLate`).
+ */
+function isTransactionTooLate(errorResult?: xdr.TransactionResult): boolean {
+  return errorResult?.result().switch().name === "txTooLate";
+}
+
+/**
  * Extracts the raw error string from a failed simulation result.
  */
 function simulationErrorText(simResult: unknown): string {
@@ -170,7 +188,7 @@ export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
   const sdk = await loadSdk();
-  const { Contract, SorobanRpc, TransactionBuilder, TimeoutInfinite } = sdk;
+  const { Contract, SorobanRpc, TransactionBuilder } = sdk;
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
     allowHttp: true,
   });
@@ -186,7 +204,7 @@ export async function buildSorobanInvocation(
   });
 
   transaction.addOperation(operation);
-  transaction.setTimeout(TimeoutInfinite);
+  transaction.setTimeout(TX_TIMEOUT_SECONDS);
 
   const tx = transaction.build();
 
@@ -202,7 +220,7 @@ export async function buildSorobanInvocation(
     });
 
     withFee.addOperation(preparedTx.operations[0]);
-    withFee.setTimeout(TimeoutInfinite);
+    withFee.setTimeout(TX_TIMEOUT_SECONDS);
 
     // Left unsigned: the connected wallet signs the XDR returned here.
     return withFee.build().toXDR();
@@ -237,6 +255,11 @@ export async function submitTransaction(
   const response = await server.sendTransaction(transaction);
 
   if (response.status !== "PENDING") {
+    if (isTransactionTooLate(response.errorResult)) {
+      onStatus?.({ status: "failed", txHash, error: TX_EXPIRED_MESSAGE });
+      throw new Error(TX_EXPIRED_MESSAGE);
+    }
+
     const error = `Transaction submission failed with status: ${response.status}`;
     onStatus?.({ status: "failed", txHash, error });
     throw decodeContractError(new Error(error));
