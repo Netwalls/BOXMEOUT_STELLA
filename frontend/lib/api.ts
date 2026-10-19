@@ -131,6 +131,8 @@ const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 
 export interface ApiRequestInit extends RequestInit {
   timeoutMs?: number;
+  /** Attach wallet-signature headers, signing a fresh challenge when needed. */
+  auth?: boolean;
 }
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -198,7 +200,24 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * Public entry point. Calls flagged `auth: true` get wallet headers; a 401
+ * drops the cached signature and re-challenges exactly once.
+ */
 export async function apiFetch<T>(path: string, options: ApiRequestInit = {}): Promise<T> {
+  const { auth = false, ...init } = options;
+  if (!auth) return sendRequest<T>(path, init);
+
+  try {
+    return await sendRequest<T>(path, await withAuthHeaders(init));
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 401) throw err;
+    cachedAuth = null;
+    return sendRequest<T>(path, await withAuthHeaders(init));
+  }
+}
+
+async function sendRequest<T>(path: string, options: ApiRequestInit = {}): Promise<T> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, headers, signal: callerSignal, ...init } = options;
   // Only idempotent reads are retried; retrying a POST could duplicate a write.
   const maxRetries = (init.method ?? "GET").toUpperCase() === "GET" ? GET_RETRY_LIMIT : 0;
@@ -244,6 +263,85 @@ function toQueryString(params: Record<string, string | number | undefined>): str
   }
   const s = qs.toString();
   return s ? `?${s}` : "";
+}
+
+// ─── WALLET AUTH ──────────────────────────────────────────────────────────────
+
+/** The connected wallet that `auth: true` requests are signed with. */
+export interface AuthSigner {
+  address: string;
+  /** Resolves with a base64 signature, or rejects (UserRejectedError on decline). */
+  signMessage: (message: string) => Promise<string>;
+}
+
+export class WalletAuthError extends Error {
+  constructor(message: string, public cancelled = false) {
+    super(message);
+    this.name = "WalletAuthError";
+  }
+}
+
+interface AuthChallenge {
+  challenge: string;
+  expiresAt: number;
+}
+
+interface CachedAuth {
+  address: string;
+  headers: Record<string, string>;
+  expiresAt: number;
+}
+
+// Refresh slightly before expiry so a request never leaves with a stale signature.
+const AUTH_CACHE_MARGIN_MS = 30_000;
+
+let authSigner: AuthSigner | null = null;
+let cachedAuth: CachedAuth | null = null;
+
+/** Called by the wallet provider on connect/disconnect. Clears any cached signature. */
+export function setAuthSigner(signer: AuthSigner | null): void {
+  authSigner = signer;
+  cachedAuth = null;
+}
+
+async function withAuthHeaders(init: RequestInit): Promise<ApiRequestInit> {
+  const authHeaders = await getAuthHeaders();
+  return { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...authHeaders } };
+}
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const signer = authSigner;
+  if (!signer) throw new WalletAuthError("Connect your wallet to continue.");
+
+  if (
+    cachedAuth &&
+    cachedAuth.address === signer.address &&
+    cachedAuth.expiresAt - AUTH_CACHE_MARGIN_MS > Date.now()
+  ) {
+    return cachedAuth.headers;
+  }
+
+  const { challenge, expiresAt } = await sendRequest<AuthChallenge>(
+    `/api/auth/challenge?address=${encodeURIComponent(signer.address)}`,
+  );
+
+  let signature: string;
+  try {
+    signature = await signer.signMessage(challenge);
+  } catch (err) {
+    const cancelled = err instanceof Error && err.name === "UserRejectedError";
+    throw new WalletAuthError(
+      cancelled ? "Signature request was declined in your wallet." : "Could not sign the authentication challenge.",
+      cancelled,
+    );
+  }
+
+  const headers = {
+    "x-wallet-address": signer.address,
+    "x-wallet-signature": signature,
+  };
+  cachedAuth = { address: signer.address, headers, expiresAt };
+  return headers;
 }
 
 // ─── API FUNCTIONS ────────────────────────────────────────────────────────────
@@ -337,6 +435,27 @@ export async function createMarketMeta(data: CreateMarketMetaInput): Promise<{ s
   return apiFetch<{ success: boolean; marketId?: string }>(`/api/markets`, {
     method: "POST",
     body: JSON.stringify(data),
+    auth: true,
+  });
+}
+
+export interface UserProfileInput {
+  displayName?: string;
+  avatarUrl?: string | null;
+}
+
+/**
+ * PUT /api/users/:address
+ * Updates the caller's own profile. Requires wallet auth for that address.
+ */
+export async function updateUserProfile(
+  address: string,
+  data: UserProfileInput,
+): Promise<{ user: { address: string; displayName: string | null; avatarUrl: string | null } }> {
+  return apiFetch(`/api/users/${address}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+    auth: true,
   });
 }
 

@@ -14,6 +14,7 @@ import {
   ApiError,
   DEFAULT_TIMEOUT_MS,
   apiFetch,
+  setAuthSigner,
   Market,
   Bet,
   MarketStats,
@@ -93,7 +94,14 @@ function mockError(status: number, message = "Server error") {
   });
 }
 
-afterEach(() => jest.restoreAllMocks());
+beforeEach(() => {
+  setAuthSigner({ address: "GADDR1", signMessage: jest.fn().mockResolvedValue("c2ln") });
+});
+
+afterEach(() => {
+  setAuthSigner(null);
+  jest.restoreAllMocks();
+});
 
 // ─── fetchMarkets ─────────────────────────────────────────────────────────────
 
@@ -392,6 +400,6 @@ test("apiFetch: does not retry a GET on a non-transient 500", async () => {
 
 test("apiFetch: never retries a POST, even on 503", async () => {
   global.fetch = jest.fn().mockResolvedValue(mockResponse(503));
-  await expect(createMarketMeta({} as never)).rejects.toBeInstanceOf(ApiError);
+  await expect(apiFetch("/api/anything", { method: "POST" })).rejects.toBeInstanceOf(ApiError);
   expect(global.fetch).toHaveBeenCalledTimes(1);
 });

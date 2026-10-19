@@ -15,8 +15,10 @@ import {
   getAddress,
   getNetwork,
   signTransaction as freighterSignTransaction,
+  signMessage as freighterSignMessage,
 } from "@stellar/freighter-api";
 import { NETWORK_PASSPHRASE } from "@/lib/stellar";
+import { setAuthSigner } from "@/lib/api";
 
 // Freighter v6 resolves every call with its payload plus an optional `error`
 // field rather than throwing, so each result is checked for `error` first.
@@ -95,6 +97,7 @@ export interface UseWalletResult {
   connect: () => Promise<void>;
   disconnect: () => void;
   signTransaction: (xdr: string) => Promise<string>;
+  signMessage: (message: string) => Promise<string>;
 }
 
 const WalletContext = createContext<UseWalletResult | null>(null);
@@ -208,6 +211,36 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [state.address],
   );
 
+  // Signs an arbitrary message (wallet-auth challenges) and returns a base64 signature.
+  const signMessage = useCallback(
+    async (message: string): Promise<string> => {
+      if (!state.address) throw new Error("Wallet not connected");
+
+      const result = await freighterSignMessage(message, { address: state.address });
+      if (result.error) {
+        const text = result.error.message;
+        if (isUserRejection(text)) throw new UserRejectedError(text);
+        throw new Error(text);
+      }
+      if (!result.signedMessage) throw new Error("Wallet returned no signature");
+
+      return typeof result.signedMessage === "string"
+        ? result.signedMessage
+        : Buffer.from(result.signedMessage).toString("base64");
+    },
+    [state.address],
+  );
+
+  // Keep the API layer's auth signer in step with the connected wallet.
+  useEffect(() => {
+    if (!state.connected || !state.address) {
+      setAuthSigner(null);
+      return;
+    }
+    setAuthSigner({ address: state.address, signMessage });
+    return () => setAuthSigner(null);
+  }, [state.connected, state.address, signMessage]);
+
   // On mount, silently restore a previously-authorised wallet without prompting.
   useEffect(() => {
     void restoreConnection();
@@ -234,8 +267,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       signTransaction,
+      signMessage,
     };
-  }, [state, connect, disconnect, signTransaction]);
+  }, [state, connect, disconnect, signTransaction, signMessage]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
