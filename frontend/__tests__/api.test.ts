@@ -9,6 +9,8 @@ import {
   fetchOddsHistory,
   fetchUserPositions,
   createMarketMeta,
+  fetchLeaderboard,
+  resolveMarket,
   ApiError,
   ApiResponseError,
   Market,
@@ -333,4 +335,48 @@ test("createMarketMeta: sends POST request with market metadata", async () => {
       body: JSON.stringify(input),
     })
   );
+});
+
+// ─── contract: paths and bodies the backend routes expect ─────────────────────
+
+test("resolveMarket: POSTs the market id and outcome to /api/admin/markets/resolve", async () => {
+  global.fetch = mockJson({ data: { success: true } });
+
+  await expect(resolveMarket("mkt-1", "FighterA", "admin-key")).resolves.toEqual({ success: true });
+
+  expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringMatching(/\/api\/admin\/markets\/resolve$/),
+    expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ "x-admin-key": "admin-key" }),
+      body: JSON.stringify({ marketId: "mkt-1", outcome: "FighterA" }),
+    })
+  );
+});
+
+test("fetchLeaderboard: GETs /api/leaderboard with the period and validates entries", async () => {
+  const entry = {
+    rank: 1,
+    address: "GTOP",
+    totalWinnings: "500000000",
+    totalBets: 4,
+    winCount: 3,
+    roi: 0.25,
+  };
+  global.fetch = mockJson({ data: [entry] });
+
+  await expect(fetchLeaderboard("30d")).resolves.toEqual([entry]);
+
+  expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining("/api/leaderboard?period=30d"),
+    expect.any(Object)
+  );
+});
+
+test("fetchLeaderboard: rejects entries with non-string winnings", async () => {
+  global.fetch = mockJson({
+    data: [{ rank: 1, address: "GTOP", totalWinnings: 500, totalBets: 4, winCount: 3, roi: 0 }],
+  });
+
+  await expect(fetchLeaderboard("all")).rejects.toBeInstanceOf(ApiResponseError);
 });

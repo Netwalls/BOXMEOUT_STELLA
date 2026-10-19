@@ -468,18 +468,19 @@ export async function fetchPendingResolutions(adminKey: string): Promise<AdminMa
 }
 
 /**
- * POST /api/admin/markets/:id/resolve
- * Resolves a market with the given outcome. Requires admin auth header.
+ * POST /api/admin/markets/resolve
+ * Resolves a market with the given outcome. The market id travels in the body,
+ * matching the backend route. Requires admin auth header.
  */
 export async function resolveMarket(
   marketId: string,
   outcome: Outcome,
   adminKey: string,
 ): Promise<{ success: boolean }> {
-  return apiFetch(`/api/admin/markets/${marketId}/resolve`, successSchema, {
+  return apiFetch(`/api/admin/markets/resolve`, successSchema, {
     method: "POST",
     headers: jsonHeaders(adminKey),
-    body: JSON.stringify({ outcome }),
+    body: JSON.stringify({ marketId, outcome }),
   });
 }
 
