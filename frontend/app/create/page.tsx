@@ -10,7 +10,7 @@ import { WalletConnectButton } from "@/components/WalletConnectButton";
 export default function CreateMarketPage(): JSX.Element {
   const router = useRouter();
   const { isConnected } = useWallet();
-  const { createMarket } = useCreateMarket();
+  const { createMarket, isWaitingForIndexer } = useCreateMarket();
   const { addToast } = useToast();
 
   if (!isConnected) {
@@ -35,6 +35,11 @@ export default function CreateMarketPage(): JSX.Element {
   return (
     <div className="max-w-2xl mx-auto py-10 px-4 space-y-6">
       <h1 className="text-2xl font-bold text-white">Create Market</h1>
+      {isWaitingForIndexer && (
+        <p role="status" className="text-sm text-gray-400">
+          Transaction confirmed. Waiting for the indexer to publish your market…
+        </p>
+      )}
       <CreateMarketForm onSubmit={handleSubmit} />
     </div>
   );
