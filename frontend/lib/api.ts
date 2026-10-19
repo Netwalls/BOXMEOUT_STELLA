@@ -107,7 +107,12 @@ export interface CreateMarketMetaInput {
 // ─── ERROR ────────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public details?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -119,16 +124,117 @@ import { API_BASE_URL } from "./config";
 
 const BASE = API_BASE_URL;
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(res.status, text);
+export const DEFAULT_TIMEOUT_MS = 15_000;
+const GET_RETRY_LIMIT = 2;
+const RETRY_BASE_DELAY_MS = 300;
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+export interface ApiRequestInit extends RequestInit {
+  timeoutMs?: number;
+}
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// Exponential backoff: 300ms, 600ms, ...
+const backoffDelay = (attempt: number) => RETRY_BASE_DELAY_MS * 2 ** attempt;
+
+/**
+ * Turns a failed response body into an ApiError. Backend errors arrive as a
+ * JSON envelope (`{ error, code, details }`); the UI should see the readable
+ * message, not the raw JSON string.
+ */
+function parseErrorBody(status: number, text: string): ApiError {
+  try {
+    const body = JSON.parse(text) as {
+      error?: unknown;
+      message?: unknown;
+      code?: unknown;
+      details?: unknown;
+    };
+    const message =
+      typeof body.message === "string"
+        ? body.message
+        : typeof body.error === "string"
+          ? body.error
+          : text;
+    return new ApiError(
+      status,
+      message,
+      typeof body.code === "string" ? body.code : undefined,
+      body.details,
+    );
+  } catch {
+    return new ApiError(status, text);
   }
-  return res.json() as Promise<T>;
+}
+
+/**
+ * Single fetch attempt bounded by `timeoutMs`. The timeout and the caller's
+ * own signal both abort the request; the timeout is reported as an ApiError
+ * so callers never see a raw AbortError for it.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  callerSignal?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal?.aborted) controller.abort(callerSignal.reason);
+  callerSignal?.addEventListener("abort", abortFromCaller);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (!callerSignal?.aborted && controller.signal.aborted) {
+      throw new ApiError(408, "Request timed out", "TIMEOUT");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+export async function apiFetch<T>(path: string, options: ApiRequestInit = {}): Promise<T> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, headers, signal: callerSignal, ...init } = options;
+  // Only idempotent reads are retried; retrying a POST could duplicate a write.
+  const maxRetries = (init.method ?? "GET").toUpperCase() === "GET" ? GET_RETRY_LIMIT : 0;
+
+  for (let attempt = 0; ; attempt++) {
+    const canRetry = attempt < maxRetries;
+    // Caller headers are merged over the defaults so passing one header keeps Content-Type.
+    const mergedHeaders = {
+      "Content-Type": "application/json",
+      ...(headers as Record<string, string> | undefined),
+    };
+
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(
+        `${BASE}${path}`,
+        { ...init, headers: mergedHeaders },
+        timeoutMs,
+        callerSignal,
+      );
+    } catch (err) {
+      if (err instanceof ApiError || callerSignal?.aborted || !canRetry) throw err;
+      await wait(backoffDelay(attempt));
+      continue;
+    }
+
+    if (res.ok) return res.json() as Promise<T>;
+
+    if (canRetry && RETRYABLE_STATUSES.has(res.status)) {
+      await wait(backoffDelay(attempt));
+      continue;
+    }
+
+    const text = await res.text().catch(() => res.statusText);
+    throw parseErrorBody(res.status, text);
+  }
 }
 
 function toQueryString(params: Record<string, string | number | undefined>): string {

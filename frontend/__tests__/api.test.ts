@@ -1,3 +1,5 @@
+jest.mock("@/lib/config", () => ({ API_BASE_URL: "http://api.test" }));
+
 import {
   fetchMarkets,
   fetchMarketById,
@@ -10,6 +12,8 @@ import {
   fetchUserPositions,
   createMarketMeta,
   ApiError,
+  DEFAULT_TIMEOUT_MS,
+  apiFetch,
   Market,
   Bet,
   MarketStats,
@@ -287,4 +291,107 @@ test("createMarketMeta: sends POST request with market metadata", async () => {
       body: JSON.stringify(input),
     })
   );
+});
+
+// ─── apiFetch hardening (#1434) ──────────────────────────────────────────────
+
+function mockResponse(status: number, body = "") {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: `status ${status}`,
+    json: () => Promise.resolve(JSON.parse(body)),
+    text: () => Promise.resolve(body),
+  };
+}
+
+test("apiFetch: merges caller headers and keeps the default Content-Type", async () => {
+  global.fetch = mockOk([MARKET]);
+  await apiFetch("/api/test", { headers: { "x-custom": "1" } });
+  const init = (global.fetch as jest.Mock).mock.calls[0][1];
+  expect(init.headers).toEqual({ "Content-Type": "application/json", "x-custom": "1" });
+});
+
+test("apiFetch: parses the backend error envelope into code, message and details", async () => {
+  global.fetch = jest
+    .fn()
+    .mockResolvedValue(
+      mockResponse(422, JSON.stringify({ error: "Bad market", code: "INVALID", details: { field: "scheduledAt" } })),
+    );
+  const err = await fetchMarketById("mkt-1").catch((e: unknown) => e);
+  expect(err).toBeInstanceOf(ApiError);
+  expect(err).toMatchObject({
+    status: 422,
+    message: "Bad market",
+    code: "INVALID",
+    details: { field: "scheduledAt" },
+  });
+});
+
+test("apiFetch: falls back to the raw body when the error is not JSON", async () => {
+  global.fetch = jest.fn().mockResolvedValue(mockResponse(500, "upstream exploded"));
+  const err = await fetchMarketById("mkt-1").catch((e: unknown) => e);
+  expect(err).toMatchObject({ status: 500, message: "upstream exploded", code: undefined });
+});
+
+test("apiFetch: aborts a request that exceeds the default timeout", async () => {
+  jest.useFakeTimers();
+  try {
+    global.fetch = jest.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    );
+    const pending = fetchMarketById("mkt-1").catch((e: unknown) => e);
+    await jest.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS);
+    await expect(pending).resolves.toMatchObject({ status: 408, code: "TIMEOUT" });
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test("apiFetch: propagates the caller's abort without retrying", async () => {
+  const controller = new AbortController();
+  global.fetch = jest.fn(
+    (_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        );
+      }),
+  );
+  const pending = apiFetch("/api/test", { method: "POST", signal: controller.signal }).catch((e: unknown) => e);
+  controller.abort();
+  await expect(pending).resolves.toMatchObject({ name: "AbortError" });
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+});
+
+test("apiFetch: retries a GET on 503 and returns the eventual success", async () => {
+  global.fetch = jest
+    .fn()
+    .mockResolvedValueOnce(mockResponse(503))
+    .mockResolvedValueOnce(mockResponse(200, JSON.stringify([MARKET])));
+  await expect(fetchMarkets()).resolves.toEqual([MARKET]);
+  expect(global.fetch).toHaveBeenCalledTimes(2);
+});
+
+test("apiFetch: retries a GET on network errors up to the retry limit", async () => {
+  global.fetch = jest.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+  await expect(fetchMarkets()).rejects.toThrow("Failed to fetch");
+  expect(global.fetch).toHaveBeenCalledTimes(3);
+});
+
+test("apiFetch: does not retry a GET on a non-transient 500", async () => {
+  global.fetch = mockError(500);
+  await expect(fetchMarkets()).rejects.toBeInstanceOf(ApiError);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+});
+
+test("apiFetch: never retries a POST, even on 503", async () => {
+  global.fetch = jest.fn().mockResolvedValue(mockResponse(503));
+  await expect(createMarketMeta({} as never)).rejects.toBeInstanceOf(ApiError);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
 });
