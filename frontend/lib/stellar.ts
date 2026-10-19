@@ -390,35 +390,78 @@ export async function str(value: string): Promise<xdr.ScVal> {
   return nativeToScVal(value, { type: "string" });
 }
 
-/**
- * Converts a XLM amount in stroops (bigint) to a human-readable string.
- * e.g. 10_000_000n -> "1"
- */
-export function stroopsToXlm(stroops: bigint): string {
-  const xlm = Number(stroops) / 10000000;
+const STROOPS_PER_XLM = 10_000_000n;
+const STELLAR_DECIMALS = 7;
+const I128_MAX = 2n ** 127n - 1n;
 
-  return xlm.toString();
+/**
+ * Thrown by `xlmToStroops` when user input cannot be converted exactly.
+ * `reason` lets callers pick a message without parsing the text.
+ */
+export class InvalidAmountError extends Error {
+  readonly reason: "empty" | "negative" | "non-numeric" | "over-precision" | "out-of-range";
+
+  constructor(reason: InvalidAmountError["reason"], message: string) {
+    super(message);
+    this.name = "InvalidAmountError";
+    this.reason = reason;
+  }
 }
 
 /**
- * Converts a human-readable XLM string to stroops (bigint).
+ * Converts a XLM amount in stroops (bigint) to an exact decimal string.
+ * Uses BigInt arithmetic only, so no float artefacts appear.
+ * e.g. 10_000_000n -> "1", 1n -> "0.0000001", -15_000_000n -> "-1.5"
+ */
+export function stroopsToXlm(stroops: bigint): string {
+  const sign = stroops < 0n ? "-" : "";
+  const magnitude = stroops < 0n ? -stroops : stroops;
+  const whole = magnitude / STROOPS_PER_XLM;
+  const fraction = (magnitude % STROOPS_PER_XLM)
+    .toString()
+    .padStart(STELLAR_DECIMALS, "0")
+    .replace(/0+$/, "");
+
+  return `${sign}${whole}${fraction ? `.${fraction}` : ""}`;
+}
+
+/**
+ * Converts a human-readable XLM string to stroops (bigint), exactly.
  * e.g. "1.5" -> 15_000_000n
+ * Throws `InvalidAmountError` for empty, negative, non-numeric, over-precise
+ * (more than 7 significant decimals) or out-of-range input.
  */
 export function xlmToStroops(xlm: string): bigint {
-  const parts = xlm.split(".");
-  const integer = BigInt(parts[0] || "0");
-  let fractional = "0";
+  const input = xlm.trim();
 
-  if (parts.length > 1) {
-    fractional = parts[1];
-    if (fractional.length > 7) {
-      fractional = fractional.slice(0, 7);
-    } else if (fractional.length < 7) {
-      fractional = fractional.padEnd(7, "0");
-    }
+  if (input === "") {
+    throw new InvalidAmountError("empty", "Amount is required");
   }
 
-  const stroops = integer * BigInt(10000000) + BigInt(fractional);
+  if (input.startsWith("-")) {
+    throw new InvalidAmountError("negative", "Amount cannot be negative");
+  }
+
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(input)) {
+    throw new InvalidAmountError("non-numeric", `"${input}" is not a valid amount`);
+  }
+
+  const [whole, fraction = ""] = input.split(".");
+
+  if (/[1-9]/.test(fraction.slice(STELLAR_DECIMALS))) {
+    throw new InvalidAmountError(
+      "over-precision",
+      `Amount supports at most ${STELLAR_DECIMALS} decimal places`
+    );
+  }
+
+  const stroops =
+    BigInt(whole || "0") * STROOPS_PER_XLM +
+    BigInt(fraction.slice(0, STELLAR_DECIMALS).padEnd(STELLAR_DECIMALS, "0"));
+
+  if (stroops > I128_MAX) {
+    throw new InvalidAmountError("out-of-range", "Amount is too large");
+  }
 
   return stroops;
 }
