@@ -209,8 +209,9 @@ export async function buildSorobanInvocation(
     withFee.addOperation(preparedTx.operations[0]);
     withFee.setTimeout(Timeout.INFINITE);
 
+    // Returned unsigned on purpose: the wallet adds the real signature, so no
+    // placeholder signature is attached here.
     const finalTx = withFee.build();
-    finalTx.addSignature(params.signerAddress, Buffer.alloc(64).fill(0));
 
     return finalTx.toXDR();
   }
