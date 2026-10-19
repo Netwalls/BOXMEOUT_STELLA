@@ -77,6 +77,19 @@ describe("buildSorobanInvocation encoding", () => {
     expect(invoke.functionName().toString()).toBe("place_bet");
   });
 
+  it("rejects a contract id that is not a C-strkey before touching the network", async () => {
+    await expect(
+      buildSorobanInvocation({
+        contractId: "market-1",
+        method: "place_bet",
+        args: [],
+        signerAddress: SIGNER,
+      })
+    ).rejects.toThrow("Invalid contract address: market-1");
+
+    expect(mockServer.getAccount).not.toHaveBeenCalled();
+  });
+
   it("converts each argument into the matching ScVal type", async () => {
     const tx = await buildAndDecode([SIGNER, 100n]);
 

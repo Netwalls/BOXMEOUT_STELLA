@@ -188,7 +188,12 @@ export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
   const sdk = await loadSdk();
-  const { Contract, SorobanRpc, TransactionBuilder } = sdk;
+  const { Contract, SorobanRpc, StrKey, TransactionBuilder } = sdk;
+
+  if (!StrKey.isValidContract(params.contractId)) {
+    throw new Error(`Invalid contract address: ${params.contractId}`);
+  }
+
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
     allowHttp: true,
   });

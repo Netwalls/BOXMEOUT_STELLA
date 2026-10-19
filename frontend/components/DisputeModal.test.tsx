@@ -2,9 +2,24 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DisputeModal } from "./DisputeModal";
-import { Market } from "@/lib/api";
+import { Bet, Market } from "@/lib/api";
+import * as stellar from "@/lib/stellar";
+
+jest.mock("@/hooks/useWallet", () => ({
+  useWallet: () => ({
+    address: "GDISPUTER",
+    isNetworkMismatched: false,
+    signTransaction: jest.fn().mockResolvedValue("signed-xdr"),
+  }),
+}));
+jest.mock("@/lib/stellar");
+jest.mock("@/components/ToastProvider", () => ({
+  useToast: () => ({ addToast: jest.fn() }),
+}));
 
 const now = Date.now();
+
+const userBets: Bet[] = [{ id: "bet-1" } as Bet];
 
 const buildMarket = (overrides: Partial<Market> = {}): Market => ({
   id: "m1",
@@ -70,7 +85,7 @@ describe("DisputeModal", () => {
   it("shows validation error when reason is too short", async () => {
     const user = userEvent.setup();
     render(
-      <DisputeModal market={buildMarket()} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
+      <DisputeModal market={buildMarket()} userBets={userBets} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
     );
     await user.type(screen.getByRole("textbox"), "Too short");
     await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
@@ -81,11 +96,25 @@ describe("DisputeModal", () => {
     const user = userEvent.setup();
     const onDisputed = jest.fn();
     render(
-      <DisputeModal market={buildMarket()} isOpen onDisputed={onDisputed} onClose={jest.fn()} />
+      <DisputeModal market={buildMarket()} userBets={userBets} isOpen onDisputed={onDisputed} onClose={jest.fn()} />
     );
     await user.type(screen.getByRole("textbox"), "This is a valid reason with enough characters.");
     await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
     await waitFor(() => expect(onDisputed).toHaveBeenCalledTimes(1));
+  });
+
+  it("builds dispute_resolution against the market contract address", async () => {
+    const user = userEvent.setup();
+    render(
+      <DisputeModal market={buildMarket()} userBets={userBets} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
+    );
+    await user.type(screen.getByRole("textbox"), "This is a valid reason with enough characters.");
+    await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
+    await waitFor(() =>
+      expect(stellar.buildSorobanInvocation).toHaveBeenCalledWith(
+        expect.objectContaining({ contractId: "CA1", method: "dispute_resolution" })
+      )
+    );
   });
 
   it("closes on backdrop click", async () => {

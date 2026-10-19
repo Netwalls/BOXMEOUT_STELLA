@@ -4,9 +4,9 @@ import { useWallet } from "@/hooks/useWallet";
 import * as stellar from "@/lib/stellar";
 import * as api from "@/lib/api";
 
-jest.mock("@/hooks/useWallet");
+jest.mock("@/hooks/useWallet", () => ({ useWallet: jest.fn() }));
 jest.mock("@/lib/stellar");
-jest.mock("@/lib/api");
+jest.mock("@/lib/api", () => ({ fetchMarketById: jest.fn(), fetchMarketBets: jest.fn() }));
 
 const mockUseWallet = useWallet as jest.Mock;
 const mockBuildSorobanInvocation = stellar.buildSorobanInvocation as jest.Mock;
@@ -20,7 +20,7 @@ describe("useClaimWinnings", () => {
 
   const mockMarket = {
     id: "market-1",
-    contractAddress: "market-1",
+    contractAddress: "CMARKETCONTRACTADDRESS",
     fighterA: {
       name: "Fighter A",
       record: "10-0",
@@ -123,7 +123,7 @@ describe("useClaimWinnings", () => {
     });
 
     expect(mockBuildSorobanInvocation).toHaveBeenCalledWith({
-      contractId: "market-1",
+      contractId: "CMARKETCONTRACTADDRESS",
       method: "claim_winnings",
       args: ["bet-1"],
       signerAddress: mockAddress,
@@ -149,7 +149,7 @@ describe("useClaimWinnings", () => {
     });
 
     expect(mockBuildSorobanInvocation).toHaveBeenCalledWith({
-      contractId: "market-1",
+      contractId: "CMARKETCONTRACTADDRESS",
       method: "claim_refund",
       args: ["bet-1"],
       signerAddress: mockAddress,

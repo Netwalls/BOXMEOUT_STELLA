@@ -97,7 +97,7 @@ export function DisputeModal({
     try {
       // Call dispute_resolution on-chain
       const xdr = await buildSorobanInvocation({
-        contractId: market.id,
+        contractId: market.contractAddress,
         method: "dispute_resolution",
         args: [reason.trim()],
         signerAddress: address,

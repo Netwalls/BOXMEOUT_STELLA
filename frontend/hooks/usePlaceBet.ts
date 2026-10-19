@@ -15,7 +15,7 @@ export interface UsePlaceBetResult {
  * Handles transaction building, fee bump, wallet signing, and submission to Stellar.
  * Returns the confirmed Bet object on success.
  */
-export function usePlaceBet(market_id: string): UsePlaceBetResult {
+export function usePlaceBet(market_id: string, contractAddress: string): UsePlaceBetResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const { address, signTransaction, isNetworkMismatched } = useWallet();
@@ -33,7 +33,7 @@ export function usePlaceBet(market_id: string): UsePlaceBetResult {
 
     try {
       const xdr = await buildSorobanInvocation({
-        contractId: market_id,
+        contractId: contractAddress,
         method: "place_bet",
         args: [side, amount],
         signerAddress: address,

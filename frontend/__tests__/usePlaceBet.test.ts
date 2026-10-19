@@ -3,10 +3,11 @@ import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useWallet } from "@/hooks/useWallet";
 import * as stellar from "@/lib/stellar";
 
-jest.mock("@/hooks/useWallet");
+jest.mock("@/hooks/useWallet", () => ({ useWallet: jest.fn() }));
 jest.mock("@/lib/stellar");
 
 const mockUseWallet = useWallet as jest.Mock;
+const CONTRACT_ADDRESS = "CMARKETCONTRACTADDRESS";
 const mockBuildSorobanInvocation = stellar.buildSorobanInvocation as jest.Mock;
 const mockSubmitTransaction = stellar.submitTransaction as jest.Mock;
 
@@ -33,7 +34,7 @@ describe("usePlaceBet", () => {
       signTransaction: jest.fn(),
     });
 
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     await expect(
       act(async () => {
@@ -52,7 +53,7 @@ describe("usePlaceBet", () => {
       signTransaction: jest.fn(),
     });
 
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     await expect(
       act(async () => {
@@ -71,14 +72,14 @@ describe("usePlaceBet", () => {
       returnValue: null,
     });
 
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     await act(async () => {
       await result.current.placeBet("FighterA", 100n);
     });
 
     expect(mockBuildSorobanInvocation).toHaveBeenCalledWith({
-      contractId: "market-1",
+      contractId: CONTRACT_ADDRESS,
       method: "place_bet",
       args: ["FighterA", 100n],
       signerAddress: mockAddress,
@@ -102,7 +103,7 @@ describe("usePlaceBet", () => {
       returnValue: null,
     });
 
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     await act(async () => {
       await result.current.placeBet("FighterA", 100n);
@@ -119,7 +120,7 @@ describe("usePlaceBet", () => {
       returnValue: null,
     });
 
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     await act(async () => {
       await result.current.placeBet("FighterA", 100n);
@@ -136,7 +137,7 @@ describe("usePlaceBet", () => {
       returnValue: null,
     });
 
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     let bet: any;
     await act(async () => {
@@ -163,7 +164,7 @@ describe("usePlaceBet", () => {
       returnValue: null,
     });
 
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     expect(result.current.isLoading).toBe(false);
 
@@ -175,7 +176,7 @@ describe("usePlaceBet", () => {
   });
 
   it("initializes with null error", () => {
-    const { result } = renderHook(() => usePlaceBet("market-1"));
+    const { result } = renderHook(() => usePlaceBet("market-1", CONTRACT_ADDRESS));
 
     expect(result.current.error).toBeNull();
   });
