@@ -218,10 +218,34 @@ export async function buildSorobanInvocation(
   throw decodeContractError(new Error(simulationErrorText(simResult)));
 }
 
+const TX_TIMEOUT_MS = 30_000;
+const TX_INITIAL_DELAY_MS = 1_000;
+const TX_MAX_DELAY_MS = 5_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Extracts the result code (e.g. `txBAD_SEQ`) from the TransactionResult XDR
+ * returned by a rejected `sendTransaction` call.
+ */
+function decodeSendErrorResult(errorResult: unknown): string {
+  try {
+    const result = errorResult as { result: () => { switch: () => { name: string } } };
+
+    return result.result().switch().name;
+  } catch {
+    return "unknown";
+  }
+}
+
 /**
  * Submits a signed XDR transaction to Soroban RPC and waits for ledger confirmation.
- * Polls `getTransaction` with exponential backoff, bounded to a 30s timeout, and
- * reports each state transition (pending/success/failed/timeout) via `onStatus`.
+ * - `TRY_AGAIN_LATER` is re-sent with exponential backoff until the timeout.
+ * - `DUPLICATE` means the network already has the transaction, so it goes straight to polling.
+ * - `ERROR` is decoded from `errorResult` and reported as a failure.
+ * Polls `getTransaction` with exponential backoff, bounded to a 30s timeout. Transient
+ * RPC errors during polling are tolerated until the timeout. Reports each state
+ * transition (pending/success/failed/timeout) via `onStatus`.
  * Returns the TransactionResult containing txHash, ledger, and return value.
  */
 export async function submitTransaction(
@@ -241,9 +265,30 @@ export async function submitTransaction(
   const hash = transaction.hash();
   const txHash = hash.toString("hex");
 
-  const response = await server.sendTransaction(transaction);
+  const submitStartedAt = Date.now();
+  let delay = TX_INITIAL_DELAY_MS;
+  let response = await server.sendTransaction(transaction);
 
-  if (response.status !== "PENDING") {
+  while (response.status === "TRY_AGAIN_LATER") {
+    if (Date.now() - submitStartedAt >= TX_TIMEOUT_MS) {
+      const error = "Transaction submission failed: RPC still busy (TRY_AGAIN_LATER)";
+      onStatus?.({ status: "failed", txHash, error });
+      throw decodeContractError(new Error(error));
+    }
+
+    await sleep(delay);
+    delay = Math.min(delay * 2, TX_MAX_DELAY_MS);
+
+    response = await server.sendTransaction(transaction);
+  }
+
+  if (response.status === "ERROR") {
+    const error = `Transaction submission failed: ${decodeSendErrorResult(response.errorResult)}`;
+    onStatus?.({ status: "failed", txHash, error });
+    throw decodeContractError(new Error(error));
+  }
+
+  if (response.status !== "PENDING" && response.status !== "DUPLICATE") {
     const error = `Transaction submission failed with status: ${response.status}`;
     onStatus?.({ status: "failed", txHash, error });
     throw decodeContractError(new Error(error));
@@ -251,24 +296,30 @@ export async function submitTransaction(
 
   onStatus?.({ status: "pending", txHash });
 
-  const TIMEOUT_MS = 30_000;
-  const INITIAL_DELAY_MS = 1_000;
-  const MAX_DELAY_MS = 5_000;
-  const startedAt = Date.now();
-  let delay = INITIAL_DELAY_MS;
+  const pollStartedAt = Date.now();
+  delay = TX_INITIAL_DELAY_MS;
 
-  let result = await server.getTransaction(hash);
+  let result;
 
-  while (result.status === "PENDING" || result.status === "NOT_FOUND") {
-    if (Date.now() - startedAt >= TIMEOUT_MS) {
-      onStatus?.({ status: "timeout", txHash });
-      throw new TransactionTimeoutError(txHash, TIMEOUT_MS);
+  for (;;) {
+    try {
+      result = await server.getTransaction(hash);
+    } catch {
+      // A transient RPC error (network blip) must not abort the wait; keep polling until the timeout.
+      result = undefined;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    delay = Math.min(delay * 2, MAX_DELAY_MS);
+    if (result && result.status !== "PENDING" && result.status !== "NOT_FOUND") {
+      break;
+    }
 
-    result = await server.getTransaction(hash);
+    if (Date.now() - pollStartedAt >= TX_TIMEOUT_MS) {
+      onStatus?.({ status: "timeout", txHash });
+      throw new TransactionTimeoutError(txHash, TX_TIMEOUT_MS);
+    }
+
+    await sleep(delay);
+    delay = Math.min(delay * 2, TX_MAX_DELAY_MS);
   }
 
   if (result.status !== "SUCCESS") {
