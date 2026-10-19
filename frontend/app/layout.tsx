@@ -6,11 +6,19 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeScript } from '@/components/ThemeScript';
 import { MotionConfigProvider } from '@/components/MotionConfigProvider';
 import { WalletProvider } from '@/hooks/useWallet';
+import { SITE_URL } from '@/lib/config';
 import '@/app/globals.css';
 
 export const metadata: Metadata = {
+  // Resolves relative OpenGraph and icon URLs (e.g. the per-market OG image) to absolute ones
+  metadataBase: new URL(SITE_URL),
   title: 'BOXMEOUT — Boxing Prediction Market',
   description: 'Decentralized boxing prediction market on Stellar',
+  applicationName: 'BOXMEOUT',
+  openGraph: {
+    siteName: 'BOXMEOUT',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({
