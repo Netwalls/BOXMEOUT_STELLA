@@ -1,4 +1,4 @@
-import type { Transaction } from "@stellar/stellar-sdk";
+import type { Transaction, xdr } from "@stellar/stellar-sdk";
 import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
@@ -147,6 +147,20 @@ function simulationErrorText(simResult: unknown): string {
 
 // ─── FUNCTIONS ────────────────────────────────────────────────────────────────
 
+type StellarSdk = typeof import("@stellar/stellar-sdk");
+
+/**
+ * Converts a contract call argument into an ScVal. Values that are already
+ * ScVals (for example a u64 built with an explicit type) pass through unchanged.
+ */
+function toScVal(sdk: StellarSdk, arg: unknown): xdr.ScVal {
+  if (arg instanceof sdk.xdr.ScVal) return arg;
+  if (typeof arg === "string" && (sdk.StrKey.isValidEd25519PublicKey(arg) || sdk.StrKey.isValidContract(arg))) {
+    return sdk.Address.fromString(arg).toScVal();
+  }
+  return sdk.nativeToScVal(arg as any);
+}
+
 /**
  * Builds a Soroban contract invocation XDR string ready for wallet signing.
  * Fetches the current account sequence number from Horizon.
@@ -155,33 +169,14 @@ function simulationErrorText(simResult: unknown): string {
 export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
-  const { Operation, SorobanRpc, TransactionBuilder, Timeout, nativeToScVal, addressToScVal } =
-    await loadSdk();
+  const sdk = await loadSdk();
+  const { Contract, SorobanRpc, TransactionBuilder, TimeoutInfinite } = sdk;
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
     allowHttp: true,
   });
 
-  const operation = Operation.invokeHostFunction({
-    hostFunction: {
-      functionName: params.method,
-      args: params.args.map((arg) => {
-        if (typeof arg === "bigint") return nativeToScVal(arg);
-        if (typeof arg === "string") {
-          try {
-            return addressToScVal(arg);
-          } catch {
-            return nativeToScVal(Number(arg));
-          }
-        }
-        if (typeof arg === "number") return nativeToScVal(arg);
-        if (Array.isArray(arg)) {
-          return nativeToScVal(arg);
-        }
-        return arg as any;
-      }),
-    },
-    auth: [],
-  });
+  const contract = new Contract(params.contractId);
+  const operation = contract.call(params.method, ...params.args.map((arg) => toScVal(sdk, arg)));
 
   const account = await server.getAccount(params.signerAddress);
 
@@ -191,7 +186,7 @@ export async function buildSorobanInvocation(
   });
 
   transaction.addOperation(operation);
-  transaction.setTimeout(Timeout.INFINITE);
+  transaction.setTimeout(TimeoutInfinite);
 
   const tx = transaction.build();
 
@@ -207,12 +202,10 @@ export async function buildSorobanInvocation(
     });
 
     withFee.addOperation(preparedTx.operations[0]);
-    withFee.setTimeout(Timeout.INFINITE);
+    withFee.setTimeout(TimeoutInfinite);
 
-    const finalTx = withFee.build();
-    finalTx.addSignature(params.signerAddress, Buffer.alloc(64).fill(0));
-
-    return finalTx.toXDR();
+    // Left unsigned: the connected wallet signs the XDR returned here.
+    return withFee.build().toXDR();
   }
 
   throw decodeContractError(new Error(simulationErrorText(simResult)));

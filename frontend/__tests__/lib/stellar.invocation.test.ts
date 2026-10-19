@@ -1,0 +1,84 @@
+import {
+  Account,
+  Address,
+  Keypair,
+  Operation,
+  StrKey,
+  Transaction,
+  TransactionBuilder,
+  scValToNative,
+} from "@stellar/stellar-sdk";
+import { buildSorobanInvocation, NETWORK_PASSPHRASE } from "@/lib/stellar";
+
+const mockServer = {
+  getAccount: jest.fn(),
+  simulateTransaction: jest.fn(),
+  sendTransaction: jest.fn(),
+  getTransaction: jest.fn(),
+};
+
+jest.mock("@stellar/stellar-sdk", () => {
+  const actual = jest.requireActual("@stellar/stellar-sdk");
+
+  return {
+    ...actual,
+    SorobanRpc: {
+      ...actual.SorobanRpc,
+      Server: jest.fn(() => mockServer),
+      assembleTransaction: (tx: { toEnvelope: () => any }) => ({
+        operations: tx.toEnvelope().v1().tx().operations(),
+      }),
+      Api: { ...actual.SorobanRpc.Api, isSimulationSuccess: () => true },
+    },
+  };
+});
+
+const SIGNER = Keypair.random().publicKey();
+const CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32, 1));
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockServer.getAccount.mockResolvedValue(new Account(SIGNER, "1"));
+  mockServer.simulateTransaction.mockResolvedValue({ minResourceFee: "100" });
+});
+
+async function buildAndDecode(args: unknown[]) {
+  const xdr = await buildSorobanInvocation({
+    contractId: CONTRACT_ID,
+    method: "place_bet",
+    args,
+    signerAddress: SIGNER,
+  });
+
+  return TransactionBuilder.fromXDR(xdr, NETWORK_PASSPHRASE) as Transaction;
+}
+
+describe("buildSorobanInvocation encoding", () => {
+  it("encodes a single invoke-contract operation targeting the given contract", async () => {
+    const tx = await buildAndDecode([]);
+
+    expect(tx.operations).toHaveLength(1);
+    expect(tx.operations[0].type).toBe("invokeHostFunction");
+
+    const invoke = (tx.operations[0] as Operation.InvokeHostFunction).func.invokeContract();
+    expect(Address.fromScAddress(invoke.contractAddress()).toString()).toBe(CONTRACT_ID);
+  });
+
+  it("uses the method name as the invoked function name", async () => {
+    const tx = await buildAndDecode([]);
+
+    const invoke = (tx.operations[0] as Operation.InvokeHostFunction).func.invokeContract();
+    expect(invoke.functionName().toString()).toBe("place_bet");
+  });
+
+  it("converts each argument into the matching ScVal type", async () => {
+    const tx = await buildAndDecode([SIGNER, 100n]);
+
+    const invoke = (tx.operations[0] as Operation.InvokeHostFunction).func.invokeContract();
+    const [addressArg, amountArg] = invoke.args();
+
+    expect(addressArg.switch().name).toBe("scvAddress");
+    expect(Address.fromScVal(addressArg).toString()).toBe(SIGNER);
+    expect(scValToNative(amountArg)).toBe(100n);
+  });
+});
