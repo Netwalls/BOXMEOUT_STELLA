@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Bet, BetSide } from "@/lib/api";
-import { buildSorobanInvocation, submitTransaction } from "@/lib/stellar";
+import { buildSorobanInvocation, submitTransaction, i128, sym } from "@/lib/stellar";
 import { useWallet } from "@/hooks/useWallet";
 
 export interface UsePlaceBetResult {
@@ -35,7 +35,7 @@ export function usePlaceBet(market_id: string): UsePlaceBetResult {
       const xdr = await buildSorobanInvocation({
         contractId: market_id,
         method: "place_bet",
-        args: [side, amount],
+        args: await Promise.all([sym(side), i128(amount)]),
         signerAddress: address,
       });
 

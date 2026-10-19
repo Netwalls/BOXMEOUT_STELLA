@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Market, Bet } from "@/lib/api";
 import { CountdownTimer } from "@/components/CountdownTimer";
-import { buildSorobanInvocation, submitTransaction } from "@/lib/stellar";
+import { buildSorobanInvocation, submitTransaction, str } from "@/lib/stellar";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/components/ToastProvider";
 
@@ -99,7 +99,7 @@ export function DisputeModal({
       const xdr = await buildSorobanInvocation({
         contractId: market.id,
         method: "dispute_resolution",
-        args: [reason.trim()],
+        args: [await str(reason.trim())],
         signerAddress: address,
       });
 

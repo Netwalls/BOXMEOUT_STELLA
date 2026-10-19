@@ -1,4 +1,4 @@
-import type { Transaction } from "@stellar/stellar-sdk";
+import type { Transaction, xdr } from "@stellar/stellar-sdk";
 import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
@@ -74,7 +74,7 @@ export function stellarExpertTxUrl(txHash: string): string {
 export interface SorobanInvokeParams {
   contractId: string;
   method: string;
-  args: unknown[];
+  args: xdr.ScVal[];
   signerAddress: string;
 }
 
@@ -155,8 +155,7 @@ function simulationErrorText(simResult: unknown): string {
 export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
-  const { Operation, SorobanRpc, TransactionBuilder, Timeout, nativeToScVal, addressToScVal } =
-    await loadSdk();
+  const { Operation, SorobanRpc, TransactionBuilder, Timeout } = await loadSdk();
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
     allowHttp: true,
   });
@@ -164,21 +163,7 @@ export async function buildSorobanInvocation(
   const operation = Operation.invokeHostFunction({
     hostFunction: {
       functionName: params.method,
-      args: params.args.map((arg) => {
-        if (typeof arg === "bigint") return nativeToScVal(arg);
-        if (typeof arg === "string") {
-          try {
-            return addressToScVal(arg);
-          } catch {
-            return nativeToScVal(Number(arg));
-          }
-        }
-        if (typeof arg === "number") return nativeToScVal(arg);
-        if (Array.isArray(arg)) {
-          return nativeToScVal(arg);
-        }
-        return arg as any;
-      }),
+      args: params.args,
     },
     auth: [],
   });
@@ -312,6 +297,63 @@ export async function decodeScVal(scVal: unknown): Promise<unknown> {
     console.error("Error decoding ScVal:", error);
     throw error;
   }
+}
+
+// ─── SCVAL ARGUMENT HELPERS ───────────────────────────────────────────────────
+// Each helper states the Soroban type explicitly, so no value is guessed at
+// runtime. They are async because the SDK is loaded lazily.
+
+/** Soroban `i128`. Keeps amounts above Number.MAX_SAFE_INTEGER exact. */
+export async function i128(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "i128" });
+}
+
+/** Soroban `u64`. */
+export async function u64(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u64" });
+}
+
+/** Soroban `u32`. */
+export async function u32(value: number): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u32" });
+}
+
+/** Soroban `Address` from a G… account or C… contract strkey. */
+export async function address(strkey: string): Promise<xdr.ScVal> {
+  const { Address } = await loadSdk();
+
+  return new Address(strkey).toScVal();
+}
+
+/** Soroban `Bytes` from a hex string. Rejects odd length and non-hex characters. */
+export async function bytes(hex: string): Promise<xdr.ScVal> {
+  if (!/^([0-9a-fA-F]{2})*$/.test(hex)) {
+    throw new TypeError("bytes() expects an even-length hex string");
+  }
+
+  const { xdr } = await loadSdk();
+
+  return xdr.ScVal.scvBytes(Buffer.from(hex, "hex"));
+}
+
+/** Soroban `Symbol`. */
+export async function sym(value: string): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "symbol" });
+}
+
+/** Soroban `String`. */
+export async function str(value: string): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "string" });
 }
 
 /**

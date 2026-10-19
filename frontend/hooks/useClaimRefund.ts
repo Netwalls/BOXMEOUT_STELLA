@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { ClaimReceipt } from "@/components/ClaimButton";
-import { buildSorobanInvocation, submitTransaction, decodeScVal } from "@/lib/stellar";
+import { buildSorobanInvocation, submitTransaction, decodeScVal, bytes } from "@/lib/stellar";
 import { fetchMarketById, fetchMarketBets } from "@/lib/api";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -49,7 +49,7 @@ export function useClaimRefund(): UseClaimRefundResult {
       const xdr = await buildSorobanInvocation({
         contractId: market_id,
         method: "claim_refund",
-        args: [bet_id],
+        args: [await bytes(bet_id)],
         signerAddress: address,
       });
 
