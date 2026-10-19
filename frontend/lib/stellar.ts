@@ -180,6 +180,17 @@ function toScVal(sdk: StellarSdk, arg: unknown): xdr.ScVal {
 }
 
 /**
+ * Encodes an unsigned 64-bit integer, such as a Unix timestamp in seconds, as a
+ * u64 ScVal. Plain bigints default to i128, so contract arguments declared as u64
+ * must be encoded with this helper.
+ */
+export async function toU64ScVal(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u64" });
+}
+
+/**
  * Builds a Soroban contract invocation XDR string ready for wallet signing.
  * Fetches the current account sequence number from Horizon.
  * Simulates the transaction via Soroban RPC to populate the auth footprint.

@@ -25,7 +25,8 @@
     "next": "14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "recharts": "^2.12.0"
+    "recharts": "^2.12.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "14.2.0",
