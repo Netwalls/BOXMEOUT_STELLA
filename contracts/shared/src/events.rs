@@ -236,6 +236,48 @@ pub fn emit_protocol_unpaused(env: &Env) {
     env.events().publish(topics, ());
 }
 
+/// Emits an `auto_refund` event when no one bet on the winning side.
+///
+/// Topics: `(Symbol("auto_refund"), market_id)`
+/// Data:   `outcome: Outcome`
+pub fn emit_auto_refund(env: &Env, market_id: u64, outcome: Outcome) {
+    let topics = (Symbol::new(env, "auto_refund"), market_id);
+    env.events().publish(topics, outcome);
+}
+
+/// Emits an `all_winnings_claimed` event when claim_all completes.
+///
+/// Topics: `(Symbol("all_winnings_claimed"), market_id)`
+/// Data:   `(bettor, claimed_ids: Vec<Bytes>, total_payout: i128)`
+pub fn emit_all_winnings_claimed(
+    env: &Env,
+    market_id: u64,
+    bettor: Address,
+    claimed_ids: Vec<Bytes>,
+    total: i128,
+) {
+    let topics = (Symbol::new(env, "all_winnings_claimed"), market_id);
+    env.events().publish(topics, (bettor, claimed_ids, total));
+}
+
+/// Emits a `dust_swept` event when sweep_dust moves rounding residue to treasury.
+///
+/// Topics: `(Symbol("dust_swept"), market_id)`
+/// Data:   `(dust_amount: i128, swept_at: u64)`
+pub fn emit_dust_swept(env: &Env, market_id: u64, dust_amount: i128, swept_at: u64) {
+    let topics = (Symbol::new(env, "dust_swept"), market_id);
+    env.events().publish(topics, (dust_amount, swept_at));
+}
+
+/// Emits a `resolution_finalized` event after the dispute window closes and fees are deposited.
+///
+/// Topics: `(Symbol("resolution_finalized"), market_id)`
+/// Data:   `finalized_at: u64`
+pub fn emit_resolution_finalized(env: &Env, market_id: u64, finalized_at: u64) {
+    let topics = (Symbol::new(env, "resolution_finalized"), market_id);
+    env.events().publish(topics, finalized_at);
+}
+
 #[cfg(test)]
 mod tests {
     use soroban_sdk::{
