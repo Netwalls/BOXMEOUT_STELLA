@@ -133,6 +133,8 @@ pub struct ProtocolConfig {
     pub max_bet_amount: i128,
     pub dispute_window_sec: u64,
     pub paused: bool,
+    pub bet_token: Address,
+    pub resolution_timeout_sec: u64,
 }
 
 #[contracttype]
