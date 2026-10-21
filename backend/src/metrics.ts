@@ -7,6 +7,9 @@
  *   - indexerLedgerLag gauge         — latest RPC ledger minus last indexed ledger
  *   - indexerRetentionGap counter    — times the indexer detected an RPC retention gap
  *   - indexerConsecutiveFailures gauge — consecutive indexer RPC failures (B-64)
+ *   - indexerLastLedger gauge        — last ledger the indexer has checkpointed
+ *   - indexerEventProcessSeconds histogram{type} — per-event handler duration
+ *   - sorobanRpcRequestSeconds histogram{method} — Soroban RPC call latency
  *   - lockJobSuccess / lockJobFailure counters
  *   - finalizeJobSuccess / finalizeJobFailure counters
  *
@@ -74,6 +77,60 @@ export const indexerConsecutiveFailures = new client.Gauge({
   registers: [metricsRegistry],
 });
 
+// ─── Indexer last-ledger gauge ────────────────────────────────────────────────
+
+/**
+ * B-112: The last ledger the indexer has checkpointed. A value that stops
+ * changing while the network advances means the indexer has stalled.
+ */
+export const indexerLastLedger = new client.Gauge({
+  name: "indexer_last_ledger",
+  help: "Last ledger sequence the indexer has processed and checkpointed",
+  registers: [metricsRegistry],
+});
+
+// ─── Indexer per-event processing duration ────────────────────────────────────
+
+/**
+ * B-112: Time spent handling one event inside the ledger transaction, labelled
+ * by canonical event type so slow handlers can be told apart.
+ */
+export const indexerEventProcessSeconds = new client.Histogram({
+  name: "indexer_event_process_seconds",
+  help: "Time spent processing one indexed event, by event type",
+  labelNames: ["type"],
+  buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [metricsRegistry],
+});
+
+// ─── Soroban RPC request latency ──────────────────────────────────────────────
+
+/**
+ * B-112: Latency of calls to the Soroban RPC, labelled by method.
+ */
+export const sorobanRpcRequestSeconds = new client.Histogram({
+  name: "soroban_rpc_request_seconds",
+  help: "Soroban RPC request latency in seconds, by method",
+  labelNames: ["method"],
+  buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
+  registers: [metricsRegistry],
+});
+
+/**
+ * Runs a Soroban RPC call and records its duration, whether it succeeds or throws.
+ */
+export async function observeSorobanRpc<T>(
+  method: string,
+  call: () => Promise<T>
+): Promise<T> {
+  const endTimer = sorobanRpcRequestSeconds.startTimer({ method });
+  try {
+    return await call();
+  } finally {
+    endTimer();
+  }
+}
+
 // ─── Job outcome counters ─────────────────────────────────────────────────────
 
 export const lockJobSuccess = new client.Counter({
@@ -97,6 +154,19 @@ export const finalizeJobSuccess = new client.Counter({
 export const finalizeJobFailure = new client.Counter({
   name: "finalize_job_failure_total",
   help: "Total number of failed finalize-market job executions",
+  registers: [metricsRegistry],
+});
+
+// ─── Retention pruning ────────────────────────────────────────────────────────
+
+/**
+ * B-101: Rows deleted by the daily retention job, labelled by table
+ * (AuditLog | EventLog).
+ */
+export const retentionRowsPruned = new client.Counter({
+  name: "retention_rows_pruned_total",
+  help: "Total number of rows deleted by the retention pruning job",
+  labelNames: ["table"],
   registers: [metricsRegistry],
 });
 

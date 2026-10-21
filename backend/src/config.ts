@@ -88,6 +88,33 @@ const configSchema = z.object({
     .string({ required_error: "REDIS_URL is required" })
     .url("REDIS_URL must be a valid URL"),
 
+  /** B-102: Idle keep-alive socket lifetime on the HTTP server (ms) */
+  SERVER_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+
+  /** B-102: Time allowed to receive the request headers (ms). Must exceed keep-alive. */
+  SERVER_HEADERS_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  /** B-102: Time allowed to receive the entire request, including body (ms) */
+  SERVER_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+
+  /** B-102: Per-request response deadline for non-SSE routes; exceeded requests get 503 (ms) */
+  API_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+
+  /** B-102: Upper bound on a single Prisma query before it rejects (ms) */
+  DB_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  /** B-102: Upper bound on a single Soroban RPC call (ms) */
+  RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+
+  /** B-101: Days to keep AuditLog rows before the daily prune job deletes them */
+  AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+
+  /**
+   * B-101: Days to keep processed EventLog rows before the daily prune job
+   * deletes them. Unprocessed rows are never pruned.
+   */
+  EVENT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+
   /** Base URL for the external fight data provider (BoxRec or equivalent) */
   BOXREC_API_URL: z.string().url().optional(),
 

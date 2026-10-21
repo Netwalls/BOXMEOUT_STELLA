@@ -6,7 +6,16 @@ import * as marketService from "./market.service";
 import * as betService from "./bet.service";
 import { markBetClaimed } from "./bet.service";
 import { publishMarketEvent } from "../events/marketEvents";
-import { indexerLedgerLag } from "../metrics";
+import {
+  indexerLedgerLag,
+  indexerLastLedger,
+  indexerEventProcessSeconds,
+  observeSorobanRpc,
+} from "../metrics";
+import { checkpointLedgerForPage } from "./indexer.checkpoint";
+
+/** Maximum events returned by one getEvents call. */
+const EVENTS_PAGE_LIMIT = 100;
 
 const logger = pino({ name: "indexer" });
 
@@ -202,16 +211,20 @@ export async function startIndexer(): Promise<void> {
       // The processLedger switch/case routes known event types and
       // logs warnings for unknowns. This avoids losing events from
       // dynamically deployed Market contracts on restart.
-      const eventsResponse = await server.getEvents({
-        startLedger: fromLedger + 1,
-        filters: [],
-        limit: 100,
-      });
+      const eventsResponse = await observeSorobanRpc("getEvents", () =>
+        server.getEvents({
+          startLedger: fromLedger + 1,
+          filters: [],
+          limit: EVENTS_PAGE_LIMIT,
+        })
+      );
 
       // B-61: update the ledger lag gauge after each RPC poll
       // getLatestLedger() is inexpensive and returns the head ledger sequence
       try {
-        const latestLedger = await server.getLatestLedger();
+        const latestLedger = await observeSorobanRpc("getLatestLedger", () =>
+          server.getLatestLedger()
+        );
         indexerLedgerLag.set(Math.max(0, latestLedger.sequence - fromLedger));
       } catch {
         // Non-fatal — metrics update is best-effort
@@ -235,6 +248,7 @@ export async function startIndexer(): Promise<void> {
         // B-62: All writes (raw event persist, handler effects, cursor update)
         // happen inside a single processLedger transaction.
         await processLedger({ sequence: ledgerSeq, closedAt: events[0].ledgerClosedAt, events });
+        indexerLastLedger.set(ledgerSeq);
 
         // B-68: Invalidate market cache AFTER the ledger transaction commits,
         // so we never drop a key for a write that later rolls back. This runs
@@ -247,6 +261,18 @@ export async function startIndexer(): Promise<void> {
 
         fromLedger = ledgerSeq;
       }
+
+      // Move the cursor over ledgers without events, so lag tracks the head.
+      const checkpoint = checkpointLedgerForPage(
+        { latestLedger: eventsResponse.latestLedger, eventCount: eventsResponse.events.length },
+        EVENTS_PAGE_LIMIT,
+        fromLedger
+      );
+      if (checkpoint !== null) {
+        await saveLastIndexedLedger(checkpoint);
+        fromLedger = checkpoint;
+      }
+      indexerLastLedger.set(fromLedger);
 
       backoff = 1000;
       await sleep(5_000);
@@ -330,7 +356,15 @@ export async function processLedger(data: LedgerData): Promise<void> {
         },
       });
 
-      await handleEvent(event, tx);
+      // B-112: time each event, labelled by canonical type ("unknown" if unmapped).
+      const endTimer = indexerEventProcessSeconds.startTimer({
+        type: normaliseEventType(event.type) ?? "unknown",
+      });
+      try {
+        await handleEvent(event, tx);
+      } finally {
+        endTimer();
+      }
     }
 
     await tx.indexerState.upsert({

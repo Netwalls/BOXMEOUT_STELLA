@@ -244,7 +244,7 @@ export function BettingInterface({ market, onBetPlaced }: BettingInterfaceProps)
   const [debouncedAmount, setDebouncedAmount] = useState<string>("");
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const { placeBet, isLoading } = usePlaceBet(market.id);
+  const { placeBet, isLoading } = usePlaceBet(market.id, market.contractAddress);
   const { addToast: showToast } = useToast();
 
   const sheetRef = useRef<HTMLDivElement>(null);

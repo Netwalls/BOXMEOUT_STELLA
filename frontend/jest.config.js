@@ -9,6 +9,7 @@ const config = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
+    "^zod$": "<rootDir>/node_modules/next/dist/compiled/zod",
   },
   // Fixture modules live beside the tests that use them and must not run as suites
   testPathIgnorePatterns: ["<rootDir>/node_modules/", "<rootDir>/.next/", "<rootDir>/e2e/"],

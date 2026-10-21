@@ -120,6 +120,36 @@ npm run db:studio
 
 This opens Prisma Studio at `http://localhost:5555` where you can browse the database tables.
 
+
+### Production migrations
+
+Production images never migrate on boot. Migrations run once per release from the
+`migrate` image target (`backend/Dockerfile`), before the `api` and `indexer` containers start:
+
+```bash
+# Build the one-shot migration image and run it against the production database
+docker build --target migrate -t boxmeout-migrate ./backend
+docker run --rm -e DATABASE_URL="$PROD_DATABASE_URL" boxmeout-migrate
+```
+
+The `migrate` image runs `prisma migrate deploy`, which only applies migrations that
+are not yet recorded in `_prisma_migrations`. It is safe to re-run. In Docker Compose
+the same step is the `migrate` service; `api` and `indexer` depend on it with
+`service_completed_successfully`, so a failed migration keeps both services from starting.
+
+**Rollback:** Prisma has no automatic down-migrations. Use one of these, in order of preference:
+
+1. **Roll forward.** Write a new migration that reverses the bad change and deploy it.
+2. **Restore from backup.** Take a database snapshot before every release. If a migration
+   corrupts data, restore the snapshot and redeploy the previous image tag.
+3. **Mark a failed migration as rolled back.** If `migrate deploy` failed partway through,
+   fix the database by hand, then run
+   `npx prisma migrate resolve --rolled-back <migration_name>` before re-running the migration.
+
+Redeploying the previous application image does not undo applied migrations. Keep
+migrations backward compatible with the previous release (add columns as nullable,
+drop them only in a later release) so that rolling back the application stays safe.
+
 ---
 
 ## 6 — Start the server
@@ -188,6 +218,81 @@ npm install
 npm run db:migrate
 npm run dev
 ```
+
+---
+
+## Scheduled market lifecycle jobs (B-111)
+
+Two jobs keep markets moving without manual admin action:
+
+| Job | Runs | Effect |
+|---|---|---|
+| `enforce-market-locks` | every interval | Locks Open markets whose `bettingEndsAt` has passed (`lock_market` on-chain). |
+| `auto-finalize-expired-windows` | every interval | Finalises Locked markets whose dispute window has elapsed (enqueues `resolve_market`). |
+
+They are BullMQ **repeatable jobs** on the `market-lifecycle` queue:
+
+- **Registered on startup.** Every replica calls `upsertJobScheduler` for both
+  jobs. Redis keeps one scheduler per job name, so registering from several
+  replicas is idempotent.
+- **Removed on shutdown.** `SIGTERM`/`SIGINT` removes both schedulers and closes
+  the worker before the database and Redis connections are closed.
+- **Single-flight across replicas.** Each tick produces one job, and each run also
+  takes a Redis lock (`lifecycle-lock:<job>`, 5-minute TTL, released on finish).
+  If another replica still holds the lock, the tick is skipped, so a market is
+  never processed by two replicas at the same time.
+
+Configuration:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LIFECYCLE_JOB_INTERVAL_MS` | `60000` | How often both jobs run. |
+| `REDIS_HOST` / `REDIS_PORT` | `127.0.0.1` / `6379` | BullMQ connection for the queue. |
+| `REDIS_URL` | `redis://localhost:6379` | Connection used for the single-flight lock. |
+
+Metrics (exposed on `/metrics`):
+
+- `lock_job_success_total`, `lock_job_failure_total`
+- `finalize_job_success_total`, `finalize_job_failure_total`
+
+A run increments exactly one of the success or failure counters. A tick skipped
+because another replica holds the lock increments neither.
+
+**Operational note.** The schedulers are shared, so when one replica shuts down
+it removes them for every replica. Until another replica starts again (a rolling
+restart usually takes seconds), no new lifecycle jobs are created. Restart at least
+one replica after a full outage to restore the schedule.
+
+---
+
+## Indexer observability and alerts (B-112)
+
+The indexer runs as its own process, so it serves its own metrics endpoint:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `INDEXER_METRICS_PORT` | `9100` | Port for the indexer `/metrics` endpoint. |
+| `INDEXER_MAX_LEDGER_LAG` | `120` | Ledgers the indexer may fall behind the RPC head before `/ready` reports not-ready. |
+
+Metrics:
+
+- `indexer_last_ledger`: last ledger the indexer has checkpointed. It should keep rising.
+- `indexer_ledger_lag`: ledgers between the RPC head and the indexer cursor.
+- `indexer_event_process_seconds{type}`: time spent per event, by canonical type.
+- `soroban_rpc_request_seconds{method}`: Soroban RPC latency, by method.
+
+The indexer cursor also advances across ledgers that contain no events, once a
+poll returns a page short of its limit. Without this, a quiet chain would look
+like a stalled indexer.
+
+`/ready` returns 503 with `checks.indexer` set to `error` when the indexer
+cursor is more than `INDEXER_MAX_LEDGER_LAG` behind the RPC head. The response
+includes `lagLedgers`.
+
+Example alert rules are in [`docs/prometheus/indexer-alerts.yml`](prometheus/indexer-alerts.yml).
+Validate them with `promtool check rules docs/prometheus/indexer-alerts.yml`.
+They cover a stalled indexer, lag, RPC failures and latency, and market lifecycle
+jobs that fail or stop completing.
 
 ---
 

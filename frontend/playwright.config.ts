@@ -27,6 +27,8 @@ export default defineConfig({
       env: {
         NEXT_PUBLIC_E2E: "true",
         NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}`,
+        // Must match E2E_ADDRESS in e2e/fixtures.ts so the wallet passes the admin check
+        NEXT_PUBLIC_ADMIN_ADDRESSES: "GE2ETESTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWXYZ",
       },
       timeout: 240_000,
       reuseExistingServer: false,

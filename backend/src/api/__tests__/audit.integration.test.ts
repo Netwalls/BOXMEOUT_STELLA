@@ -17,7 +17,7 @@ describe("Audit Logging Integration Tests (Issue #456)", () => {
 
   describe("Audit Log Middleware", () => {
     it("should log admin actions to the audit_logs table", async () => {
-      const response = await request(app)
+      await request(app)
         .post("/api/admin/oracles")
         .send({
           address: "GBUQWP3BOUZX34ULNQG23RQ6F4YUSXHTQSXUSMIQ75XABDUATSXOCKETX",
@@ -41,7 +41,7 @@ describe("Audit Logging Integration Tests (Issue #456)", () => {
     });
 
     it("should sanitize sensitive fields in audit logs", async () => {
-      const response = await request(app)
+      await request(app)
         .post("/api/admin/oracles")
         .send({
           address: "GBUQWP3BOUZX34ULNQG23RQ6F4YUSXHTQSXUSMIQ75XABDUATSXOCKETX",
@@ -60,7 +60,7 @@ describe("Audit Logging Integration Tests (Issue #456)", () => {
 
       expect(auditLogs.length).toBeGreaterThan(0);
       const log = auditLogs[0];
-      const requestBody = log.requestBody as any;
+      const requestBody = log.requestBody as Record<string, unknown>;
 
       expect(requestBody.password).toBeUndefined();
       expect(requestBody.token).toBeUndefined();
@@ -155,7 +155,7 @@ describe("Audit Logging Integration Tests (Issue #456)", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.logs.length).toBe(2);
-      expect(response.body.logs.every((log: any) => log.userId === "user-1")).toBe(true);
+      expect(response.body.logs.every((log: { userId: string }) => log.userId === "user-1")).toBe(true);
     });
 
     it("should filter audit logs by actionType (path)", async () => {
@@ -168,7 +168,7 @@ describe("Audit Logging Integration Tests (Issue #456)", () => {
       expect(response.status).toBe(200);
       expect(response.body.logs.length).toBeGreaterThan(0);
       expect(
-        response.body.logs.every((log: any) => log.path.includes("/oracles")),
+        response.body.logs.every((log: { path: string }) => log.path.includes("/oracles")),
       ).toBe(true);
     });
 
@@ -217,8 +217,8 @@ describe("Audit Logging Integration Tests (Issue #456)", () => {
 
         expect(response2.status).toBe(200);
         // Pages should have different logs
-        const ids1 = response1.body.logs.map((l: any) => l.id);
-        const ids2 = response2.body.logs.map((l: any) => l.id);
+        const ids1 = response1.body.logs.map((l: { id: string }) => l.id);
+        const ids2 = response2.body.logs.map((l: { id: string }) => l.id);
         const intersection = ids1.filter((id: string) => ids2.includes(id));
         expect(intersection.length).toBe(0);
       }

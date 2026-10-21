@@ -10,7 +10,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-# Generate Prisma client before building
+# Generate Prisma client before building. OpenSSL must be present so the
+# generated query engine matches the openssl-3 runtime images.
+RUN apk add --no-cache openssl
 RUN npx prisma generate
 RUN npm run build
 
@@ -20,6 +22,9 @@ FROM node:20-alpine AS runtime-base
 WORKDIR /app
 
 ENV NODE_ENV=production
+
+# Prisma's query engine on Alpine (musl) needs OpenSSL to detect its version.
+RUN apk add --no-cache openssl
 
 # Copy production node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -49,3 +54,16 @@ CMD ["node", "dist/index.js"]
 # Uses the same compiled image — no extra build cost.
 FROM runtime-base AS indexer
 CMD ["node", "dist/indexer/index.js"]
+
+# ── Stage 6: migrate (one-shot) ──────────────────────────────────────────────
+# #1406 B-108: Runs `prisma migrate deploy` once per release, before the api and
+# indexer containers start. Production api/indexer images never migrate on boot.
+# The Prisma CLI is a devDependency, so this target is built from the builder
+# stage, which has the full node_modules tree. It runs as the same non-root user.
+FROM builder AS migrate
+ENV NODE_ENV=production
+RUN apk add --no-cache openssl \
+  && addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 apiuser
+USER apiuser
+CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]

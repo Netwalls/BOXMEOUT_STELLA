@@ -5,20 +5,20 @@ use soroban_sdk::{contracttype, Address, Bytes, String};
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MarketStatus {
-    Open     = 0, // Bets are being accepted
-    Locked   = 1, // Fight started — no more bets
-    Resolved = 2, // Winner declared — claims open
+    Open = 0,      // Bets are being accepted
+    Locked = 1,    // Fight started — no more bets
+    Resolved = 2,  // Winner declared — claims open
     Cancelled = 3, // Fight cancelled — full refunds
-    Disputed  = 4, // Result under admin review — claims frozen
+    Disputed = 4,  // Result under admin review — claims frozen
 }
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Outcome {
-    FighterA     = 0, // Fighter A wins
-    FighterB     = 1, // Fighter B wins
-    Draw         = 2, // Match ends in a draw — status set to Cancelled for full refunds
-    NoContest    = 3, // No contest — DQ or injury ruling
+    FighterA = 0,     // Fighter A wins
+    FighterB = 1,     // Fighter B wins
+    Draw = 2,         // Match ends in a draw — status set to Cancelled for full refunds
+    NoContest = 3,    // No contest — DQ or injury ruling
     Undetermined = 4, // Not yet resolved
 }
 
@@ -34,9 +34,9 @@ pub enum BetSide {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Fighter {
-    pub name:         String,
-    pub record:       String,
-    pub nationality:  String,
+    pub name: String,
+    pub record: String,
+    pub nationality: String,
     pub weight_class: String,
 }
 
@@ -52,22 +52,22 @@ pub enum OptionalOutcome {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Market {
-    pub market_id:              Bytes,
-    pub fighter_a:              Fighter,
-    pub fighter_b:              Fighter,
-    pub scheduled_at:           u64,
-    pub betting_ends_at:        u64,
-    pub created_at:             u64,
-    pub created_by:             Address,
-    pub status:                 MarketStatus,
-    pub pool_a:                 i128,
-    pub pool_b:                 i128,
-    pub total_pool:             i128,
-    pub protocol_fee_bp:        u32,
-    pub oracle_address:         Address,
-    pub fee_collector_address:  Address,
+    pub market_id: Bytes,
+    pub fighter_a: Fighter,
+    pub fighter_b: Fighter,
+    pub scheduled_at: u64,
+    pub betting_ends_at: u64,
+    pub created_at: u64,
+    pub created_by: Address,
+    pub status: MarketStatus,
+    pub pool_a: i128,
+    pub pool_b: i128,
+    pub total_pool: i128,
+    pub protocol_fee_bp: u32,
+    pub oracle_address: Address,
+    pub fee_collector_address: Address,
     /// `Outcome::Undetermined` until the market is resolved.
-    pub outcome:                Outcome,
+    pub outcome: Outcome,
 }
 
 /// Full on-chain market record, as tracked by an individual Market contract instance.
@@ -79,60 +79,62 @@ pub type MarketData = Market;
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct MarketInfo {
-    pub market_id:      Bytes,
+    pub market_id: Bytes,
     pub market_address: Address,
-    pub creator:        Address,
-    pub fighter_a:       String,
-    pub fighter_b:       String,
-    pub oracle:          Address,
-    pub lock_time:       u64,
-    pub end_time:        u64,
-    pub created_at:      u64,
+    pub creator: Address,
+    pub fighter_a: String,
+    pub fighter_b: String,
+    pub oracle: Address,
+    pub lock_time: u64,
+    pub end_time: u64,
+    pub created_at: u64,
 }
 
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Bet {
-    pub bet_id:    Bytes,
+    pub bet_id: Bytes,
     pub market_id: Bytes,
-    pub bettor:    Address,
-    pub side:      BetSide,
-    pub amount:    i128,
+    pub bettor: Address,
+    pub side: BetSide,
+    pub amount: i128,
     pub placed_at: u64,
-    pub claimed:   bool,
+    pub claimed: bool,
 }
 
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct BetRecord {
-    pub bet_id:    Bytes,
-    pub bettor:    Address,
+    pub bet_id: Bytes,
+    pub bettor: Address,
     pub market_id: u64,
-    pub side:      BetSide,
-    pub amount:    i128,
+    pub side: BetSide,
+    pub amount: i128,
     pub placed_at: u64,
-    pub claimed:   bool,
+    pub claimed: bool,
 }
 
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct ClaimReceipt {
-    pub bet_id:     Bytes,
-    pub bettor:     Address,
-    pub payout:     i128,
+    pub bet_id: Bytes,
+    pub bettor: Address,
+    pub payout: i128,
     pub claimed_at: u64,
 }
 
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct ProtocolConfig {
-    pub admin:              Address,
-    pub fee_collector:      Address,
-    pub default_fee_bp:     u32,
-    pub min_bet_amount:     i128,
-    pub max_bet_amount:     i128,
+    pub admin: Address,
+    pub fee_collector: Address,
+    pub default_fee_bp: u32,
+    pub min_bet_amount: i128,
+    pub max_bet_amount: i128,
     pub dispute_window_sec: u64,
-    pub paused:             bool,
+    pub paused: bool,
+    pub bet_token: Address,
+    pub resolution_timeout_sec: u64,
 }
 
 #[contracttype]
@@ -248,7 +250,7 @@ mod tests {
     fn fee_large_amount_no_overflow() {
         // 10 billion XLM in stroops = 100_000_000_000 * 10_000_000
         let large = 100_000_000_000i128 * 10_000_000;
-        let fee   = calculate_fee(large, 200); // 2%
+        let fee = calculate_fee(large, 200); // 2%
         assert_eq!(fee, large * 200 / 10_000);
     }
 }

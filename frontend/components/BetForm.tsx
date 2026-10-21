@@ -53,7 +53,7 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
   const [estimate, setEstimate] = useState<FeeEstimate | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
 
-  const { placeBet, isLoading } = usePlaceBet(market.id);
+  const { placeBet, isLoading } = usePlaceBet(market.id, market.contractAddress);
 
   const isLocked = market.status !== "Open";
   const numericAmount = parseFloat(amount);

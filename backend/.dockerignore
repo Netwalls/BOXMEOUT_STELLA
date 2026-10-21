@@ -1,0 +1,28 @@
+# Dependencies are installed inside the image by `npm ci`; never send host modules
+node_modules
+npm-debug.log*
+
+# Build output is produced inside the builder stage
+dist
+coverage
+
+# Secrets and local environment must never reach the build context or an image layer
+.env
+.env.*
+!.env.example
+
+# Tests, docs and dev tooling are not needed at runtime
+**/__tests__
+tests
+**/*.test.ts
+**/*.spec.ts
+docs
+*.md
+jest.config.ts
+.eslintrc.json
+.prettierrc
+
+# Repository metadata
+.git
+.github
+.claude
