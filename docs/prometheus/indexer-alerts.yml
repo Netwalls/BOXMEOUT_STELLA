@@ -1,0 +1,86 @@
+# Example Prometheus alert rules for the BOXMEOUT backend (B-112 / #1410).
+#
+# Scrape both processes:
+#   - the API server         (default port 3001, path /metrics)
+#   - the indexer process    (INDEXER_METRICS_PORT, default 9100, path /metrics)
+#
+# Validate before loading:
+#   promtool check rules docs/prometheus/indexer-alerts.yml
+#
+# Thresholds are examples. Tune them against your RPC latency and ledger rate.
+
+groups:
+  - name: boxmeout-indexer
+    rules:
+      - alert: IndexerMetricsMissing
+        expr: absent(indexer_last_ledger)
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Indexer metrics are not being scraped"
+          description: "indexer_last_ledger is absent. The indexer process may be down or its metrics port is unreachable."
+
+      - alert: IndexerStalled
+        expr: changes(indexer_last_ledger[10m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Indexer has stopped advancing"
+          description: "indexer_last_ledger has not changed for 10 minutes. The network head keeps moving, so events are no longer being indexed."
+
+      - alert: IndexerLagHigh
+        expr: indexer_ledger_lag > 120
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Indexer is behind the network head"
+          description: "The indexer is {{ $value }} ledgers behind the RPC head (threshold 120). /ready reports not-ready at the same threshold by default."
+
+      - alert: IndexerConsecutiveRpcFailures
+        expr: indexer_consecutive_failures > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Indexer is failing to reach the Soroban RPC"
+          description: "{{ $value }} consecutive RPC failures. The indexer is backing off."
+
+      - alert: SorobanRpcSlow
+        expr: histogram_quantile(0.95, sum by (le, method) (rate(soroban_rpc_request_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Soroban RPC p95 latency above 2s"
+          description: "p95 latency for {{ $labels.method }} is {{ $value }}s."
+
+      - alert: IndexerEventProcessingSlow
+        expr: histogram_quantile(0.95, sum by (le, type) (rate(indexer_event_process_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Indexer event handler p95 above 1s"
+          description: "p95 handler time for event type {{ $labels.type }} is {{ $value }}s."
+
+  - name: boxmeout-market-lifecycle
+    rules:
+      - alert: LifecycleJobFailing
+        expr: increase(lock_job_failure_total[15m]) > 0 or increase(finalize_job_failure_total[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Market lock or finalize job is failing"
+          description: "The lifecycle job threw in the last 15 minutes. Check the API logs for 'lifecycle job failed'."
+
+      - alert: LifecycleJobsNotRunning
+        expr: (increase(lock_job_success_total[15m]) + increase(finalize_job_success_total[15m])) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Market lifecycle jobs have not completed in 15 minutes"
+          description: "Markets will not auto-lock or auto-finalize. Check that the API is running and that its Redis connection is healthy."

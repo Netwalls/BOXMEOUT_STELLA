@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
+import { fail } from "../response";
 
 let redis: Redis | null = null;
 
@@ -65,10 +66,8 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
         const retryAfterSeconds = Math.max(1, Math.ceil((oldestTimestamp + windowMs - now) / 1000));
 
         res.setHeader("Retry-After", String(retryAfterSeconds));
-        res.status(429).json({
-          error: "Too many requests",
-          code: "RATE_LIMITED",
-          retryAfter: retryAfterSeconds,
+        fail(res, 429, "RATE_LIMITED", "Too many requests", {
+          details: { retryAfter: retryAfterSeconds },
         });
         return;
       }

@@ -150,7 +150,24 @@ npm test             # run all Jest tests
 
 Tests use [Jest](https://jestjs.io/) and [React Testing Library](https://testing-library.com/). MSW (Mock Service Worker) is used to intercept API calls in tests.
 
+### Test Structure & Conventions
+
+Test files follow standard conventions across the frontend codebase:
+- **Component tests**: Colocated directly beside the component file under `components/` (e.g., `components/MarketCard.test.tsx`, `components/BettingInterface.test.tsx`).
+- **Hook tests**: Located under `__tests__/hooks/` (e.g., `__tests__/hooks/useWallet.test.ts`, `__tests__/hooks/usePlaceBet.test.ts`).
+- **Lib / utility tests**: Located under `__tests__/lib/` (e.g., `__tests__/lib/stellar.test.ts`).
+
+Do not create duplicate test suites in root `__tests__/`, `hooks/__tests__/`, or inside `lib/`.
+
 ---
+
+## Test Layout
+
+- Hook tests live in `__tests__/hooks/`, one file per hook (`useClaimWinnings.test.ts`).
+- Library tests live in `__tests__/lib/`, one file per module.
+- Component tests sit next to the component: `components/BetForm.tsx` and `components/BetForm.test.tsx`.
+- Add cases to the existing file for a module instead of creating a second one. Duplicate
+  suites drift apart and double the CI time.
 
 ## Tech Stack
 

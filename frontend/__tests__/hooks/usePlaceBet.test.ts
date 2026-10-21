@@ -1,37 +1,182 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
-import type { Bet } from "@/lib/api";
+import { useWallet } from "@/hooks/useWallet";
+import * as stellar from "@/lib/stellar";
 
-const BET: Bet = { id: "bet-1", marketId: "mkt-1", bettor: "GADDR1", side: "FighterA", amount: "100000000", placedAt: "2026-06-20T10:00:00Z", claimed: false, payout: null };
+jest.mock("@/hooks/useWallet");
+jest.mock("@/lib/stellar");
 
-afterEach(() => jest.restoreAllMocks());
+const mockUseWallet = useWallet as jest.Mock;
+const mockBuildSorobanInvocation = stellar.buildSorobanInvocation as jest.Mock;
+const mockSubmitTransaction = stellar.submitTransaction as jest.Mock;
 
-test("happy path: returns confirmed Bet on success", async () => {
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(BET) });
-  const { result } = renderHook(() => usePlaceBet("mkt-1"));
-  let bet: unknown;
-  await act(async () => { bet = await result.current.placeBet("FighterA", BigInt(100_000_000)); });
-  expect(bet).toEqual(BET);
-  expect(result.current.isLoading).toBe(false);
-  expect(result.current.error).toBeNull();
-});
+describe("usePlaceBet", () => {
+  const mockAddress = "GADDR1234567890ABCDEF";
 
-test("error path: sets error state on 400 response", async () => {
-  global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400, json: () => Promise.resolve({}) });
-  const { result } = renderHook(() => usePlaceBet("mkt-1"));
-  await act(async () => {
-    await expect(result.current.placeBet("FighterA", BigInt(100_000_000))).rejects.toThrow();
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseWallet.mockReturnValue({
+      address: mockAddress,
+      isConnected: true,
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+      signTransaction: jest.fn().mockResolvedValue("signed-xdr"),
+    });
   });
-  expect(result.current.error).toBeInstanceOf(Error);
-  expect(result.current.isLoading).toBe(false);
-});
 
-test("edge case: isLoading is true while in-flight, false after", async () => {
-  let resolve!: (v: unknown) => void;
-  global.fetch = jest.fn().mockReturnValue(new Promise((res) => { resolve = res; }));
-  const { result } = renderHook(() => usePlaceBet("mkt-1"));
-  act(() => { result.current.placeBet("FighterA", BigInt(100_000_000)).catch(() => {}); });
-  await waitFor(() => expect(result.current.isLoading).toBe(true));
-  await act(async () => { resolve({ ok: true, json: () => Promise.resolve(BET) }); });
-  await waitFor(() => expect(result.current.isLoading).toBe(false));
+  it("throws error when wallet not connected", async () => {
+    mockUseWallet.mockReturnValueOnce({
+      address: null,
+      isConnected: false,
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+      signTransaction: jest.fn(),
+    });
+
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    await expect(
+      act(async () => {
+        await result.current.placeBet("FighterA", 100n);
+      })
+    ).rejects.toThrow("Wallet not connected");
+  });
+
+  it("throws error when wallet network is mismatched", async () => {
+    mockUseWallet.mockReturnValueOnce({
+      address: mockAddress,
+      isConnected: true,
+      isNetworkMismatched: true,
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+      signTransaction: jest.fn(),
+    });
+
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    await expect(
+      act(async () => {
+        await result.current.placeBet("FighterA", 100n);
+      })
+    ).rejects.toThrow("Wallet is connected to the wrong network");
+
+    expect(mockBuildSorobanInvocation).not.toHaveBeenCalled();
+  });
+
+  it("builds Soroban invocation with correct params", async () => {
+    mockBuildSorobanInvocation.mockResolvedValueOnce("xdr-string");
+    mockSubmitTransaction.mockResolvedValueOnce({
+      txHash: "tx-hash-123",
+      ledger: 12345,
+      returnValue: null,
+    });
+
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    await act(async () => {
+      await result.current.placeBet("FighterA", 100n);
+    });
+
+    expect(mockBuildSorobanInvocation).toHaveBeenCalledWith({
+      contractId: "market-1",
+      method: "place_bet",
+      args: ["FighterA", 100n],
+      signerAddress: mockAddress,
+    });
+  });
+
+  it("signs transaction with wallet", async () => {
+    const mockSignTransaction = jest.fn().mockResolvedValueOnce("signed-xdr");
+    mockUseWallet.mockReturnValueOnce({
+      address: mockAddress,
+      isConnected: true,
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+      signTransaction: mockSignTransaction,
+    });
+
+    mockBuildSorobanInvocation.mockResolvedValueOnce("xdr-string");
+    mockSubmitTransaction.mockResolvedValueOnce({
+      txHash: "tx-hash-123",
+      ledger: 12345,
+      returnValue: null,
+    });
+
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    await act(async () => {
+      await result.current.placeBet("FighterA", 100n);
+    });
+
+    expect(mockSignTransaction).toHaveBeenCalledWith("xdr-string");
+  });
+
+  it("submits signed transaction to network", async () => {
+    mockBuildSorobanInvocation.mockResolvedValueOnce("xdr-string");
+    mockSubmitTransaction.mockResolvedValueOnce({
+      txHash: "tx-hash-123",
+      ledger: 12345,
+      returnValue: null,
+    });
+
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    await act(async () => {
+      await result.current.placeBet("FighterA", 100n);
+    });
+
+    expect(mockSubmitTransaction).toHaveBeenCalledWith("signed-xdr");
+  });
+
+  it("returns confirmed Bet object on success", async () => {
+    mockBuildSorobanInvocation.mockResolvedValueOnce("xdr-string");
+    mockSubmitTransaction.mockResolvedValueOnce({
+      txHash: "tx-hash-123",
+      ledger: 12345,
+      returnValue: null,
+    });
+
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    let bet: any;
+    await act(async () => {
+      bet = await result.current.placeBet("FighterA", 100n);
+    });
+
+    expect(bet).toMatchObject({
+      id: "tx-hash-123",
+      marketId: "market-1",
+      bettor: mockAddress,
+      side: "FighterA",
+      amount: "100",
+      claimed: false,
+      payout: null,
+    });
+    expect(bet.placedAt).toBeDefined();
+  });
+
+  it("sets isLoading false after transaction completes", async () => {
+    mockBuildSorobanInvocation.mockResolvedValueOnce("xdr-string");
+    mockSubmitTransaction.mockResolvedValueOnce({
+      txHash: "tx-hash-123",
+      ledger: 12345,
+      returnValue: null,
+    });
+
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    expect(result.current.isLoading).toBe(false);
+
+    await act(async () => {
+      await result.current.placeBet("FighterA", 100n);
+    });
+
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("initializes with null error", () => {
+    const { result } = renderHook(() => usePlaceBet("market-1"));
+
+    expect(result.current.error).toBeNull();
+  });
 });

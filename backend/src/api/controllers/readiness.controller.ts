@@ -5,6 +5,9 @@
  *   - PostgreSQL (via Prisma $queryRaw)
  *   - Redis (via ioredis PING)
  *   - Soroban RPC (via SorobanRpc.Server.getHealth)
+ *   - Indexer (B-112): the persisted cursor must be within INDEXER_MAX_LEDGER_LAG
+ *     ledgers of the RPC head. The indexer runs in its own process, so its lag
+ *     is read from the shared IndexerState row rather than in-process metrics.
  *
  * Each check runs with an individual timeout (5 s by default) so a hung
  * dependency does not stall the entire probe indefinitely.
@@ -18,14 +21,24 @@ import type { Request, Response } from "express";
 import Redis from "ioredis";
 import { SorobanRpc } from "@stellar/stellar-sdk";
 import { db } from "../../db";
+import { ok } from "../response";
 
 const CHECK_TIMEOUT_MS = 5_000;
+
+/** Default maximum indexer lag, in ledgers (about 10 minutes at ~5 s per ledger). */
+const DEFAULT_MAX_INDEXER_LAG_LEDGERS = 120;
 
 type CheckStatus = "ok" | "error";
 
 interface DependencyResult {
   status: CheckStatus;
   error?: string;
+  lagLedgers?: number;
+}
+
+function maxIndexerLagLedgers(): number {
+  const parsed = parseInt(process.env.INDEXER_MAX_LEDGER_LAG ?? "", 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_MAX_INDEXER_LAG_LEDGERS;
 }
 
 /** Races a promise against a timeout. Rejects with a timeout error if the
@@ -88,6 +101,34 @@ async function checkRpc(): Promise<DependencyResult> {
   }
 }
 
+async function checkIndexer(): Promise<DependencyResult> {
+  try {
+    const rpcUrl = process.env.STELLAR_RPC_URL ?? "";
+    if (!rpcUrl) throw new Error("STELLAR_RPC_URL not configured");
+    const server = new SorobanRpc.Server(rpcUrl);
+    const [state, latest] = await withTimeout(
+      Promise.all([
+        db.indexerState.findUnique({ where: { id: 1 } }),
+        server.getLatestLedger(),
+      ]),
+      CHECK_TIMEOUT_MS,
+      "indexer"
+    );
+    const lagLedgers = latest.sequence - (state?.lastLedger ?? 0);
+    const threshold = maxIndexerLagLedgers();
+    if (lagLedgers > threshold) {
+      return {
+        status: "error",
+        lagLedgers,
+        error: `indexer lag ${lagLedgers} ledgers exceeds ${threshold}`,
+      };
+    }
+    return { status: "ok", lagLedgers };
+  } catch (err) {
+    return { status: "error", error: errorMessage(err) };
+  }
+}
+
 function errorMessage(err: unknown): string {
   if (process.env.NODE_ENV === "production") {
     // Do not leak internal error details in production
@@ -100,23 +141,25 @@ function errorMessage(err: unknown): string {
  * GET /ready
  */
 export async function readinessHandler(req: Request, res: Response): Promise<void> {
-  const [dbResult, redisResult, rpcResult] = await Promise.all([
+  const [dbResult, redisResult, rpcResult, indexerResult] = await Promise.all([
     checkDb(),
     checkRedis(),
     checkRpc(),
+    checkIndexer(),
   ]);
 
   const checks = {
     db: dbResult,
     redis: redisResult,
     rpc: rpcResult,
+    indexer: indexerResult,
   };
 
   const allOk = Object.values(checks).every((c) => c.status === "ok");
 
   if (allOk) {
-    res.status(200).json({ status: "ok", checks });
+    ok(res, { status: "ok", checks });
   } else {
-    res.status(503).json({ status: "not_ready", checks });
+    ok(res, { status: "not_ready", checks }, { status: 503 });
   }
 }

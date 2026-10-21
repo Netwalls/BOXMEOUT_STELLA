@@ -32,7 +32,14 @@ const envSchema = z
       .default("testnet"),
     NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE: z.string().min(1).optional(),
     NEXT_PUBLIC_SOROBAN_RPC_URL: z.string().url().optional(),
-    NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID: z.string().optional(),
+    NEXT_PUBLIC_MARKET_CONTRACT_ID: z.string().optional(),
+    NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID: z
+      .string()
+      .regex(/^C[A-Z2-7]{55}$/, {
+        message: "NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID must be a Soroban contract address (C...)",
+      })
+      .optional(),
+    NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
     /** Comma-separated Stellar addresses with admin access. */
     NEXT_PUBLIC_ADMIN_ADDRESSES: z.string().optional(),
     /** Overrides the admin key sent with requests (development/testing only). */
@@ -71,7 +78,9 @@ function loadConfig(): EnvConfig {
     NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
     NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE: process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE,
     NEXT_PUBLIC_SOROBAN_RPC_URL: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL,
+    NEXT_PUBLIC_MARKET_CONTRACT_ID: process.env.NEXT_PUBLIC_MARKET_CONTRACT_ID,
     NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID: process.env.NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
     NEXT_PUBLIC_ADMIN_ADDRESSES: process.env.NEXT_PUBLIC_ADMIN_ADDRESSES,
     NEXT_PUBLIC_ADMIN_API_KEY: process.env.NEXT_PUBLIC_ADMIN_API_KEY,
     NEXT_PUBLIC_E2E: process.env.NEXT_PUBLIC_E2E,
@@ -107,6 +116,15 @@ export const NETWORK_PASSPHRASE: string =
   config.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ?? NETWORK_PASSPHRASES[STELLAR_NETWORK];
 export const SOROBAN_RPC_URL: string =
   config.NEXT_PUBLIC_SOROBAN_RPC_URL ?? DEFAULT_SOROBAN_RPC_URL;
+export const MARKET_CONTRACT_ID: string | undefined =
+  config.NEXT_PUBLIC_MARKET_CONTRACT_ID;
+export const SITE_URL: string =
+  config.NEXT_PUBLIC_SITE_URL ||
+  (process.env.NEXT_PUBLIC_VERCEL_URL
+    ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+    : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");
 export const MARKET_FACTORY_CONTRACT_ID: string | undefined =
   config.NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID;
 export const ADMIN_ADDRESSES: string[] = (config.NEXT_PUBLIC_ADMIN_ADDRESSES ?? "")

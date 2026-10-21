@@ -25,7 +25,10 @@ export function Navbar() {
     <nav className="bg-gray-900 border-b border-gray-800">
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
         {/* Logo */}
-        <Link href="/" className="text-xl font-bold text-amber-400">
+        <Link
+          href="/"
+          className="text-xl font-bold text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 rounded"
+        >
           BOXMEOUT
         </Link>
 
@@ -35,7 +38,7 @@ export function Navbar() {
             <li key={l.href}>
               <Link
                 href={l.href}
-                className="text-gray-300 hover:text-white transition-colors"
+                className="text-gray-300 hover:text-white transition-colors px-2 py-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
               >
                 {l.label}
               </Link>
@@ -45,7 +48,7 @@ export function Navbar() {
             <button
               onClick={toggleTheme}
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="w-9 h-9 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-gray-800"
+              className="w-9 h-9 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
             >
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
@@ -59,7 +62,7 @@ export function Navbar() {
 
         {/* Hamburger button — mobile only */}
         <button
-          className="md:hidden flex items-center justify-center w-11 h-11 text-gray-300 hover:text-white"
+          className="md:hidden flex items-center justify-center w-11 h-11 text-gray-300 hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
           onClick={() => setOpen((o) => !o)}
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
@@ -100,7 +103,7 @@ export function Navbar() {
               <li key={l.href}>
                 <Link
                   href={l.href}
-                  className="flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors"
+                  className="flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors px-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
                   onClick={() => setOpen(false)}
                 >
                   {l.label}

@@ -4,14 +4,18 @@ import dynamic from "next/dynamic";
 import { useMarket } from "@/hooks/useMarket";
 import { useMarketBets } from "@/hooks/useMarketBets";
 import { useMarketEvents } from "@/hooks/useMarketEvents";
+import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/components/ToastProvider";
 import { Market, Bet } from "@/lib/api";
+import { stellarExpertContractUrl } from "@/lib/stellar";
 import { FighterCard } from "@/components/FighterCard";
 import { BetForm } from "@/components/BetForm";
 import { MarketStatusBadge } from "@/components/MarketStatusBadge";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { DisputeModal } from "@/components/DisputeModal";
+import { useWallet } from "@/hooks/useWallet";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { truncateAddress, stellarExpertContractUrl } from "@/lib/stellar";
 
 // recharts is only needed on this page; keep it out of the shared bundle
 const OutcomeChart = dynamic(() => import("@/components/OutcomeChart").then((m) => m.OutcomeChart), {
@@ -59,20 +63,30 @@ export function MarketDetailClient({
   initialBets,
   initialOddsHistory,
 }: MarketDetailClientProps): JSX.Element {
+  const { address } = useWallet();
   const { market } = useMarket(marketId);
   const { bets: liveBets } = useMarketBets(marketId);
-  const { poolA: livePoolA, poolB: livePoolB } = useMarketEvents(marketId);
   const { addToast } = useToast();
+  const { address } = useWallet();
   const [justPlaced, setJustPlaced] = useState<Bet[]>([]);
   const [showDispute, setShowDispute] = useState(false);
+  const [copiedContract, setCopiedContract] = useState(false);
 
   // Use live polled data once available, fall back to SSR initial data
   const m = market ?? initialMarket;
+  const contractAddress = m.contractAddress || m.id;
   const oddsHistory = initialOddsHistory;
 
   const polledBets = liveBets.length ? liveBets : initialBets;
   // Show a bet placed this session immediately, ahead of the next bet-list poll
   const bets = [...justPlaced.filter((b) => !polledBets.some((pb) => pb.id === b.id)), ...polledBets];
+  const hasPosition = Boolean(address && bets.some((b) => b.bettor === address));
+
+  const { poolA: livePoolA, poolB: livePoolB } = useMarketEvents(marketId, {
+    hasPosition,
+    initialStatus: m.status,
+    marketTitle: `${m.fighterA.name} vs ${m.fighterB.name}`,
+  });
 
   // useMarketEvents drives live pool totals; fall back to the polled market until the first event lands
   const poolA = livePoolA ?? BigInt(m.poolA);
@@ -80,6 +94,18 @@ export function MarketDetailClient({
   const total = poolA + poolB;
   const oddsA = total === BigInt(0) ? 50 : Number((poolA * BigInt(100)) / total);
   const oddsB = 100 - oddsA;
+
+  const handleCopyContract = useCallback(async () => {
+    if (!contractAddress) return;
+    try {
+      await navigator.clipboard.writeText(contractAddress);
+      setCopiedContract(true);
+      addToast("Contract address copied to clipboard!", "success");
+      setTimeout(() => setCopiedContract(false), 2000);
+    } catch {
+      addToast("Could not copy contract address.", "error");
+    }
+  }, [contractAddress, addToast]);
 
   const handleShare = useCallback(async () => {
     const url = window.location.href;
@@ -104,6 +130,15 @@ export function MarketDetailClient({
     }
   }, [m.fighterA.name, m.fighterB.name, addToast]);
 
+  const handleCopyContract = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(m.contractAddress);
+      addToast("Contract address copied!", "success");
+    } catch {
+      addToast("Could not copy contract address.", "error");
+    }
+  }, [m.contractAddress, addToast]);
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -112,6 +147,82 @@ export function MarketDetailClient({
           {m.fighterA.name} vs {m.fighterB.name}
         </h1>
         <MarketStatusBadge status={m.status} />
+
+        {/* Contract Address & Explorer Link */}
+        {contractAddress && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-900/80 px-2.5 py-1 text-xs text-gray-300">
+            <span className="text-gray-400 font-medium">Contract:</span>
+            <span className="font-mono text-gray-200" title={contractAddress}>
+              {truncateAddress(contractAddress)}
+            </span>
+            <button
+              type="button"
+              onClick={handleCopyContract}
+              aria-label={copiedContract ? "Contract address copied" : "Copy contract address to clipboard"}
+              className="p-1 text-gray-400 hover:text-white transition-colors rounded hover:bg-gray-800"
+              title={copiedContract ? "Copied" : "Copy address"}
+            >
+              {copiedContract ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3.5 w-3.5 text-green-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              )}
+            </button>
+            <span className="sr-only" role="status" aria-live="polite">
+              {copiedContract ? "Copied contract address to clipboard" : ""}
+            </span>
+            <a
+              href={stellarExpertContractUrl(contractAddress)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="View contract on Stellar Expert (opens in new tab)"
+              className="p-1 text-gray-400 hover:text-amber-400 transition-colors rounded hover:bg-gray-800"
+              title="View on Stellar Expert"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </a>
+          </div>
+        )}
         <button
           onClick={handleShare}
           aria-label="Share this market"
@@ -130,6 +241,31 @@ export function MarketDetailClient({
           </svg>
           Share
         </button>
+      </div>
+
+      {/* Contract */}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+        <span>Contract</span>
+        <code className="font-mono text-gray-300" title={m.contractAddress}>
+          {m.contractAddress.slice(0, 6)}…{m.contractAddress.slice(-6)}
+        </code>
+        <button
+          type="button"
+          onClick={handleCopyContract}
+          aria-label="Copy contract address"
+          className="rounded border border-gray-600 px-2 py-0.5 text-gray-300 hover:border-gray-400 hover:text-white transition-colors"
+        >
+          Copy
+        </button>
+        <a
+          href={stellarExpertContractUrl(m.contractAddress)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 hover:underline"
+        >
+          View on Stellar Expert
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
       </div>
 
       <CountdownTimer
@@ -191,7 +327,13 @@ export function MarketDetailClient({
       )}
 
       {showDispute && (
-        <DisputeModal market={m} onDisputed={() => setShowDispute(false)} />
+        <DisputeModal
+          market={m}
+          userBets={userBets}
+          isOpen={showDispute}
+          onDisputed={() => setShowDispute(false)}
+          onClose={() => setShowDispute(false)}
+        />
       )}
     </div>
   );

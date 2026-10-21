@@ -5,7 +5,7 @@
 //! ============================================================
 use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec};
 
-use shared::{errors::ContractError, events, types::MarketInfo};
+use shared::{errors::ContractError, events, types::{MarketInfo, ProtocolConfig}};
 
 // Storage keys for persistent state
 const ADMIN: &str = "ADMIN";
@@ -13,6 +13,7 @@ const MARKET_WASM_HASH: &str = "MARKET_WASM_HASH";
 const TREASURY: &str = "TREASURY";
 const PAUSED: &str = "PAUSED";
 const MARKET_COUNT_KEY: &str = "MARKET_COUNT";
+const CONFIG_KEY: &str = "CONFIG";
 // #1191: Changed from single MARKET_MAP to per-market keys
 // Format: ("MARKET", market_id) -> MarketInfo
 // Format: ("MARKET_BY_IDX", index) -> market_id
@@ -131,7 +132,7 @@ impl MarketFactory {
         env.storage()
             .persistent()
             .get(&CONFIG_KEY)
-            .ok_or(ContractError::Unauthorized)
+            .ok_or(ContractError::NotInitialized)
     }
 
     /// Deploys a new Market contract instance and registers its `MarketInfo`.

@@ -1011,9 +1011,11 @@ dependencies = [
 name = "market"
 version = "0.1.0"
 dependencies = [
+ "market_factory",
  "proptest",
  "shared",
  "soroban-sdk",
+ "treasury",
 ]
 
 [[package]]
@@ -1022,6 +1024,7 @@ version = "0.1.0"
 dependencies = [
  "shared",
  "soroban-sdk",
+ "treasury",
 ]
 
 [[package]]

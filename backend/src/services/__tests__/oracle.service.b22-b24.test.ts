@@ -16,6 +16,12 @@ jest.mock("../../logger", () => ({
   },
 }));
 
+// ── Mock bullmq so module load does not open Redis connections ────────────
+jest.mock("bullmq", () => ({
+  Queue: jest.fn().mockImplementation(() => ({ getJob: jest.fn(), add: jest.fn() })),
+  Worker: jest.fn().mockImplementation(() => ({ on: jest.fn() })),
+}));
+
 // ── Mock @stellar/stellar-sdk to avoid loading the heavy SDK ──────────────
 jest.mock("@stellar/stellar-sdk", () => ({
   SorobanRpc: { Server: jest.fn() },
@@ -59,6 +65,9 @@ jest.mock("@prisma/client", () => {
       dispute: { create: jest.fn() },
       adminLog: { create: jest.fn() },
       $transaction: jest.fn(),
+      // db.ts subscribes to Prisma events and wraps the client in $extends (B-100, B-102)
+      $on: jest.fn(),
+      $extends: jest.fn().mockReturnThis(),
     })),
     // Re-export enums / types the module-under-test imports at the type level
     Prisma: {},
