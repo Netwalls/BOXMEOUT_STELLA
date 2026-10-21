@@ -55,6 +55,8 @@ pub struct Market {
     pub dispute_window_sec: u64,
     pub treasury: Address,
     pub bet_token: Address,
+    pub stake_sum_a: i128,
+    pub stake_sum_b: i128,
 }
 
 #[contracttype]

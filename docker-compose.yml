@@ -1,11 +1,10 @@
-version: "3.9"
-
 # ── BOXMEOUT local dev stack ──────────────────────────────────────────────────
 # Usage:
 #   cp backend/.env.example backend/.env   # fill in Stellar + DB creds
 #   docker-compose up --build
 #
 # The API will be available at http://localhost:3001
+# Migrations run in the one-shot `migrate` service before api and indexer start.
 # Swagger UI (dev mode) will be available at http://localhost:3001/docs
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -40,6 +39,21 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Database migrations (one-shot) ──────────────────────────────────────────
+  # #1406 B-108: The api and indexer wait for this service to exit successfully,
+  # so only one process ever runs `prisma migrate deploy` per `up`.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://boxmeout:boxmeout@postgres:5432/boxmeout
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # ── Backend API ─────────────────────────────────────────────────────────────
   api:
     build:
@@ -57,19 +71,38 @@ services:
     ports:
       - "3001:3001"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Run migrations then start server
-    command: >
-      sh -c "npx prisma migrate deploy && node dist/index.js"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 15s
       retries: 3
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
+  # NEXT_PUBLIC_* values are baked in at build time. The browser calls the API
+  # on the host port, so the default points at http://localhost:3001.
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_STELLAR_NETWORK: ${NEXT_PUBLIC_STELLAR_NETWORK:-testnet}
+        NEXT_PUBLIC_SOROBAN_RPC_URL: ${NEXT_PUBLIC_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+        NEXT_PUBLIC_MARKET_CONTRACT_ID: ${NEXT_PUBLIC_MARKET_CONTRACT_ID:-}
+        NEXT_PUBLIC_ADMIN_ADDRESSES: ${NEXT_PUBLIC_ADMIN_ADDRESSES:-}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
 
   # ── Indexer ──────────────────────────────────────────────────────────────────
   # B-54: Runs the Soroban event-polling loop as a managed process separate
@@ -87,6 +120,8 @@ services:
       DATABASE_URL: postgresql://boxmeout:boxmeout@postgres:5432/boxmeout
       REDIS_URL: redis://redis:6379
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

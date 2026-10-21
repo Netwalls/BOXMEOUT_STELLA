@@ -206,6 +206,12 @@ impl MarketFactory {
             ],
         )?;
 
+        let _: () = env.invoke_contract(
+            &treasury,
+            &Symbol::new(&env, "register_market"),
+            soroban_sdk::vec![&env, market_address.clone().into()],
+        );
+
         let info = MarketInfo {
             market_id: market_id.clone(),
             market_address,
@@ -246,12 +252,6 @@ impl MarketFactory {
         env.storage()
             .persistent()
             .get(&(key_prefix, key_suffix))
-    }
-
-    /// Returns the address of a registered market, or None if not found.
-    /// Treasury uses this to authorize deposits and payouts against registered markets.
-    pub fn get_market_address(env: Env, market_id: Bytes) -> Option<Address> {
-        Self::get_market(env, market_id).map(|info| info.market_address)
     }
 
     /// Returns a bounded, stably-ordered (creation order) page of all markets
@@ -369,11 +369,6 @@ impl MarketFactory {
         env.storage().persistent().set(&ADMIN, &new_admin);
         env.storage().persistent().remove(&PENDING_ADMIN);
 
-        // Update ProtocolConfig.admin to keep it in sync
-        let mut config = Self::get_config(&env)?;
-        config.admin = new_admin.clone();
-        env.storage().persistent().set(&CONFIG_KEY, &config);
-
         events::emit_admin_transferred(&env, old_admin, new_admin);
         Ok(())
     }
@@ -437,12 +432,6 @@ impl MarketFactory {
     pub fn pause_factory(env: Env, admin: Address) -> Result<(), ContractError> {
         Self::require_admin(&env, &admin)?;
         env.storage().persistent().set(&PAUSED, &true);
-
-        // Update ProtocolConfig.paused to keep it in sync
-        let mut config = Self::get_config(&env)?;
-        config.paused = true;
-        env.storage().persistent().set(&CONFIG_KEY, &config);
-
         events::emit_protocol_paused(&env);
         Ok(())
     }
@@ -456,12 +445,6 @@ impl MarketFactory {
     pub fn unpause_factory(env: Env, admin: Address) -> Result<(), ContractError> {
         Self::require_admin(&env, &admin)?;
         env.storage().persistent().set(&PAUSED, &false);
-
-        // Update ProtocolConfig.paused to keep it in sync
-        let mut config = Self::get_config(&env)?;
-        config.paused = false;
-        env.storage().persistent().set(&CONFIG_KEY, &config);
-
         events::emit_protocol_unpaused(&env);
         Ok(())
     }

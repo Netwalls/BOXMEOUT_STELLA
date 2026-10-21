@@ -48,7 +48,10 @@ mod tests {
     fn round_trips_factory_nonce() {
         let env = Env::default();
         for nonce in [0u64, 1, 2, 255, 256, 1_000_000, u64::MAX] {
-            assert_eq!(market_id_to_u64(&factory_style_id(&env, nonce, 9_999)), nonce);
+            assert_eq!(
+                market_id_to_u64(&factory_style_id(&env, nonce, 9_999)),
+                nonce
+            );
         }
     }
 

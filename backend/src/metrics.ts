@@ -157,6 +157,19 @@ export const finalizeJobFailure = new client.Counter({
   registers: [metricsRegistry],
 });
 
+// ─── Retention pruning ────────────────────────────────────────────────────────
+
+/**
+ * B-101: Rows deleted by the daily retention job, labelled by table
+ * (AuditLog | EventLog).
+ */
+export const retentionRowsPruned = new client.Counter({
+  name: "retention_rows_pruned_total",
+  help: "Total number of rows deleted by the retention pruning job",
+  labelNames: ["table"],
+  registers: [metricsRegistry],
+});
+
 // ─── /metrics router ──────────────────────────────────────────────────────────
 
 export const metricsRouter = Router();

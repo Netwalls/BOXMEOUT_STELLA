@@ -4,10 +4,15 @@ import { createApp } from "./app";
 import { logger } from "./logger";
 import { db } from "./db";
 import { redis } from "./lib/redis";
+import { applyServerTimeouts } from "./lib/timeout";
 import {
   startResolutionService,
   stopResolutionService,
 } from "./services/resolution.service";
+import {
+  startRetentionService,
+  stopRetentionService,
+} from "./services/retention.service";
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
@@ -62,6 +67,9 @@ async function shutdown(signal: string): Promise<void> {
     // 2. Remove the repeatable lifecycle jobs and close their worker.
     await stopResolutionService();
     logger.info("Resolution service stopped");
+
+    // 2b. Stop the daily retention job (waits for an in-flight prune to finish).
+    await stopRetentionService();
 
     // 3. Close Prisma connection pool.
     await db.$disconnect();

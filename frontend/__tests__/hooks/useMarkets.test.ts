@@ -1,13 +1,25 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useMarkets } from "@/hooks/useMarkets";
 import type { MarketFilters } from "@/lib/api";
-import { MARKET, apiError, mockFetchMarkets, pending } from "./mockApiClient";
+import type { Market } from "@/lib/api";
+import { MARKET, OTHER_MARKET, apiError, mockFetchMarkets, pending } from "./mockApiClient";
 
 jest.mock("@/lib/api");
 
 // Held stable across renders: useMarkets keys its effect on filter identity, so
 // an inline object literal would retrigger the fetch on every render
 const FILTERS: MarketFilters = { status: "Open", weightClass: "Heavyweight" };
+
+/** A promise whose settlement the test controls, to force out-of-order responses. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 afterEach(() => {
   jest.useRealTimers();
@@ -26,7 +38,7 @@ describe("useMarkets", () => {
       expect(result.current.error).toBeNull();
     });
 
-    it("returns to loading while a refetch is in flight", async () => {
+    it("reports a background refetch as refreshing, not loading", async () => {
       mockFetchMarkets.mockResolvedValueOnce([MARKET]);
       const { result } = renderHook(() => useMarkets());
       await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -36,7 +48,86 @@ describe("useMarkets", () => {
         result.current.refetch();
       });
 
-      await waitFor(() => expect(result.current.isLoading).toBe(true));
+      await waitFor(() => expect(result.current.isRefreshing).toBe(true));
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.markets).toEqual([MARKET]);
+    });
+  });
+
+  describe("request ordering", () => {
+    it("ignores a stale response that resolves after a newer one", async () => {
+      const stale = deferred<Market[]>();
+      const fresh = deferred<Market[]>();
+      mockFetchMarkets.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+      const { result } = renderHook(() => useMarkets());
+
+      act(() => {
+        result.current.refetch();
+      });
+      await act(async () => {
+        fresh.resolve([OTHER_MARKET]);
+      });
+      await act(async () => {
+        stale.resolve([MARKET]);
+      });
+
+      expect(result.current.markets).toEqual([OTHER_MARKET]);
+    });
+
+    it("ignores a stale error once a newer request has succeeded", async () => {
+      const stale = deferred<Market[]>();
+      const fresh = deferred<Market[]>();
+      mockFetchMarkets.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+      const { result } = renderHook(() => useMarkets());
+
+      act(() => {
+        result.current.refetch();
+      });
+      await act(async () => {
+        fresh.resolve([OTHER_MARKET]);
+      });
+      await act(async () => {
+        stale.reject(apiError(500, "Internal Server Error"));
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.markets).toEqual([OTHER_MARKET]);
+    });
+
+    it("stays loading when a stale response settles before the newest one", async () => {
+      const stale = deferred<Market[]>();
+      const fresh = deferred<Market[]>();
+      mockFetchMarkets.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+      const { result } = renderHook(() => useMarkets());
+
+      act(() => {
+        result.current.refetch();
+      });
+      await act(async () => {
+        stale.resolve([MARKET]);
+      });
+
+      expect(result.current.isLoading).toBe(true);
+      expect(result.current.isRefreshing).toBe(false);
+    });
+  });
+
+  describe("background polling", () => {
+    it("does not flip isLoading back on during a poll, only isRefreshing", async () => {
+      jest.useFakeTimers();
+      mockFetchMarkets.mockResolvedValueOnce([MARKET]).mockReturnValue(pending());
+      const { result } = renderHook(() => useMarkets());
+      await act(async () => {});
+      expect(result.current.isLoading).toBe(false);
+
+      await act(async () => {
+        jest.advanceTimersByTime(30000);
+      });
+
+      expect(mockFetchMarkets).toHaveBeenCalledTimes(2);
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.isRefreshing).toBe(true);
+      expect(result.current.markets).toEqual([MARKET]);
     });
   });
 

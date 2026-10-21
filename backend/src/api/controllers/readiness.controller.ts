@@ -21,6 +21,7 @@ import type { Request, Response } from "express";
 import Redis from "ioredis";
 import { SorobanRpc } from "@stellar/stellar-sdk";
 import { db } from "../../db";
+import { ok } from "../response";
 
 const CHECK_TIMEOUT_MS = 5_000;
 
@@ -157,8 +158,8 @@ export async function readinessHandler(req: Request, res: Response): Promise<voi
   const allOk = Object.values(checks).every((c) => c.status === "ok");
 
   if (allOk) {
-    res.status(200).json({ status: "ok", checks });
+    ok(res, { status: "ok", checks });
   } else {
-    res.status(503).json({ status: "not_ready", checks });
+    ok(res, { status: "not_ready", checks }, { status: 503 });
   }
 }
