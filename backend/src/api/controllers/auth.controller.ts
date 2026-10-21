@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { generateChallenge } from "../middleware/walletAuth.middleware";
+import { ok, fail } from "../response";
 
 const stellarAddressRegex = /^G[A-Z0-9]{55}$/;
 
@@ -15,14 +16,14 @@ export async function getChallengeHandler(req: Request, res: Response): Promise<
   const address = String(req.query.address ?? "");
 
   if (!stellarAddressRegex.test(address)) {
-    res.status(400).json({ error: "Invalid Stellar address", code: "INVALID_ADDRESS" });
+    fail(res, 400, "INVALID_ADDRESS", "Invalid Stellar address");
     return;
   }
 
   try {
     const { challenge, expiresAt } = await generateChallenge(address);
-    res.status(200).json({ challenge, expiresAt });
+    ok(res, { challenge, expiresAt });
   } catch {
-    res.status(503).json({ error: "Auth service unavailable", code: "SERVICE_UNAVAILABLE" });
+    fail(res, 503, "SERVICE_UNAVAILABLE", "Auth service unavailable");
   }
 }

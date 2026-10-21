@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Bet, BetSide } from "@/lib/api";
-import { buildSorobanInvocation, submitTransaction } from "@/lib/stellar";
+import { buildSorobanInvocation, submitTransaction, i128, sym } from "@/lib/stellar";
 import { useWallet } from "@/hooks/useWallet";
 
 export interface UsePlaceBetResult {
@@ -15,7 +15,7 @@ export interface UsePlaceBetResult {
  * Handles transaction building, fee bump, wallet signing, and submission to Stellar.
  * Returns the confirmed Bet object on success.
  */
-export function usePlaceBet(market_id: string): UsePlaceBetResult {
+export function usePlaceBet(market_id: string, contractAddress: string): UsePlaceBetResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const { address, signTransaction, isNetworkMismatched } = useWallet();
@@ -33,9 +33,9 @@ export function usePlaceBet(market_id: string): UsePlaceBetResult {
 
     try {
       const xdr = await buildSorobanInvocation({
-        contractId: market_id,
+        contractId: contractAddress,
         method: "place_bet",
-        args: [side, amount],
+        args: await Promise.all([sym(side), i128(amount)]),
         signerAddress: address,
       });
 

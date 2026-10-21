@@ -56,7 +56,14 @@ struct MockTreasury;
 
 #[contractimpl]
 impl MockTreasury {
-    pub fn deposit(_env: Env, _from_market: Address, _market_id: Bytes, _bettor: Address, _amount: i128) {}
+    pub fn deposit(
+        _env: Env,
+        _from_market: Address,
+        _market_id: Bytes,
+        _bettor: Address,
+        _amount: i128,
+    ) {
+    }
 }
 
 // ─── Proptest strategies ──────────────────────────────────────────────────────

@@ -1,6 +1,4 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { db as prisma } from "../db";
 
 export interface UserProfile {
   address: string;
@@ -70,4 +68,14 @@ export async function updateUser(
     createdAt: existing?.createdAt ?? new Date(),
     updatedAt: new Date(),
   };
+}
+
+/**
+ * Cursor-paginated bets placed by a wallet, ordered by (placedAt, id) descending.
+ */
+export async function getUserBets(
+  address: string,
+  options?: { cursor?: string | null; limit?: number | string | null }
+): Promise<PaginatedBets> {
+  return getBetsByAddressPaginated(address, options);
 }

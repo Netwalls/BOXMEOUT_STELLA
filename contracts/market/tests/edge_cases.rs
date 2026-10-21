@@ -16,9 +16,7 @@
 //!
 //! ≥10 distinct test cases, all must pass without panic/overflow.
 
-use market::types::{
-    BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig,
-};
+use market::types::{BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig};
 use market::{DataKey, MarketContract, MarketContractClient, MAX_DISPUTE_REASON_LEN};
 use soroban_sdk::{
     contract, contractimpl,
@@ -63,7 +61,14 @@ struct MockTreasury;
 
 #[contractimpl]
 impl MockTreasury {
-    pub fn deposit(_env: Env, _from_market: Address, _market_id: Bytes, _bettor: Address, _amount: i128) {}
+    pub fn deposit(
+        _env: Env,
+        _from_market: Address,
+        _market_id: Bytes,
+        _bettor: Address,
+        _amount: i128,
+    ) {
+    }
 }
 
 /// Dispute window passed to `initialize` in every test market.
@@ -386,7 +391,11 @@ fn edge_total_pool_invariant_many_bets() {
         let m = client.get_market_info();
         assert_eq!(m.pool_a, expected_pool_a, "pool_a mismatch at bet {}", i);
         assert_eq!(m.pool_b, expected_pool_b, "pool_b mismatch at bet {}", i);
-        assert_eq!(m.total_pool, expected_total, "total_pool mismatch at bet {}", i);
+        assert_eq!(
+            m.total_pool, expected_total,
+            "total_pool mismatch at bet {}",
+            i
+        );
         assert_eq!(
             m.total_pool,
             m.pool_a + m.pool_b,
@@ -454,7 +463,12 @@ fn edge_zero_fee_full_payout() {
 
 /// Places one bet for `bettor`, locks and resolves the market.
 /// Returns `resolved_at`.
-fn resolve_with_bettor(env: &Env, client: &MarketContractClient, oracle: &Address, bettor: &Address) -> u64 {
+fn resolve_with_bettor(
+    env: &Env,
+    client: &MarketContractClient,
+    oracle: &Address,
+    bettor: &Address,
+) -> u64 {
     let betting_ends_at = client.get_market_info().betting_ends_at;
     client.place_bet(bettor, &BetSide::FighterA, &1_000i128);
 
@@ -486,7 +500,8 @@ fn edge_dispute_one_second_before_window_end_succeeds() {
     let bettor = Address::generate(&env);
     let resolved_at = resolve_with_bettor(&env, &client, &oracle, &bettor);
 
-    env.ledger().with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC - 1);
+    env.ledger()
+        .with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC - 1);
     client.dispute_resolution(&bettor, &reason_of_len(&env, 8));
 
     assert_eq!(client.get_market_info().status, MarketStatus::Disputed);
@@ -502,7 +517,8 @@ fn edge_dispute_at_window_end_fails() {
     let bettor = Address::generate(&env);
     let resolved_at = resolve_with_bettor(&env, &client, &oracle, &bettor);
 
-    env.ledger().with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC);
+    env.ledger()
+        .with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC);
     client.dispute_resolution(&bettor, &reason_of_len(&env, 8));
 }
 
@@ -516,7 +532,8 @@ fn edge_finalize_one_second_before_window_end_fails() {
     let bettor = Address::generate(&env);
     let resolved_at = resolve_with_bettor(&env, &client, &oracle, &bettor);
 
-    env.ledger().with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC - 1);
+    env.ledger()
+        .with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC - 1);
     client.finalize_resolution(&None);
 }
 
@@ -529,7 +546,8 @@ fn edge_finalize_at_window_end_succeeds() {
     let bettor = Address::generate(&env);
     let resolved_at = resolve_with_bettor(&env, &client, &oracle, &bettor);
 
-    env.ledger().with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC);
+    env.ledger()
+        .with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC);
     client.finalize_resolution(&None);
 
     assert_eq!(client.get_market_info().status, MarketStatus::Resolved);
@@ -546,11 +564,13 @@ fn edge_dispute_and_finalize_windows_do_not_overlap() {
     let reason = reason_of_len(&env, 8);
 
     // One second before the boundary: dispute allowed, finalize rejected.
-    env.ledger().with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC - 1);
+    env.ledger()
+        .with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC - 1);
     assert!(client.try_finalize_resolution(&None).is_err());
 
     // At the boundary: dispute rejected, finalize allowed.
-    env.ledger().with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC);
+    env.ledger()
+        .with_mut(|l| l.timestamp = resolved_at + DISPUTE_WINDOW_SEC);
     assert!(client.try_dispute_resolution(&bettor, &reason).is_err());
     assert!(client.try_finalize_resolution(&None).is_ok());
 }
@@ -593,7 +613,8 @@ fn edge_dispute_reason_over_max_length_leaves_market_resolved() {
     let bettor = Address::generate(&env);
     resolve_with_bettor(&env, &client, &oracle, &bettor);
 
-    let result = client.try_dispute_resolution(&bettor, &reason_of_len(&env, MAX_DISPUTE_REASON_LEN + 1));
+    let result =
+        client.try_dispute_resolution(&bettor, &reason_of_len(&env, MAX_DISPUTE_REASON_LEN + 1));
     assert!(result.is_err());
     assert_eq!(client.get_market_info().status, MarketStatus::Resolved);
 }

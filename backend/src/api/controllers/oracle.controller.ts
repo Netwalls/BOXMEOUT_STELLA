@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as oracleService from "../../services/oracle.service";
 import { db } from "../../db";
+import { ok, fail } from "../response";
 
 /**
  * POST /api/oracle/submit (issue #908)
@@ -28,7 +29,7 @@ export async function submitOracleResultHandler(
       "oracle",
     );
 
-    res.status(201).json(result);
+    ok(res, result, { status: 201 });
   } catch (err) {
     next(err);
   }
@@ -84,13 +85,14 @@ export async function listOracleResultsHandler(
       }),
     ]);
 
-    res.status(200).json({
-      data: results,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
+    ok(res, results, {
+      meta: {
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
       },
     });
   } catch (err) {
@@ -111,7 +113,7 @@ export async function getAllOraclesHandler(
 ): Promise<void> {
   try {
     const oracles = await oracleService.getAllOracles();
-    res.status(200).json(oracles);
+    ok(res, oracles);
   } catch (err) {
     next(err);
   }
@@ -131,12 +133,12 @@ export async function createOracleHandler(
     const { address, name } = req.body as { address?: string; name?: string };
 
     if (!address || !name) {
-      res.status(400).json({ error: "Missing required fields: address, name" });
+      fail(res, 400, "VALIDATION_ERROR", "Missing required fields: address, name");
       return;
     }
 
     const oracle = await oracleService.createOracle(address, name);
-    res.status(201).json(oracle);
+    ok(res, oracle, { status: 201 });
   } catch (err) {
     next(err);
   }
@@ -157,7 +159,7 @@ export async function updateOracleHandler(
     const { name, active } = req.body as { name?: string; active?: boolean };
 
     if (name === undefined && active === undefined) {
-      res.status(400).json({ error: "At least one field (name, active) is required" });
+      fail(res, 400, "VALIDATION_ERROR", "At least one field (name, active) is required");
       return;
     }
 
@@ -166,7 +168,7 @@ export async function updateOracleHandler(
       ...(active !== undefined && { active }),
     });
 
-    res.status(200).json(oracle);
+    ok(res, oracle);
   } catch (err) {
     next(err);
   }
@@ -184,7 +186,7 @@ export async function deleteOracleHandler(
   try {
     const { id } = req.params;
     const oracle = await oracleService.deleteOracle(id);
-    res.status(200).json(oracle);
+    ok(res, oracle);
   } catch (err) {
     next(err);
   }

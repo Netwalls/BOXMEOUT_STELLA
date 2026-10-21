@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+/** Rows deleted per statement, so a large backlog never holds one long delete. */
+export const PRUNE_BATCH_SIZE = 1000;
 
 export interface AuditLogQuery {
   page?: number;
@@ -147,4 +148,76 @@ export async function getAuditLogsByDateRange(startDate: Date, endDate: Date) {
     },
     orderBy: { timestamp: "desc" },
   });
+}
+
+/**
+ * Deletes rows in batches until none older than `cutoff` remain.
+ * `findBatch` returns the ids of up to `batchSize` expired rows and
+ * `deleteBatch` removes them. Returns the total number of rows deleted.
+ */
+async function pruneInBatches<T extends string | number>(
+  findBatch: (cutoff: Date, batchSize: number) => Promise<T[]>,
+  deleteBatch: (ids: T[]) => Promise<{ count: number }>,
+  cutoff: Date,
+  batchSize: number,
+): Promise<number> {
+  let deleted = 0;
+  for (;;) {
+    const ids = await findBatch(cutoff, batchSize);
+    if (ids.length === 0) break;
+
+    const result = await deleteBatch(ids);
+    deleted += result.count;
+
+    if (ids.length < batchSize) break;
+  }
+  return deleted;
+}
+
+/**
+ * B-101: Deletes AuditLog rows whose timestamp is before `cutoff`.
+ */
+export function pruneAuditLogs(
+  cutoff: Date,
+  batchSize: number = PRUNE_BATCH_SIZE,
+): Promise<number> {
+  return pruneInBatches(
+    async (before, take) => {
+      const rows = await prisma.auditLog.findMany({
+        where: { timestamp: { lt: before } },
+        orderBy: { timestamp: "asc" },
+        select: { id: true },
+        take,
+      });
+      return rows.map((row) => row.id);
+    },
+    (ids) => prisma.auditLog.deleteMany({ where: { id: { in: ids } } }),
+    cutoff,
+    batchSize,
+  );
+}
+
+/**
+ * B-101: Deletes EventLog rows that were processed before `cutoff`.
+ * Rows with a null `processedAt` are never deleted, so unprocessed events
+ * are always kept for the indexer.
+ */
+export function pruneEventLogs(
+  cutoff: Date,
+  batchSize: number = PRUNE_BATCH_SIZE,
+): Promise<number> {
+  return pruneInBatches(
+    async (before, take) => {
+      const rows = await prisma.eventLog.findMany({
+        where: { processedAt: { lt: before } },
+        orderBy: { processedAt: "asc" },
+        select: { id: true },
+        take,
+      });
+      return rows.map((row) => row.id);
+    },
+    (ids) => prisma.eventLog.deleteMany({ where: { id: { in: ids } } }),
+    cutoff,
+    batchSize,
+  );
 }

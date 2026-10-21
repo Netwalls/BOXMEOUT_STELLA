@@ -38,11 +38,7 @@ pub fn calc_max_trade(reserve: i128, _balance: i128) -> i128 {
 ///
 /// # Returns
 /// Amount of fees claimable in stroops
-pub fn calc_claimable_lp_fees(
-    lp_fee_per_share: i128,
-    lp_fee_debt: i128,
-    lp_shares: i128,
-) -> i128 {
+pub fn calc_claimable_lp_fees(lp_fee_per_share: i128, lp_fee_debt: i128, lp_shares: i128) -> i128 {
     if lp_shares <= 0 {
         return 0;
     }

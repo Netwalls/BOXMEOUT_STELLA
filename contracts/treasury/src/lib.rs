@@ -1,9 +1,6 @@
 #![no_std]
 use shared::{events, types::ProtocolConfig};
-use soroban_sdk::{
-    contract, contractimpl, token, Address, Bytes, Env, String, Symbol,
-    Vec,
-};
+use soroban_sdk::{contract, contractimpl, token, Address, Bytes, Env, String, Symbol, Vec};
 
 /// Maximum number of entries kept in `WITHDRAWAL_LOG`. Older entries are
 /// evicted first; the `fee_withdrawn` / `EmrgDrain` events remain the
@@ -101,11 +98,19 @@ fn read_admin(env: &Env) -> Address {
 /// A window that has run for `WITHDRAWAL_WINDOW_SECS` or longer is treated
 /// as expired: a fresh window opens at `now` with nothing spent.
 fn current_window(env: &Env, now: u64) -> (u64, i128) {
-    let start: u64 = env.storage().persistent().get(&key_window_start(env)).unwrap_or(0);
+    let start: u64 = env
+        .storage()
+        .persistent()
+        .get(&key_window_start(env))
+        .unwrap_or(0);
     if now >= start.saturating_add(WITHDRAWAL_WINDOW_SECS) {
         return (now, 0);
     }
-    let spent: i128 = env.storage().persistent().get(&key_window_spent(env)).unwrap_or(0);
+    let spent: i128 = env
+        .storage()
+        .persistent()
+        .get(&key_window_spent(env))
+        .unwrap_or(0);
     (start, spent)
 }
 #[contract]
@@ -170,11 +175,15 @@ impl Treasury {
         env.storage()
             .persistent()
             .set(&key_wlog(&env), &Vec::<(Address, i128, u64)>::new(&env));
-        env.storage().persistent().set(&key_daily_limit(&env), &daily_limit);
+        env.storage()
+            .persistent()
+            .set(&key_daily_limit(&env), &daily_limit);
         env.storage()
             .persistent()
             .set(&key_window_start(&env), &env.ledger().timestamp());
-        env.storage().persistent().set(&key_window_spent(&env), &0i128);
+        env.storage()
+            .persistent()
+            .set(&key_window_spent(&env), &0i128);
     }
 
     /// Updates the daily withdrawal limit enforced by `withdraw_fees`.
@@ -200,7 +209,9 @@ impl Treasury {
             .persistent()
             .get(&key_daily_limit(&env))
             .expect("not initialized");
-        env.storage().persistent().set(&key_daily_limit(&env), &new_limit);
+        env.storage()
+            .persistent()
+            .set(&key_daily_limit(&env), &new_limit);
         events::emit_daily_limit_updated(&env, old_limit, new_limit);
     }
 
@@ -223,7 +234,13 @@ impl Treasury {
     /// Panics if:
     /// - `from_market` has not authorized the call.
     /// - `from_market` does not match the address registered for `market_id` in the factory.
-    pub fn deposit(env: Env, from_market: Address, market_id: Bytes, bettor: Address, amount: i128) -> Result<(), ContractError> {
+    pub fn deposit(
+        env: Env,
+        from_market: Address,
+        market_id: Bytes,
+        bettor: Address,
+        amount: i128,
+    ) -> Result<(), ContractError> {
         from_market.require_auth();
 
         let factory: Address = env
@@ -232,12 +249,12 @@ impl Treasury {
             .get(&key_factory(&env))
             .expect("not initialized");
 
-        let registered: Address = env.invoke_contract(
+        let registered: Option<Address> = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_market_address"),
             soroban_sdk::vec![&env, market_id.to_val()],
         );
-        if registered != from_market {
+        if registered != Some(from_market.clone()) {
             return Err(ContractError::MarketNotApproved);
         }
 
@@ -289,12 +306,12 @@ impl Treasury {
 
         let caller = env.current_contract_address();
 
-        let registered: Address = env.invoke_contract(
+        let registered: Option<Address> = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_market_address"),
             soroban_sdk::vec![&env, market_id.to_val()],
         );
-        if registered != caller {
+        if registered != Some(caller.clone()) {
             return Err(ContractError::MarketNotApproved);
         }
 
@@ -354,12 +371,12 @@ impl Treasury {
             .get(&key_factory(&env))
             .expect("not initialized");
 
-        let registered: Address = env.invoke_contract(
+        let registered: Option<Address> = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_market_address"),
             soroban_sdk::vec![&env, market_id.to_val()],
         );
-        if registered != from_market {
+        if registered != Some(from_market.clone()) {
             panic!("unauthorized: caller is not a registered market");
         }
 
@@ -425,8 +442,12 @@ impl Treasury {
         if new_spent > daily_limit {
             panic_with_error!(&env, ContractError::DailyWithdrawalLimitExceeded);
         }
-        env.storage().persistent().set(&key_window_start(&env), &window_start);
-        env.storage().persistent().set(&key_window_spent(&env), &new_spent);
+        env.storage()
+            .persistent()
+            .set(&key_window_start(&env), &window_start);
+        env.storage()
+            .persistent()
+            .set(&key_window_spent(&env), &new_spent);
 
         let balance: i128 = env
             .storage()
@@ -459,18 +480,38 @@ impl Treasury {
 
     /// Release escrowed winnings or refunds from a market to a bettor (issue #1181).
     /// Only callable by the registered market contract.
-    pub fn release_winnings(env: Env, from_market: Address, market_id: Bytes, recipient: Address, amount: i128) {
+    pub fn release_winnings(
+        env: Env,
+        from_market: Address,
+        market_id: Bytes,
+        recipient: Address,
+        amount: i128,
+    ) {
         from_market.require_auth();
 
-        let balance: i128 = env.storage().persistent().get(&key_balance(&env)).unwrap_or(0);
+        let balance: i128 = env
+            .storage()
+            .persistent()
+            .get(&key_balance(&env))
+            .unwrap_or(0);
         if amount > balance {
             panic!("insufficient escrow for payout");
         }
 
-        env.storage().persistent().set(&key_balance(&env), &(balance - amount));
+        env.storage()
+            .persistent()
+            .set(&key_balance(&env), &(balance - amount));
 
-        let token_addr: Address = env.storage().persistent().get(&key_token(&env)).expect("token not set");
-        token::Client::new(&env, &token_addr).transfer(&env.current_contract_address(), &recipient, &amount);
+        let token_addr: Address = env
+            .storage()
+            .persistent()
+            .get(&key_token(&env))
+            .expect("token not set");
+        token::Client::new(&env, &token_addr).transfer(
+            &env.current_contract_address(),
+            &recipient,
+            &amount,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "WinningsReleased"),),
@@ -500,7 +541,11 @@ impl Treasury {
     /// Panics if:
     /// - `admin` has not authorized the call.
     /// - The protocol is not currently paused.
-    pub fn emergency_drain(env: Env, admin: Address, recipient: Address) -> Result<i128, ContractError> {
+    pub fn emergency_drain(
+        env: Env,
+        admin: Address,
+        recipient: Address,
+    ) -> Result<i128, ContractError> {
         admin.require_auth();
 
         let stored_admin: Address = env
@@ -542,9 +587,7 @@ impl Treasury {
             &recipient,
             &amount,
         );
-        env.storage()
-            .persistent()
-            .set(&key_balance(&env), &0i128);
+        env.storage().persistent().set(&key_balance(&env), &0i128);
 
         let ts = env.ledger().timestamp();
         append_withdrawal_log(&env, &recipient, amount, ts);
@@ -723,9 +766,7 @@ impl Treasury {
         env.storage()
             .persistent()
             .set(&key_admin(&env), &pending_admin);
-        env.storage()
-            .persistent()
-            .remove(&key_pending_admin(&env));
+        env.storage().persistent().remove(&key_pending_admin(&env));
 
         events::emit_admin_transferred(&env, old_admin, pending_admin);
     }
@@ -831,7 +872,14 @@ mod tests {
         let contract_id = env.register_contract(None, Treasury);
         let client = TreasuryClient::new(&env, &contract_id);
 
-        client.initialize(&admin, &200u32, &fee_recipient, &factory, &token, &1_000_000i128);
+        client.initialize(
+            &admin,
+            &200u32,
+            &fee_recipient,
+            &factory,
+            &token,
+            &1_000_000i128,
+        );
 
         assert_eq!(client.get_balance(), 0);
         assert_eq!(client.get_total_fees_earned(), 0);
@@ -852,8 +900,22 @@ mod tests {
         let contract_id = env.register_contract(None, Treasury);
         let client = TreasuryClient::new(&env, &contract_id);
 
-        client.initialize(&admin, &200u32, &fee_recipient, &factory, &token, &1_000_000i128);
-        client.initialize(&admin, &200u32, &fee_recipient, &factory, &token, &1_000_000i128); // must panic
+        client.initialize(
+            &admin,
+            &200u32,
+            &fee_recipient,
+            &factory,
+            &token,
+            &1_000_000i128,
+        );
+        client.initialize(
+            &admin,
+            &200u32,
+            &fee_recipient,
+            &factory,
+            &token,
+            &1_000_000i128,
+        ); // must panic
     }
 
     #[test]
@@ -868,7 +930,14 @@ mod tests {
         let contract_id = env.register_contract(None, Treasury);
         let client = TreasuryClient::new(&env, &contract_id);
 
-        client.initialize(&admin, &1001u32, &fee_recipient, &factory, &token, &1_000_000i128);
+        client.initialize(
+            &admin,
+            &1001u32,
+            &fee_recipient,
+            &factory,
+            &token,
+            &1_000_000i128,
+        );
     }
 
     #[test]
@@ -882,7 +951,14 @@ mod tests {
         let contract_id = env.register_contract(None, Treasury);
         let client = TreasuryClient::new(&env, &contract_id);
 
-        client.initialize(&admin, &1000u32, &fee_recipient, &factory, &token, &1_000_000i128);
+        client.initialize(
+            &admin,
+            &1000u32,
+            &fee_recipient,
+            &factory,
+            &token,
+            &1_000_000i128,
+        );
         assert_eq!(client.get_fee_bps(), 1000);
     }
 
@@ -905,7 +981,14 @@ mod tests {
         let token_addr = shared::test_utils::fund_address(env, &contract_id, balance);
 
         let client = TreasuryClient::new(env, &contract_id);
-        client.initialize(&admin, &200u32, &fee_recipient, &factory, &token_addr, &1_000_000i128);
+        client.initialize(
+            &admin,
+            &200u32,
+            &fee_recipient,
+            &factory,
+            &token_addr,
+            &1_000_000i128,
+        );
 
         // Seed BALANCE via a direct storage write so we don't need the full
         // deposit_fees machinery (which requires a registered market).
@@ -1176,7 +1259,10 @@ mod tests {
         client.accept_admin(&new_admin);
 
         // The last event must carry the shared `admin_transferred` topic name.
-        assert_eq!(last_event_name(&env), soroban_sdk::Symbol::new(&env, "admin_transferred"));
+        assert_eq!(
+            last_event_name(&env),
+            soroban_sdk::Symbol::new(&env, "admin_transferred")
+        );
 
         // Confirm the data payload is (old_admin, new_admin) — exactly what
         // emit_admin_transferred emits — not the three-tuple the old ad-hoc
@@ -1198,7 +1284,10 @@ mod tests {
         client.set_fee_bps(&admin, &350u32);
 
         // The emitted event must carry the shared `config_updated` topic name.
-        assert_eq!(last_event_name(&env), soroban_sdk::Symbol::new(&env, "config_updated"));
+        assert_eq!(
+            last_event_name(&env),
+            soroban_sdk::Symbol::new(&env, "config_updated")
+        );
 
         // Confirm the data is (param_name: String, new_value: i128).
         let (_, data) = shared::test_utils::last_event(&env);

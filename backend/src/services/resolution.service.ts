@@ -34,6 +34,7 @@ import { Queue, Worker, Job } from "bullmq";
 import type { Counter } from "prom-client";
 import { randomUUID } from "crypto";
 import { db } from "../db";
+import { config } from "../config";
 import { logger } from "../logger";
 import { redis } from "../lib/redis";
 import {
@@ -171,7 +172,11 @@ async function lockMarketOnChain(
   keypair: Keypair,
   market: { id: string; contractAddress: string }
 ): Promise<void> {
-  const account = await server.getAccount(keypair.publicKey());
+  const account = await withTimeout(
+    server.getAccount(keypair.publicKey()),
+    config.RPC_TIMEOUT_MS,
+    "rpc getAccount",
+  );
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const fee = Math.min(
@@ -189,9 +194,17 @@ async function lockMarketOnChain(
         .setTimeout(30)
         .build();
 
-      const prepared = await server.prepareTransaction(tx);
+      const prepared = await withTimeout(
+        server.prepareTransaction(tx),
+        config.RPC_TIMEOUT_MS,
+        "rpc prepareTransaction",
+      );
       prepared.sign(keypair);
-      const result = await server.sendTransaction(prepared);
+      const result = await withTimeout(
+        server.sendTransaction(prepared),
+        config.RPC_TIMEOUT_MS,
+        "rpc sendTransaction",
+      );
 
       logger.info(
         { marketId: market.id, txHash: result.hash },
@@ -218,7 +231,11 @@ async function finalizeMarketOnChain(
   keypair: Keypair,
   market: { id: string; contractAddress: string }
 ): Promise<void> {
-  const account = await server.getAccount(keypair.publicKey());
+  const account = await withTimeout(
+    server.getAccount(keypair.publicKey()),
+    config.RPC_TIMEOUT_MS,
+    "rpc getAccount",
+  );
 
   const contract = new Contract(market.contractAddress);
   const tx = new TransactionBuilder(account, {
@@ -229,9 +246,17 @@ async function finalizeMarketOnChain(
     .setTimeout(30)
     .build();
 
-  const prepared = await server.prepareTransaction(tx);
+  const prepared = await withTimeout(
+    server.prepareTransaction(tx),
+    config.RPC_TIMEOUT_MS,
+    "rpc prepareTransaction",
+  );
   prepared.sign(keypair);
-  const result = await server.sendTransaction(prepared);
+  const result = await withTimeout(
+    server.sendTransaction(prepared),
+    config.RPC_TIMEOUT_MS,
+    "rpc sendTransaction",
+  );
 
   logger.info(
     { marketId: market.id, txHash: result.hash },

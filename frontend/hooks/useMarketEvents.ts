@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { fetchMarketStats, type MarketStats } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/config";
 import { ToastContext } from "@/components/ToastProvider";
 
 export interface UseMarketEventsResult {
@@ -63,7 +64,7 @@ const SSE_RECONNECT_BASE_MS = 1000;
 const SSE_RECONNECT_MAX_MS = 30000;
 
 function buildMarketEventsUrl(market_id: string): string {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const base = API_BASE_URL;
   return `${base}/markets/${encodeURIComponent(market_id)}/events`;
 }
 

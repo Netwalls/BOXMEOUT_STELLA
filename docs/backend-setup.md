@@ -120,6 +120,36 @@ npm run db:studio
 
 This opens Prisma Studio at `http://localhost:5555` where you can browse the database tables.
 
+
+### Production migrations
+
+Production images never migrate on boot. Migrations run once per release from the
+`migrate` image target (`backend/Dockerfile`), before the `api` and `indexer` containers start:
+
+```bash
+# Build the one-shot migration image and run it against the production database
+docker build --target migrate -t boxmeout-migrate ./backend
+docker run --rm -e DATABASE_URL="$PROD_DATABASE_URL" boxmeout-migrate
+```
+
+The `migrate` image runs `prisma migrate deploy`, which only applies migrations that
+are not yet recorded in `_prisma_migrations`. It is safe to re-run. In Docker Compose
+the same step is the `migrate` service; `api` and `indexer` depend on it with
+`service_completed_successfully`, so a failed migration keeps both services from starting.
+
+**Rollback:** Prisma has no automatic down-migrations. Use one of these, in order of preference:
+
+1. **Roll forward.** Write a new migration that reverses the bad change and deploy it.
+2. **Restore from backup.** Take a database snapshot before every release. If a migration
+   corrupts data, restore the snapshot and redeploy the previous image tag.
+3. **Mark a failed migration as rolled back.** If `migrate deploy` failed partway through,
+   fix the database by hand, then run
+   `npx prisma migrate resolve --rolled-back <migration_name>` before re-running the migration.
+
+Redeploying the previous application image does not undo applied migrations. Keep
+migrations backward compatible with the previous release (add columns as nullable,
+drop them only in a later release) so that rolling back the application stays safe.
+
 ---
 
 ## 6 — Start the server

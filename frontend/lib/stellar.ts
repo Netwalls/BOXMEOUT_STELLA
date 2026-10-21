@@ -1,5 +1,10 @@
 import type { Transaction, xdr } from "@stellar/stellar-sdk";
 import { ContractErrorException, parseContractErrorCode } from "./errors";
+import {
+  NETWORK_PASSPHRASE,
+  SOROBAN_RPC_URL,
+  STELLAR_NETWORK,
+} from "./config";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
@@ -13,28 +18,14 @@ const loadSdk = (): Promise<typeof import("@stellar/stellar-sdk")> => import("@s
  * lowercase so case-sensitive comparisons (e.g. against Freighter's network
  * string) don't trigger a false mismatch banner.
  */
-export const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet").toLowerCase();
-
-/**
- * Canonical network passphrases keyed by normalized network name.
- * Used to derive the passphrase from the network name when an explicit
- * NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE is not provided.
- */
-const NETWORK_PASSPHRASES: Record<string, string> = {
-  testnet: "Test SDF Network ; September 2015",
-  mainnet: "Public Global Stellar Network ; September 2015",
-  futurenet: "Test SDF Future Network ; October 2022",
-};
+export const NETWORK = STELLAR_NETWORK.toLowerCase();
 
 /**
  * The Stellar network passphrase this app is configured to operate against.
  * Wallet network mismatches are detected by comparing against this passphrase.
- * Falls back to the passphrase derived from NETWORK when not explicitly set.
+ * Read from `lib/config.ts`, which derives it from the network when not set.
  */
-export const NETWORK_PASSPHRASE =
-  process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ??
-  NETWORK_PASSPHRASES[NETWORK] ??
-  NETWORK_PASSPHRASES.testnet;
+export { NETWORK_PASSPHRASE };
 
 export const NETWORK_NAME = NETWORK;
 
@@ -50,8 +41,55 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
   return a.toLowerCase() === b.toLowerCase();
 }
 
-export const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
+export { SOROBAN_RPC_URL };
+
+/**
+ * How long a built transaction stays valid, in seconds. Kept short so a signed
+ * XDR that is logged, copied or left in a wallet popup cannot be submitted much
+ * later against stale market state.
+ */
+export const TX_TIMEOUT_SECONDS = 120;
+
+/** User-facing message for a transaction that expired before it was submitted. */
+export const TX_EXPIRED_MESSAGE = "This transaction expired before it was submitted. Please try again.";
+
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
+
+/**
+ * Decides whether the Soroban RPC client may use plain HTTP for `url`.
+ * Plain HTTP is allowed only for localhost/127.0.0.1 outside production and
+ * off mainnet. Any other non-HTTPS URL throws, so transactions cannot be sent
+ * unencrypted by a misconfigured environment variable.
+ */
+export function allowHttpForRpc(
+  url: string,
+  options: { production?: boolean; network?: string } = {}
+): boolean {
+  const production = options.production ?? process.env.NODE_ENV === "production";
+  const network = (options.network ?? NETWORK).toLowerCase();
+  const parsed = new URL(url);
+
+  if (parsed.protocol === "https:") {
+    return false;
+  }
+
+  const isLocalDevelopment =
+    parsed.protocol === "http:" &&
+    LOCAL_HOSTNAMES.has(parsed.hostname) &&
+    !production &&
+    network !== "mainnet";
+
+  if (isLocalDevelopment) {
+    return true;
+  }
+
+  throw new Error(`Insecure Soroban RPC URL rejected (HTTPS required): ${url}`);
+}
+
+/** Options for `new SorobanRpc.Server`, validated against the configured RPC URL. */
+function rpcServerOptions(): { allowHttp: boolean } {
+  return { allowHttp: allowHttpForRpc(SOROBAN_RPC_URL) };
+}
 
 /**
  * Base URL for the stellar.expert explorer, derived from the configured network.
@@ -81,7 +119,7 @@ export function stellarExpertContractUrl(contractId: string): string {
 export interface SorobanInvokeParams {
   contractId: string;
   method: string;
-  args: unknown[];
+  args: xdr.ScVal[];
   signerAddress: string;
 }
 
@@ -139,6 +177,14 @@ function decodeContractError(error: unknown): unknown {
 }
 
 /**
+ * Reports whether the network rejected a transaction because its validity
+ * window had already closed (`txTooLate`).
+ */
+function isTransactionTooLate(errorResult?: xdr.TransactionResult): boolean {
+  return errorResult?.result().switch().name === "txTooLate";
+}
+
+/**
  * Extracts the raw error string from a failed simulation result.
  */
 function simulationErrorText(simResult: unknown): string {
@@ -154,6 +200,31 @@ function simulationErrorText(simResult: unknown): string {
 
 // ─── FUNCTIONS ────────────────────────────────────────────────────────────────
 
+type StellarSdk = typeof import("@stellar/stellar-sdk");
+
+/**
+ * Converts a contract call argument into an ScVal. Values that are already
+ * ScVals (for example a u64 built with an explicit type) pass through unchanged.
+ */
+function toScVal(sdk: StellarSdk, arg: unknown): xdr.ScVal {
+  if (arg instanceof sdk.xdr.ScVal) return arg;
+  if (typeof arg === "string" && (sdk.StrKey.isValidEd25519PublicKey(arg) || sdk.StrKey.isValidContract(arg))) {
+    return sdk.Address.fromString(arg).toScVal();
+  }
+  return sdk.nativeToScVal(arg as any);
+}
+
+/**
+ * Encodes an unsigned 64-bit integer, such as a Unix timestamp in seconds, as a
+ * u64 ScVal. Plain bigints default to i128, so contract arguments declared as u64
+ * must be encoded with this helper.
+ */
+export async function toU64ScVal(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u64" });
+}
+
 /**
  * Builds a Soroban contract invocation XDR string ready for wallet signing.
  * Fetches the current account sequence number from Horizon.
@@ -162,36 +233,17 @@ function simulationErrorText(simResult: unknown): string {
 export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
-  const { Operation, SorobanRpc, TransactionBuilder, Timeout, nativeToScVal, addressToScVal, xdr: sdkXdr } =
-    await loadSdk();
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
-    allowHttp: true,
-  });
+  const sdk = await loadSdk();
+  const { Contract, SorobanRpc, StrKey, TransactionBuilder } = sdk;
 
-  const operation = Operation.invokeHostFunction({
-    hostFunction: {
-      functionName: params.method,
-      args: params.args.map((arg) => {
-        if (typeof arg === "bigint") return nativeToScVal(arg);
-        if (typeof arg === "string") {
-          try {
-            return addressToScVal(arg);
-          } catch {
-            return nativeToScVal(Number(arg));
-          }
-        }
-        if (typeof arg === "number") return nativeToScVal(arg);
-        if (Array.isArray(arg)) {
-          return nativeToScVal(arg);
-        }
-        if (arg !== null && typeof arg === "object" && "_arm" in arg) {
-          return arg as xdr.ScVal;
-        }
-        return nativeToScVal(arg);
-      }),
-    },
-    auth: [],
-  });
+  if (!StrKey.isValidContract(params.contractId)) {
+    throw new Error(`Invalid contract address: ${params.contractId}`);
+  }
+
+  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
+
+  const contract = new Contract(params.contractId);
+  const operation = contract.call(params.method, ...params.args.map((arg) => toScVal(sdk, arg)));
 
   const account = await server.getAccount(params.signerAddress);
 
@@ -201,7 +253,7 @@ export async function buildSorobanInvocation(
   });
 
   transaction.addOperation(operation);
-  transaction.setTimeout(Timeout.INFINITE);
+  transaction.setTimeout(TX_TIMEOUT_SECONDS);
 
   const tx = transaction.build();
 
@@ -217,21 +269,43 @@ export async function buildSorobanInvocation(
     });
 
     withFee.addOperation(preparedTx.operations[0]);
-    withFee.setTimeout(Timeout.INFINITE);
+    withFee.setTimeout(TX_TIMEOUT_SECONDS);
 
-    const finalTx = withFee.build();
-    finalTx.addSignature(params.signerAddress, Buffer.alloc(64).fill(0));
-
-    return finalTx.toXDR();
+    // Left unsigned: the connected wallet signs the XDR returned here.
+    return withFee.build().toXDR();
   }
 
   throw decodeContractError(new Error(simulationErrorText(simResult)));
 }
 
+const TX_TIMEOUT_MS = 30_000;
+const TX_INITIAL_DELAY_MS = 1_000;
+const TX_MAX_DELAY_MS = 5_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Extracts the result code (e.g. `txBAD_SEQ`) from the TransactionResult XDR
+ * returned by a rejected `sendTransaction` call.
+ */
+function decodeSendErrorResult(errorResult: unknown): string {
+  try {
+    const result = errorResult as { result: () => { switch: () => { name: string } } };
+
+    return result.result().switch().name;
+  } catch {
+    return "unknown";
+  }
+}
+
 /**
  * Submits a signed XDR transaction to Soroban RPC and waits for ledger confirmation.
- * Polls `getTransaction` with exponential backoff, bounded to a 30s timeout, and
- * reports each state transition (pending/success/failed/timeout) via `onStatus`.
+ * - `TRY_AGAIN_LATER` is re-sent with exponential backoff until the timeout.
+ * - `DUPLICATE` means the network already has the transaction, so it goes straight to polling.
+ * - `ERROR` is decoded from `errorResult` and reported as a failure.
+ * Polls `getTransaction` with exponential backoff, bounded to a 30s timeout. Transient
+ * RPC errors during polling are tolerated until the timeout. Reports each state
+ * transition (pending/success/failed/timeout) via `onStatus`.
  * Returns the TransactionResult containing txHash, ledger, and return value.
  */
 export async function submitTransaction(
@@ -239,9 +313,7 @@ export async function submitTransaction(
   onStatus?: (update: TransactionStatusUpdate) => void
 ): Promise<TransactionResult> {
   const { SorobanRpc, TransactionBuilder } = await loadSdk();
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
-    allowHttp: true,
-  });
+  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const transaction = TransactionBuilder.fromXDR(
     signedXdr,
@@ -251,9 +323,35 @@ export async function submitTransaction(
   const hash = transaction.hash();
   const txHash = hash.toString("hex");
 
-  const response = await server.sendTransaction(transaction);
+  const submitStartedAt = Date.now();
+  let delay = TX_INITIAL_DELAY_MS;
+  let response = await server.sendTransaction(transaction);
 
-  if (response.status !== "PENDING") {
+  while (response.status === "TRY_AGAIN_LATER") {
+    if (Date.now() - submitStartedAt >= TX_TIMEOUT_MS) {
+      const error = "Transaction submission failed: RPC still busy (TRY_AGAIN_LATER)";
+      onStatus?.({ status: "failed", txHash, error });
+      throw decodeContractError(new Error(error));
+    }
+
+    await sleep(delay);
+    delay = Math.min(delay * 2, TX_MAX_DELAY_MS);
+
+    response = await server.sendTransaction(transaction);
+  }
+
+  if (response.status === "ERROR" && isTransactionTooLate(response.errorResult)) {
+    onStatus?.({ status: "failed", txHash, error: TX_EXPIRED_MESSAGE });
+    throw new Error(TX_EXPIRED_MESSAGE);
+  }
+
+  if (response.status === "ERROR") {
+    const error = `Transaction submission failed: ${decodeSendErrorResult(response.errorResult)}`;
+    onStatus?.({ status: "failed", txHash, error });
+    throw decodeContractError(new Error(error));
+  }
+
+  if (response.status !== "PENDING" && response.status !== "DUPLICATE") {
     const error = `Transaction submission failed with status: ${response.status}`;
     onStatus?.({ status: "failed", txHash, error });
     throw decodeContractError(new Error(error));
@@ -261,24 +359,30 @@ export async function submitTransaction(
 
   onStatus?.({ status: "pending", txHash });
 
-  const TIMEOUT_MS = 30_000;
-  const INITIAL_DELAY_MS = 1_000;
-  const MAX_DELAY_MS = 5_000;
-  const startedAt = Date.now();
-  let delay = INITIAL_DELAY_MS;
+  const pollStartedAt = Date.now();
+  delay = TX_INITIAL_DELAY_MS;
 
-  let result = await server.getTransaction(hash);
+  let result;
 
-  while (result.status === "PENDING" || result.status === "NOT_FOUND") {
-    if (Date.now() - startedAt >= TIMEOUT_MS) {
-      onStatus?.({ status: "timeout", txHash });
-      throw new TransactionTimeoutError(txHash, TIMEOUT_MS);
+  for (;;) {
+    try {
+      result = await server.getTransaction(hash);
+    } catch {
+      // A transient RPC error (network blip) must not abort the wait; keep polling until the timeout.
+      result = undefined;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    delay = Math.min(delay * 2, MAX_DELAY_MS);
+    if (result && result.status !== "PENDING" && result.status !== "NOT_FOUND") {
+      break;
+    }
 
-    result = await server.getTransaction(hash);
+    if (Date.now() - pollStartedAt >= TX_TIMEOUT_MS) {
+      onStatus?.({ status: "timeout", txHash });
+      throw new TransactionTimeoutError(txHash, TX_TIMEOUT_MS);
+    }
+
+    await sleep(delay);
+    delay = Math.min(delay * 2, TX_MAX_DELAY_MS);
   }
 
   if (result.status !== "SUCCESS") {
@@ -323,35 +427,135 @@ export async function decodeScVal(scVal: unknown): Promise<unknown> {
   }
 }
 
-/**
- * Converts a XLM amount in stroops (bigint) to a human-readable string.
- * e.g. 10_000_000n -> "1"
- */
-export function stroopsToXlm(stroops: bigint): string {
-  const xlm = Number(stroops) / 10000000;
+// ─── SCVAL ARGUMENT HELPERS ───────────────────────────────────────────────────
+// Each helper states the Soroban type explicitly, so no value is guessed at
+// runtime. They are async because the SDK is loaded lazily.
 
-  return xlm.toString();
+/** Soroban `i128`. Keeps amounts above Number.MAX_SAFE_INTEGER exact. */
+export async function i128(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "i128" });
+}
+
+/** Soroban `u64`. */
+export async function u64(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u64" });
+}
+
+/** Soroban `u32`. */
+export async function u32(value: number): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u32" });
+}
+
+/** Soroban `Address` from a G… account or C… contract strkey. */
+export async function address(strkey: string): Promise<xdr.ScVal> {
+  const { Address } = await loadSdk();
+
+  return new Address(strkey).toScVal();
+}
+
+/** Soroban `Bytes` from a hex string. Rejects odd length and non-hex characters. */
+export async function bytes(hex: string): Promise<xdr.ScVal> {
+  if (!/^([0-9a-fA-F]{2})*$/.test(hex)) {
+    throw new TypeError("bytes() expects an even-length hex string");
+  }
+
+  const { xdr } = await loadSdk();
+
+  return xdr.ScVal.scvBytes(Buffer.from(hex, "hex"));
+}
+
+/** Soroban `Symbol`. */
+export async function sym(value: string): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "symbol" });
+}
+
+/** Soroban `String`. */
+export async function str(value: string): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "string" });
+}
+
+const STROOPS_PER_XLM = 10_000_000n;
+const STELLAR_DECIMALS = 7;
+const I128_MAX = 2n ** 127n - 1n;
+
+/**
+ * Thrown by `xlmToStroops` when user input cannot be converted exactly.
+ * `reason` lets callers pick a message without parsing the text.
+ */
+export class InvalidAmountError extends Error {
+  readonly reason: "empty" | "negative" | "non-numeric" | "over-precision" | "out-of-range";
+
+  constructor(reason: InvalidAmountError["reason"], message: string) {
+    super(message);
+    this.name = "InvalidAmountError";
+    this.reason = reason;
+  }
 }
 
 /**
- * Converts a human-readable XLM string to stroops (bigint).
+ * Converts a XLM amount in stroops (bigint) to an exact decimal string.
+ * Uses BigInt arithmetic only, so no float artefacts appear.
+ * e.g. 10_000_000n -> "1", 1n -> "0.0000001", -15_000_000n -> "-1.5"
+ */
+export function stroopsToXlm(stroops: bigint): string {
+  const sign = stroops < 0n ? "-" : "";
+  const magnitude = stroops < 0n ? -stroops : stroops;
+  const whole = magnitude / STROOPS_PER_XLM;
+  const fraction = (magnitude % STROOPS_PER_XLM)
+    .toString()
+    .padStart(STELLAR_DECIMALS, "0")
+    .replace(/0+$/, "");
+
+  return `${sign}${whole}${fraction ? `.${fraction}` : ""}`;
+}
+
+/**
+ * Converts a human-readable XLM string to stroops (bigint), exactly.
  * e.g. "1.5" -> 15_000_000n
+ * Throws `InvalidAmountError` for empty, negative, non-numeric, over-precise
+ * (more than 7 significant decimals) or out-of-range input.
  */
 export function xlmToStroops(xlm: string): bigint {
-  const parts = xlm.split(".");
-  const integer = BigInt(parts[0] || "0");
-  let fractional = "0";
+  const input = xlm.trim();
 
-  if (parts.length > 1) {
-    fractional = parts[1];
-    if (fractional.length > 7) {
-      fractional = fractional.slice(0, 7);
-    } else if (fractional.length < 7) {
-      fractional = fractional.padEnd(7, "0");
-    }
+  if (input === "") {
+    throw new InvalidAmountError("empty", "Amount is required");
   }
 
-  const stroops = integer * BigInt(10000000) + BigInt(fractional);
+  if (input.startsWith("-")) {
+    throw new InvalidAmountError("negative", "Amount cannot be negative");
+  }
+
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(input)) {
+    throw new InvalidAmountError("non-numeric", `"${input}" is not a valid amount`);
+  }
+
+  const [whole, fraction = ""] = input.split(".");
+
+  if (/[1-9]/.test(fraction.slice(STELLAR_DECIMALS))) {
+    throw new InvalidAmountError(
+      "over-precision",
+      `Amount supports at most ${STELLAR_DECIMALS} decimal places`
+    );
+  }
+
+  const stroops =
+    BigInt(whole || "0") * STROOPS_PER_XLM +
+    BigInt(fraction.slice(0, STELLAR_DECIMALS).padEnd(STELLAR_DECIMALS, "0"));
+
+  if (stroops > I128_MAX) {
+    throw new InvalidAmountError("out-of-range", "Amount is too large");
+  }
 
   return stroops;
 }

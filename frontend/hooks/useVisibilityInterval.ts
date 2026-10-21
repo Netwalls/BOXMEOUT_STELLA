@@ -31,9 +31,9 @@ export function useVisibilityInterval(
       callbackRef.current();
     };
 
-    const start = () => {
+    const start = (fireImmediately: boolean) => {
       if (interval !== null) return;
-      tick();
+      if (fireImmediately) tick();
       interval = setInterval(tick, delay);
     };
 
@@ -48,14 +48,16 @@ export function useVisibilityInterval(
       if (document.hidden) {
         stop();
       } else {
-        start();
+        start(true);
       }
     };
 
     if (typeof document !== "undefined" && document.hidden) {
       // Tab is already hidden; wait for it to become visible before starting.
     } else {
-      start();
+      // No immediate tick on mount: the caller owns the initial load, so
+      // firing here would issue a duplicate request.
+      start(false);
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);

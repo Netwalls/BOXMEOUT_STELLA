@@ -65,6 +65,9 @@ jest.mock("@prisma/client", () => {
       dispute: { create: jest.fn() },
       adminLog: { create: jest.fn() },
       $transaction: jest.fn(),
+      // db.ts subscribes to Prisma events and wraps the client in $extends (B-100, B-102)
+      $on: jest.fn(),
+      $extends: jest.fn().mockReturnThis(),
     })),
     // Re-export enums / types the module-under-test imports at the type level
     Prisma: {},

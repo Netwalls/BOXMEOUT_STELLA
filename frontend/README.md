@@ -57,9 +57,12 @@ Create a `.env.local` file in this directory (never commit it — it is in `.git
 |---|---|---|---|
 | `NEXT_PUBLIC_API_URL` | Yes | Base URL of the backend REST API. No trailing slash. | `http://localhost:3001` |
 | `NEXT_PUBLIC_STELLAR_NETWORK` | Yes | Stellar network to connect to. `testnet` or `mainnet`. | `testnet` |
-| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | Yes | Network passphrase matching `NEXT_PUBLIC_STELLAR_NETWORK`. | `Test SDF Network ; September 2015` |
+| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | No | Network passphrase matching `NEXT_PUBLIC_STELLAR_NETWORK`. Derived from the network when unset. Must be the mainnet passphrase on `mainnet`. | `Test SDF Network ; September 2015` |
 | `NEXT_PUBLIC_SOROBAN_RPC_URL` | Yes | Soroban RPC endpoint for building and simulating transactions. | `https://soroban-testnet.stellar.org` |
 | `NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID` | Yes | Contract ID of the deployed `MarketFactory` contract. | `CDXXX...` |
+| `NEXT_PUBLIC_ADMIN_ADDRESSES` | No | Comma-separated Stellar addresses with access to `/admin`. | `GADMIN1...,GADMIN2...` |
+| `NEXT_PUBLIC_ADMIN_API_KEY` | No | Admin key sent with admin requests. Defaults to the connected wallet address. | |
+| `NEXT_PUBLIC_E2E` | No | Set to `true` to build with wallet and chain mocks (Playwright). | `false` |
 
 ### Example `.env.local` for Testnet
 
@@ -157,6 +160,14 @@ Test files follow standard conventions across the frontend codebase:
 Do not create duplicate test suites in root `__tests__/`, `hooks/__tests__/`, or inside `lib/`.
 
 ---
+
+## Test Layout
+
+- Hook tests live in `__tests__/hooks/`, one file per hook (`useClaimWinnings.test.ts`).
+- Library tests live in `__tests__/lib/`, one file per module.
+- Component tests sit next to the component: `components/BetForm.tsx` and `components/BetForm.test.tsx`.
+- Add cases to the existing file for a module instead of creating a second one. Duplicate
+  suites drift apart and double the CI time.
 
 ## Tech Stack
 
