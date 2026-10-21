@@ -8,7 +8,7 @@ const renderToast = (toast, onDismiss = () => {}) => {
   );
 };
 
-desc('Toast', () => {
+describe('Toast', () => {
   const successToast = {
     id: 'success-1',
     type: 'success' as const,
@@ -83,5 +83,36 @@ desc('Toast', () => {
     });
     expect(onDismiss).toHaveBeenCalledWith('success-1');
     jest.useRealTimers();
+  });
+
+  it('renders a link when href is provided', () => {
+    const toastWithLink = {
+      id: 'link-1',
+      type: 'info' as const,
+      message: 'Market resolved',
+      href: '/markets/mkt-123',
+    };
+    renderToast(toastWithLink);
+    const link = screen.getByRole('link', { name: /view market/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/markets/mkt-123');
+  });
+
+  it('renders and invokes action button when action is provided', () => {
+    const handleAction = jest.fn();
+    const toastWithAction = {
+      id: 'action-1',
+      type: 'success' as const,
+      message: 'Alerts ready',
+      action: {
+        label: 'Enable desktop alerts',
+        onClick: handleAction,
+      },
+    };
+    renderToast(toastWithAction);
+    const actionBtn = screen.getByRole('button', { name: /enable desktop alerts/i });
+    expect(actionBtn).toBeInTheDocument();
+    fireEvent.click(actionBtn);
+    expect(handleAction).toHaveBeenCalledTimes(1);
   });
 });

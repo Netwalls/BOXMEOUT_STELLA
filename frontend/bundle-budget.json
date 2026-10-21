@@ -1,0 +1,11 @@
+{
+  "routes": {
+    "/page": 120,
+    "/admin/page": 130,
+    "/create/page": 130,
+    "/leaderboard/page": 120,
+    "/markets/[id]/page": 160,
+    "/portfolio/page": 130,
+    "/_not-found": 100
+  }
+}

@@ -1,5 +1,5 @@
-import type { Transaction } from "@stellar/stellar-sdk";
-import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
+import type { Transaction, xdr } from "@stellar/stellar-sdk";
+import { ContractErrorException, parseContractErrorCode } from "./errors";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
@@ -67,6 +67,13 @@ export const STELLAR_EXPERT_BASE_URL =
  */
 export function stellarExpertTxUrl(txHash: string): string {
   return `${STELLAR_EXPERT_BASE_URL}/tx/${txHash}`;
+}
+
+/**
+ * Builds a stellar.expert URL for a given contract address / ID.
+ */
+export function stellarExpertContractUrl(contractId: string): string {
+  return `${STELLAR_EXPERT_BASE_URL}/contract/${contractId}`;
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -155,7 +162,7 @@ function simulationErrorText(simResult: unknown): string {
 export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
-  const { Operation, SorobanRpc, TransactionBuilder, Timeout, nativeToScVal, addressToScVal } =
+  const { Operation, SorobanRpc, TransactionBuilder, Timeout, nativeToScVal, addressToScVal, xdr: sdkXdr } =
     await loadSdk();
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
     allowHttp: true,
@@ -177,7 +184,10 @@ export async function buildSorobanInvocation(
         if (Array.isArray(arg)) {
           return nativeToScVal(arg);
         }
-        return arg as any;
+        if (arg !== null && typeof arg === "object" && "_arm" in arg) {
+          return arg as xdr.ScVal;
+        }
+        return nativeToScVal(arg);
       }),
     },
     auth: [],
@@ -298,7 +308,7 @@ export async function decodeScVal(scVal: unknown): Promise<unknown> {
   const { scValToNative } = await loadSdk();
 
   try {
-    return scValToNative(scVal as any);
+    return scValToNative(scVal as xdr.ScVal);
   } catch (error) {
     if (error instanceof Error && error.message.includes("LedgerKey")) {
       return null;

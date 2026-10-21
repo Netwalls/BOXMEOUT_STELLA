@@ -19,6 +19,7 @@ const envSchema = z.object({
     .default("testnet"),
   NEXT_PUBLIC_SOROBAN_RPC_URL: z.string().url().optional(),
   NEXT_PUBLIC_MARKET_CONTRACT_ID: z.string().optional(),
+  NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
@@ -29,6 +30,7 @@ function loadConfig(): EnvConfig {
     NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
     NEXT_PUBLIC_SOROBAN_RPC_URL: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL,
     NEXT_PUBLIC_MARKET_CONTRACT_ID: process.env.NEXT_PUBLIC_MARKET_CONTRACT_ID,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   });
 
   if (!parsed.success) {
@@ -60,3 +62,10 @@ export const STELLAR_NETWORK: EnvConfig["NEXT_PUBLIC_STELLAR_NETWORK"] =
 export const SOROBAN_RPC_URL: string | undefined = config.NEXT_PUBLIC_SOROBAN_RPC_URL;
 export const MARKET_CONTRACT_ID: string | undefined =
   config.NEXT_PUBLIC_MARKET_CONTRACT_ID;
+export const SITE_URL: string =
+  config.NEXT_PUBLIC_SITE_URL ||
+  (process.env.NEXT_PUBLIC_VERCEL_URL
+    ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+    : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");

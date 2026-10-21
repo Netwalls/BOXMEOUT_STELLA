@@ -9,6 +9,8 @@ import { useMarkets } from "@/hooks/useMarkets";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
 import { useClaimRefund } from "@/hooks/useClaimRefund";
 import { useToast } from "@/components/ToastProvider";
+import { ActivityFeed } from "@/components/ActivityFeed";
+import { useUserBets } from "@/hooks/useUserBets";
 import type { Bet, Market } from "@/lib/api";
 
 /** Returns every bet that can currently be claimed (winner or refundable, not yet claimed). */
@@ -95,6 +97,7 @@ function StatTile({ label, value, valueClass = "text-white" }: StatTileProps) {
 export default function PortfolioPage() {
   const { address, connect } = useWallet();
   const { bets, summary, isLoading, refetch } = usePortfolio(address);
+  const activity = useUserBets(address);
   const { markets: marketList } = useMarkets();
   const { claim } = useClaimWinnings();
   const { claimRefund } = useClaimRefund();
@@ -294,6 +297,21 @@ export default function PortfolioPage() {
             markets={marketsMap}
             onClaimSuccess={refetch}
           />
+
+          <section aria-labelledby="activity-heading" className="space-y-3">
+            <h2 id="activity-heading" className="text-lg font-semibold text-white">
+              Activity
+            </h2>
+            <ActivityFeed
+              bets={activity.bets}
+              markets={marketsMap}
+              isLoading={activity.isLoading}
+              error={activity.error}
+              hasMore={activity.hasMore}
+              onLoadMore={activity.loadMore}
+              onRetry={activity.retry}
+            />
+          </section>
         </>
       )}
     </div>

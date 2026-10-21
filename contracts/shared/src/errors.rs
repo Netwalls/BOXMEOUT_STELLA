@@ -28,6 +28,8 @@ pub enum ContractError {
     AlreadyInitialized = 13,
     /// end_time is in the past, or lock_time is after end_time
     InvalidTimestamp = 14,
+    /// Contract storage has not been initialized yet
+    NotInitialized = 15,
 
     // ── Bet Validation ─────────────────────────────────────
     /// Bet amount is below config.min_bet

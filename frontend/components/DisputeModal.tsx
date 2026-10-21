@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Market, Bet } from "@/lib/api";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { buildSorobanInvocation, submitTransaction } from "@/lib/stellar";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/components/ToastProvider";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 /** Soroban contract maximum for the dispute reason string. */
 const MAX_REASON_CHARS = 256;
@@ -32,8 +33,10 @@ export function DisputeModal({
   const [reason, setReason] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
   const { address, signTransaction, isNetworkMismatched } = useWallet();
   const { addToast: showToast } = useToast();
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Compute dispute window end timestamp (seconds since epoch)
   // Uses scheduledAt as proxy for resolvedAt since Market type has no resolvedAt field.
@@ -49,17 +52,19 @@ export function DisputeModal({
   const handleClose = useCallback(() => {
     setReason("");
     setValidationError(null);
+    setAnnouncement("");
     onClose();
   }, [onClose]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") handleClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, handleClose]);
+  useAccessibleDialog({
+    isOpen: isOpen && withinWindow,
+    containerRef: dialogRef,
+    onClose: handleClose,
+    isBusy: isSubmitting,
+    onBlockedEscape: () => {
+      setAnnouncement("Dispute submission in progress. Please wait.");
+    },
+  });
 
   if (!isOpen || !withinWindow) return null;
 
@@ -126,12 +131,20 @@ export function DisputeModal({
       onClick={handleClose}
     >
       <div
-        className="bg-gray-900 rounded-xl border border-gray-700 p-6 w-full max-w-md mx-4 space-y-4"
+        ref={dialogRef}
+        tabIndex={-1}
+        className="bg-gray-900 rounded-xl border border-gray-700 p-6 w-full max-w-md mx-4 space-y-4 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="dispute-modal-title"
+        aria-describedby="dispute-modal-desc"
       >
+        {/* Screen reader announcement region for live status and blocked actions */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </div>
+
         <div className="flex items-start justify-between gap-4">
           <h2 id="dispute-modal-title" className="text-lg font-semibold text-white">
             Dispute This Result
@@ -144,7 +157,7 @@ export function DisputeModal({
           />
         </div>
 
-        <p className="text-sm text-gray-400">
+        <p id="dispute-modal-desc" className="text-sm text-gray-400">
           If you believe the reported outcome is incorrect, submit a dispute with a detailed
           reason. Disputes must be raised within 24 hours of resolution.
         </p>
@@ -157,7 +170,14 @@ export function DisputeModal({
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
+            <label
+              htmlFor="dispute-reason"
+              className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1"
+            >
+              Reason for dispute
+            </label>
             <textarea
+              id="dispute-reason"
               value={reason}
               onChange={(e) => {
                 // Allow typing but flag over-limit in real time

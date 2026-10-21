@@ -3,6 +3,7 @@ import { BetSide } from "@prisma/client";
 import { z } from "zod";
 import { logger } from "../../logger";
 import * as betService from "../../services/bet.service";
+import { ok, fail } from "../response";
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
@@ -11,17 +12,12 @@ const stellarAddressSchema = z
   .string()
   .regex(/^G[A-Z0-9]{55}$/, "Invalid Stellar address");
 
-const betsByAddressQuerySchema = z.object({
+const betsByAddressQuerySchema = pageQuerySchema.extend({
   status: z.enum(["pending", "won", "lost", "claimed"]).optional(),
   marketId: z.string().optional(),
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
-const positionsQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
-});
+const positionsQuerySchema = pageQuerySchema;
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -32,17 +28,13 @@ const positionsQuerySchema = z.object({
 export async function getBetsByAddressHandler(req: Request, res: Response): Promise<void> {
   const addressParsed = stellarAddressSchema.safeParse(req.params.address);
   if (!addressParsed.success) {
-    res.status(400).json({ error: "Invalid Stellar address", code: "INVALID_ADDRESS" });
+    fail(res, 400, "INVALID_ADDRESS", "Invalid Stellar address");
     return;
   }
 
   const parsed = betsByAddressQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({
-      error: "Validation failed",
-      code: "VALIDATION_ERROR",
-      details: parsed.error.flatten(),
-    });
+    fail(res, 400, "VALIDATION_ERROR", "Validation failed", { details: parsed.error.flatten() });
     return;
   }
 
@@ -52,10 +44,10 @@ export async function getBetsByAddressHandler(req: Request, res: Response): Prom
     // Apply pagination after filtering (consistent with leaderboard pattern)
     const skip = (page - 1) * limit;
     const paginated = bets.slice(skip, skip + limit);
-    res.status(200).json({ data: paginated, page, limit, total: bets.length });
+    ok(res, paginated, { meta: { page, limit, total: bets.length } });
   } catch (err) {
     logger.error({ err }, "getBetsByAddressHandler failed");
-    res.status(500).json({ error: "Internal server error" });
+    fail(res, 500, "INTERNAL_ERROR", "Internal server error");
   }
 }
 
@@ -72,23 +64,15 @@ export async function getPortfolioHandler(
   try {
     const addressParsed = stellarAddressSchema.safeParse(req.params.address);
     if (!addressParsed.success) {
-      res.status(400).json({ error: "Invalid Stellar address format", code: "VALIDATION_ERROR" });
+      fail(res, 400, "VALIDATION_ERROR", "Invalid Stellar address format");
       return;
     }
 
     const portfolio = await betService.getPortfolioSummary(addressParsed.data);
-    res.status(200).json({ data: portfolio });
+    ok(res, portfolio);
   } catch (err) {
     next(err);
   }
-}
-
-/**
- * GET /api/users/:address/bets   (#1088)
- * Alias route — same as /api/bets/:address but under /users path.
- */
-export async function getUserBetsHandler(req: Request, res: Response): Promise<void> {
-  return getBetsByAddressHandler(req, res);
 }
 
 /**
@@ -98,17 +82,13 @@ export async function getUserBetsHandler(req: Request, res: Response): Promise<v
 export async function getUserPositionsHandler(req: Request, res: Response): Promise<void> {
   const addressParsed = stellarAddressSchema.safeParse(req.params.address);
   if (!addressParsed.success) {
-    res.status(400).json({ error: "Invalid Stellar address", code: "INVALID_ADDRESS" });
+    fail(res, 400, "INVALID_ADDRESS", "Invalid Stellar address");
     return;
   }
 
   const parsed = positionsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({
-      error: "Validation failed",
-      code: "VALIDATION_ERROR",
-      details: parsed.error.flatten(),
-    });
+    fail(res, 400, "VALIDATION_ERROR", "Validation failed", { details: parsed.error.flatten() });
     return;
   }
 
@@ -118,10 +98,10 @@ export async function getUserPositionsHandler(req: Request, res: Response): Prom
     const bets = await betService.getBetsByAddress(addressParsed.data, { status: "pending" });
     const skip = (page - 1) * limit;
     const paginated = bets.slice(skip, skip + limit);
-    res.status(200).json({ data: paginated, page, limit, total: bets.length });
+    ok(res, paginated, { meta: { page, limit, total: bets.length } });
   } catch (err) {
     logger.error({ err }, "getUserPositionsHandler failed");
-    res.status(500).json({ error: "Internal server error" });
+    fail(res, 500, "INTERNAL_ERROR", "Internal server error");
   }
 }
 
@@ -132,30 +112,18 @@ export async function getPayoutEstimateHandler(req: Request, res: Response): Pro
   const { market_id, side, amount } = req.query as Record<string, string>;
 
   if (!market_id || !side || !amount) {
-    res.status(400).json({
-      error: "Validation failed",
-      code: "VALIDATION_ERROR",
-      details: { required: ["market_id", "side", "amount"] },
-    });
+    fail(res, 400, "VALIDATION_ERROR", "Validation failed", { details: { required: ["market_id", "side", "amount"] } });
     return;
   }
 
   if (!["FighterA", "FighterB"].includes(side)) {
-    res.status(400).json({
-      error: "Validation failed",
-      code: "VALIDATION_ERROR",
-      details: { side: "must be FighterA or FighterB" },
-    });
+    fail(res, 400, "VALIDATION_ERROR", "Validation failed", { details: { side: "must be FighterA or FighterB" } });
     return;
   }
 
   const parsedAmount = parseInt(amount, 10);
   if (isNaN(parsedAmount) || parsedAmount <= 0) {
-    res.status(400).json({
-      error: "Validation failed",
-      code: "VALIDATION_ERROR",
-      details: { amount: "must be a positive integer" },
-    });
+    fail(res, 400, "VALIDATION_ERROR", "Validation failed", { details: { amount: "must be a positive integer" } });
     return;
   }
 
@@ -165,9 +133,40 @@ export async function getPayoutEstimateHandler(req: Request, res: Response): Pro
       side as BetSide,
       BigInt(parsedAmount)
     );
-    res.json({ data: { estimatedPayout: estimatedPayout.toString() } });
+    ok(res, { estimatedPayout: estimatedPayout.toString() });
   } catch (err) {
     logger.error({ err }, "getPayoutEstimateHandler failed");
+    fail(res, 500, "INTERNAL_ERROR", "Internal server error");
+  }
+}
+
+const leaderboardQuerySchema = z.object({
+  period: z.enum(["7d", "30d", "all"]).default("all"),
+  limit: z.coerce.number().int().positive().optional(),
+});
+
+/**
+ * GET /api/leaderboard?period=7d|30d|all&limit=
+ * Ranks bettors by realised profit for the requested period.
+ * Responds with the ranked entries array (see frontend/lib/api.ts fetchLeaderboard).
+ */
+export async function getLeaderboardHandler(req: Request, res: Response): Promise<void> {
+  const parsed = leaderboardQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Validation failed",
+      code: "VALIDATION_ERROR",
+      details: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  try {
+    const { period, limit } = parsed.data;
+    const result = await betService.getLeaderboard(period, limit);
+    res.status(200).json(result.entries);
+  } catch (err) {
+    logger.error({ err }, "getLeaderboardHandler failed");
     res.status(500).json({ error: "Internal server error" });
   }
 }

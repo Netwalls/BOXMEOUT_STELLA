@@ -141,67 +141,23 @@ soroban contract deploy \
 
 ## Testnet Deploy
 
-Use the provided deployment script or deploy manually:
-
-### Option A — Automated script
+Requirements: Rust with the `wasm32-unknown-unknown` target, the Stellar CLI (`stellar`, v28+), Node.js with `backend/` dependencies installed (`cd backend && npm ci`), and a funded Testnet account (fund it with [friendbot](https://friendbot.stellar.org)).
 
 ```bash
 cd contracts/scripts
 ADMIN_SECRET=S... ./deploy_testnet.sh
 ```
 
-This script builds, optimizes, deploys both `Treasury` and `MarketFactory`, initializes them, and saves the contract IDs to `.env.testnet`.
+The script:
 
-### Option B — Manual deployment
+1. Builds and optimizes `market`, `treasury` and `market_factory` WASM.
+2. Uploads all three WASM binaries. The Market hash is stored in the factory.
+3. Uses `BET_TOKEN_ID` as the bet token (defaults to the native XLM Stellar Asset Contract, deployed if missing). The token is passed to `Treasury.initialize`.
+4. Derives the Treasury and MarketFactory IDs from fixed salts before deploying, because each contract needs the other's address at `initialize` time.
+5. Initializes Treasury (fee 200 bps, factory, token, daily limit `DAILY_LIMIT`) and then MarketFactory (Market WASM hash, Treasury as treasury and fee collector, fee 200 bps, bet limits, 24h dispute window).
+6. Writes `contracts/deployed.testnet.json` (IDs, WASM hashes, deploy time) and `contracts/.env.testnet`, then prints the `.env` lines to paste into `backend/.env` and `frontend/.env.local`.
 
-```bash
-cd contracts
-
-# 1. Build and optimize
-cargo build --release --target wasm32-unknown-unknown
-soroban contract optimize \
-  --wasm target/wasm32-unknown-unknown/release/market_factory.wasm \
-  --wasm-out target/wasm32-unknown-unknown/release/market_factory.optimized.wasm
-soroban contract optimize \
-  --wasm target/wasm32-unknown-unknown/release/treasury.wasm \
-  --wasm-out target/wasm32-unknown-unknown/release/treasury.optimized.wasm
-
-# 2. Deploy MarketFactory
-FACTORY_ID=$(soroban contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/market_factory.optimized.wasm \
-  --source admin \
-  --network testnet)
-echo "FACTORY_ID=$FACTORY_ID"
-
-# 3. Deploy Treasury
-TREASURY_ID=$(soroban contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/treasury.optimized.wasm \
-  --source admin \
-  --network testnet)
-echo "TREASURY_ID=$TREASURY_ID"
-
-# 4. Initialize Treasury
-ADMIN_PUBKEY=$(stellar keys address admin)
-soroban contract invoke \
-  --id "$TREASURY_ID" \
-  --source admin \
-  --network testnet \
-  -- initialize \
-  --admin "$ADMIN_PUBKEY" \
-  --factory "$FACTORY_ID"
-
-# 5. Initialize MarketFactory
-soroban contract invoke \
-  --id "$FACTORY_ID" \
-  --source admin \
-  --network testnet \
-  -- initialize \
-  --admin "$ADMIN_PUBKEY" \
-  --fee-collector "$TREASURY_ID" \
-  --default-fee-bp 200 \
-  --min-bet 1000000 \
-  --max-bet 100000000000
-```
+Optional variables: `BET_TOKEN_ID`, `DAILY_LIMIT` (stroops).
 
 ---
 

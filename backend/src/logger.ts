@@ -1,13 +1,37 @@
 import pino from "pino";
 import pinoHttp from "pino-http";
 import type { IncomingMessage } from "http";
+import { Prisma } from "@prisma/client";
 
 const isDev = process.env.NODE_ENV !== "production";
+
+/**
+ * B-100: Secrets that must never reach a log line. Any log call that includes
+ * request headers or config values is censored at the logger, so a future
+ * `logger.info({ req })` cannot leak an admin, oracle or wallet credential.
+ */
+export const redactConfig = {
+  paths: [
+    'req.headers["x-admin-key"]',
+    'req.headers["x-oracle-key"]',
+    'req.headers["x-wallet-signature"]',
+    'req.headers["authorization"]',
+    'req.headers["cookie"]',
+    'headers["x-admin-key"]',
+    'headers["x-oracle-key"]',
+    'headers["x-wallet-signature"]',
+    "ADMIN_SECRET_KEY",
+    "*.ADMIN_SECRET_KEY",
+    "*.password",
+  ],
+  censor: "[Redacted]",
+};
 
 export const logger = pino({
   level: isDev ? "debug" : "info",
   timestamp: pino.stdTimeFunctions.isoTime,
   base: { service: "boxmeout-backend" },
+  redact: redactConfig,
   ...(isDev && {
     transport: {
       target: "pino-pretty",
@@ -19,6 +43,22 @@ export const logger = pino({
     },
   }),
 });
+
+/**
+ * B-100: Prisma validation errors embed the full query arguments in their
+ * message, and known-request errors can carry field values in `meta`. Those
+ * errors are logged by class name and code only, so query parameters never
+ * reach the logs. Other errors are returned unchanged for pino to serialise.
+ */
+export function sanitizeErrorForLog(err: unknown): unknown {
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    return { name: err.name };
+  }
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return { name: err.name, code: err.code };
+  }
+  return err;
+}
 
 /**
  * B-74: Structured logging helpers for background jobs and services.

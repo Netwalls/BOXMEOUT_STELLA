@@ -22,7 +22,7 @@ const makeEvent = (type: string, overrides: Record<string, unknown> = {}): Sorob
 
 describe("handleWinningsClaimedEvent", () => {
   beforeEach(() => {
-    mockMarkBetClaimedByMarketAndBettor.mockResolvedValue({} as any);
+    mockMarkBetClaimedByMarketAndBettor.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -59,7 +59,7 @@ describe("handleWinningsClaimedEvent", () => {
 
 describe("handleRefundClaimedEvent", () => {
   beforeEach(() => {
-    mockMarkBetClaimedByMarketAndBettor.mockResolvedValue({} as any);
+    mockMarkBetClaimedByMarketAndBettor.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

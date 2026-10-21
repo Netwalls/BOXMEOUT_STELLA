@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { StrKey } from "@stellar/stellar-sdk";
 
 export interface CreateMarketFormData {
   fighterAName: string;
@@ -48,7 +49,12 @@ const INITIAL: CreateMarketFormData = {
   oracleAddress: "",
 };
 
-const STARTS_WITH_G = /^G[A-Z0-9]{55}$/;
+export function formatUtcPreview(datetimeLocalStr: string): string | null {
+  if (!datetimeLocalStr) return null;
+  const d = new Date(datetimeLocalStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().replace(".000", "");
+}
 
 function validate(data: CreateMarketFormData): FormErrors {
   const errors: FormErrors = {};
@@ -75,25 +81,38 @@ function validate(data: CreateMarketFormData): FormErrors {
 
   if (!data.scheduledAt) {
     errors.scheduledAt = "Required";
+  } else {
+    const scheduledTime = new Date(data.scheduledAt);
+    if (isNaN(scheduledTime.getTime())) {
+      errors.scheduledAt = "Invalid date format";
+    } else if (scheduledTime <= now) {
+      errors.scheduledAt = "Must be in the future";
+    }
   }
 
   if (!data.bettingEndsAt) {
     errors.bettingEndsAt = "Required";
   } else {
     const lockTime = new Date(data.bettingEndsAt);
-    if (lockTime <= now) {
+    if (isNaN(lockTime.getTime())) {
+      errors.bettingEndsAt = "Invalid date format";
+    } else if (lockTime <= now) {
       errors.bettingEndsAt = "Must be in the future";
     } else if (data.scheduledAt) {
-      const endTime = new Date(data.scheduledAt);
-      if (endTime <= lockTime) {
+      const scheduledTime = new Date(data.scheduledAt);
+      if (!isNaN(scheduledTime.getTime()) && scheduledTime <= lockTime) {
         errors.bettingEndsAt = "Must be before fight time";
       }
     }
   }
 
-  if (!data.oracleAddress.trim()) errors.oracleAddress = "Required";
-  else if (!STARTS_WITH_G.test(data.oracleAddress.trim())) {
-    errors.oracleAddress = "Must be a valid G... Stellar address";
+  if (!data.oracleAddress.trim()) {
+    errors.oracleAddress = "Required";
+  } else {
+    const trimmed = data.oracleAddress.trim();
+    if (!StrKey.isValidEd25519PublicKey(trimmed)) {
+      errors.oracleAddress = "Must be a valid G... Stellar address";
+    }
   }
 
   return errors;
@@ -109,6 +128,11 @@ function Label({ htmlFor, children }: { htmlFor: string; children: string }) {
       {children}
     </label>
   );
+}
+
+function UtcPreview({ value }: { value: string }) {
+  const text = utcPreview(value);
+  return text ? <p className="mt-1 text-xs text-gray-500">{text}</p> : null;
 }
 
 function Field({
@@ -222,10 +246,20 @@ export function CreateMarketForm({ onSubmit }: CreateMarketFormProps): JSX.Eleme
           <div>
             <Label htmlFor="scheduledAt">Fight Date / Time</Label>
             <Field id="scheduledAt" type="datetime-local" value={formData.scheduledAt} error={touched.scheduledAt ? errors.scheduledAt : undefined} placeholder="" onChange={(v) => set("scheduledAt", v)} />
+            {formData.scheduledAt && formatUtcPreview(formData.scheduledAt) && (
+              <p className="mt-1 text-xs text-gray-400">
+                UTC: <span className="font-mono text-gray-300">{formatUtcPreview(formData.scheduledAt)}</span>
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="bettingEndsAt">Betting Closes At</Label>
             <Field id="bettingEndsAt" type="datetime-local" value={formData.bettingEndsAt} error={touched.bettingEndsAt ? errors.bettingEndsAt : undefined} placeholder="" onChange={(v) => set("bettingEndsAt", v)} />
+            {formData.bettingEndsAt && formatUtcPreview(formData.bettingEndsAt) && (
+              <p className="mt-1 text-xs text-gray-400">
+                UTC: <span className="font-mono text-gray-300">{formatUtcPreview(formData.bettingEndsAt)}</span>
+              </p>
+            )}
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="oracleAddress">Oracle Address</Label>

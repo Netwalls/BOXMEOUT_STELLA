@@ -164,7 +164,7 @@ describe("GET /api/bets/payout-estimate", () => {
       .query({ side: "FighterA", amount: "1000" });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 when side is missing", async () => {
@@ -173,7 +173,7 @@ describe("GET /api/bets/payout-estimate", () => {
       .query({ market_id: "market-1", amount: "1000" });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 when amount is missing", async () => {
@@ -182,7 +182,7 @@ describe("GET /api/bets/payout-estimate", () => {
       .query({ market_id: "market-1", side: "FighterA" });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 when side is invalid", async () => {
@@ -191,7 +191,7 @@ describe("GET /api/bets/payout-estimate", () => {
       .query({ market_id: "market-1", side: "InvalidSide", amount: "1000" });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 when amount is not a positive integer", async () => {
@@ -200,7 +200,7 @@ describe("GET /api/bets/payout-estimate", () => {
       .query({ market_id: "market-1", side: "FighterA", amount: "-5" });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 429 after exceeding rate limit of 30 requests per minute", async () => {
@@ -218,6 +218,6 @@ describe("GET /api/bets/payout-estimate", () => {
       .query({ market_id: "market-1", side: "FighterA", amount: "1000" });
 
     expect(res.status).toBe(429);
-    expect(res.body.code).toBe("RATE_LIMITED");
+    expect(res.body.error.code).toBe("RATE_LIMITED");
   }, 30000);
 });
