@@ -249,12 +249,12 @@ impl Treasury {
             .get(&key_factory(&env))
             .expect("not initialized");
 
-        let registered: Address = env.invoke_contract(
+        let registered: Option<Address> = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_market_address"),
             soroban_sdk::vec![&env, market_id.to_val()],
         );
-        if registered != from_market {
+        if registered != Some(from_market.clone()) {
             return Err(ContractError::MarketNotApproved);
         }
 
@@ -306,12 +306,12 @@ impl Treasury {
 
         let caller = env.current_contract_address();
 
-        let registered: Address = env.invoke_contract(
+        let registered: Option<Address> = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_market_address"),
             soroban_sdk::vec![&env, market_id.to_val()],
         );
-        if registered != caller {
+        if registered != Some(caller.clone()) {
             return Err(ContractError::MarketNotApproved);
         }
 
@@ -371,12 +371,12 @@ impl Treasury {
             .get(&key_factory(&env))
             .expect("not initialized");
 
-        let registered: Address = env.invoke_contract(
+        let registered: Option<Address> = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_market_address"),
             soroban_sdk::vec![&env, market_id.to_val()],
         );
-        if registered != from_market {
+        if registered != Some(from_market.clone()) {
             panic!("unauthorized: caller is not a registered market");
         }
 
