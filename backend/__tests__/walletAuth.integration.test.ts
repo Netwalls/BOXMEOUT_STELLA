@@ -80,7 +80,7 @@ describe("wallet auth challenge flow", () => {
         .set("x-wallet-signature", signature)
         .expect(401);
 
-      expect(res.body.code).toBe("CHALLENGE_EXPIRED");
+      expect(res.body.error.code).toBe("CHALLENGE_EXPIRED");
     } finally {
       nowSpy.mockRestore();
     }
@@ -111,7 +111,7 @@ describe("wallet auth challenge flow", () => {
       .set("x-wallet-signature", signature)
       .expect(401);
 
-    expect(res.body.code).toBe("CHALLENGE_EXPIRED");
+    expect(res.body.error.code).toBe("CHALLENGE_EXPIRED");
   });
 
   it("rejects a signature from a different signer", async () => {
@@ -134,7 +134,7 @@ describe("wallet auth challenge flow", () => {
       .set("x-wallet-signature", signature)
       .expect(401);
 
-    expect(res.body.code).toBe("INVALID_SIGNATURE");
+    expect(res.body.error.code).toBe("INVALID_SIGNATURE");
   });
 
   it("rejects a request with no challenge issued", async () => {
@@ -150,6 +150,6 @@ describe("wallet auth challenge flow", () => {
       .set("x-wallet-signature", signature)
       .expect(401);
 
-    expect(res.body.code).toBe("CHALLENGE_EXPIRED");
+    expect(res.body.error.code).toBe("CHALLENGE_EXPIRED");
   });
 });

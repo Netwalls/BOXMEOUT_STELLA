@@ -9,13 +9,19 @@ import {
   fetchOddsHistory,
   fetchUserPositions,
   createMarketMeta,
+  fetchLeaderboard,
+  resolveMarket,
   ApiError,
+  ApiResponseError,
   Market,
   Bet,
   MarketStats,
   OddsSnapshot,
   PortfolioSummary,
 } from "@/lib/api";
+
+// Response bodies below follow the envelope the backend controllers send:
+// `{ data, page, limit }` for lists and `{ data }` for single values.
 
 const MARKET: Market = {
   id: "mkt-1",
@@ -71,12 +77,12 @@ const SUMMARY: PortfolioSummary = {
   roi: 0,
 };
 
-function mockOk(body: unknown) {
+function mockJson(body: unknown, status = 200) {
   return jest.fn().mockResolvedValue({
-    ok: true,
-    status: 200,
+    ok: status >= 200 && status < 300,
+    status,
     json: () => Promise.resolve(body),
-    text: () => Promise.resolve(""),
+    text: () => Promise.resolve(JSON.stringify(body)),
   });
 }
 
@@ -84,19 +90,63 @@ function mockError(status: number, message = "Server error") {
   return jest.fn().mockResolvedValue({
     ok: false,
     status,
-    json: () => Promise.resolve({ message }),
+    json: () => Promise.resolve({ error: message }),
     text: () => Promise.resolve(message),
   });
 }
 
 afterEach(() => jest.restoreAllMocks());
 
+// ─── envelope handling ────────────────────────────────────────────────────────
+
+test("fetchMarkets: unwraps data and exposes pagination metadata", async () => {
+  global.fetch = mockJson({ data: [MARKET], page: 2, limit: 10 });
+
+  const result = await fetchMarkets({ page: 2, limit: 10 });
+
+  expect(result.data).toEqual([MARKET]);
+  expect(result.page).toBe(2);
+  expect(result.limit).toBe(10);
+});
+
+test("fetchMarkets: exposes nextCursor for cursor-paginated responses", async () => {
+  global.fetch = mockJson({ data: [MARKET], nextCursor: "abc", limit: 20 });
+
+  const result = await fetchMarkets();
+
+  expect(result.nextCursor).toBe("abc");
+  expect(result.page).toBeUndefined();
+});
+
+test("fetchMarketById: unwraps a single-value envelope", async () => {
+  global.fetch = mockJson({ data: MARKET });
+  await expect(fetchMarketById("mkt-1")).resolves.toEqual(MARKET);
+});
+
+test("a body without an envelope is validated as-is", async () => {
+  global.fetch = mockJson(MARKET);
+  await expect(fetchMarketById("mkt-1")).resolves.toEqual(MARKET);
+});
+
+test("throws ApiResponseError when the payload does not match the schema", async () => {
+  global.fetch = mockJson({ data: { ...MARKET, poolA: 1000 } });
+
+  const err = await fetchMarketById("mkt-1").catch((e) => e);
+
+  expect(err).toBeInstanceOf(ApiResponseError);
+  expect(err.message).toContain("poolA");
+});
+
+test("rejects BigInt fields that are not decimal strings", async () => {
+  global.fetch = mockJson({ data: { ...MARKET, totalPool: "1.5e9" } });
+  await expect(fetchMarketById("mkt-1")).rejects.toBeInstanceOf(ApiResponseError);
+});
+
 // ─── fetchMarkets ─────────────────────────────────────────────────────────────
 
-test("fetchMarkets: returns market array", async () => {
-  global.fetch = mockOk([MARKET]);
-  const result = await fetchMarkets();
-  expect(result).toEqual([MARKET]);
+test("fetchMarkets: requests the market list", async () => {
+  global.fetch = mockJson({ data: [MARKET] });
+  await fetchMarkets();
   expect(global.fetch).toHaveBeenCalledWith(
     expect.stringContaining("/api/markets"),
     expect.any(Object)
@@ -104,7 +154,7 @@ test("fetchMarkets: returns market array", async () => {
 });
 
 test("fetchMarkets: passes query params", async () => {
-  global.fetch = mockOk([MARKET]);
+  global.fetch = mockJson({ data: [MARKET] });
   await fetchMarkets({ status: "Open", weightClass: "Heavyweight", page: 2, limit: 10 });
   const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
   expect(url).toContain("status=Open");
@@ -122,7 +172,7 @@ test("fetchMarkets: throws ApiError on 500", async () => {
 // ─── fetchMarketById ──────────────────────────────────────────────────────────
 
 test("fetchMarketById: returns market", async () => {
-  global.fetch = mockOk(MARKET);
+  global.fetch = mockJson({ data: MARKET });
   const result = await fetchMarketById("mkt-1");
   expect(result).toEqual(MARKET);
   expect(global.fetch).toHaveBeenCalledWith(
@@ -142,7 +192,7 @@ test("fetchMarketById: throws ApiError with status 404", async () => {
 // ─── fetchMarketStats ─────────────────────────────────────────────────────────
 
 test("fetchMarketStats: returns stats", async () => {
-  global.fetch = mockOk(STATS);
+  global.fetch = mockJson({ data: STATS });
   const result = await fetchMarketStats("mkt-1");
   expect(result).toEqual(STATS);
   expect(global.fetch).toHaveBeenCalledWith(
@@ -153,10 +203,8 @@ test("fetchMarketStats: returns stats", async () => {
 
 // ─── fetchMarketBets ──────────────────────────────────────────────────────────
 
-// ─── fetchMarketBets ──────────────────────────────────────────────────────────
-
 test("fetchMarketBets: returns bets array", async () => {
-  global.fetch = mockOk([BET]);
+  global.fetch = mockJson({ data: [BET], page: 1, limit: 20 });
   const result = await fetchMarketBets("mkt-1");
   expect(result).toEqual([BET]);
   expect(global.fetch).toHaveBeenCalledWith(
@@ -166,7 +214,7 @@ test("fetchMarketBets: returns bets array", async () => {
 });
 
 test("fetchMarketBets: passes outcome filter query param", async () => {
-  global.fetch = mockOk([BET]);
+  global.fetch = mockJson({ data: [BET] });
   await fetchMarketBets("mkt-1", { outcome: "FighterA" });
   const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
   expect(url).toContain("outcome=FighterA");
@@ -175,7 +223,7 @@ test("fetchMarketBets: passes outcome filter query param", async () => {
 // ─── fetchBetsByAddress ───────────────────────────────────────────────────────
 
 test("fetchBetsByAddress: returns bets for address", async () => {
-  global.fetch = mockOk([BET]);
+  global.fetch = mockJson({ data: [BET] });
   const result = await fetchBetsByAddress("GADDR1");
   expect(result).toEqual([BET]);
   expect(global.fetch).toHaveBeenCalledWith(
@@ -187,7 +235,7 @@ test("fetchBetsByAddress: returns bets for address", async () => {
 // ─── fetchPortfolioSummary ────────────────────────────────────────────────────
 
 test("fetchPortfolioSummary: returns summary", async () => {
-  global.fetch = mockOk(SUMMARY);
+  global.fetch = mockJson({ data: SUMMARY });
   const result = await fetchPortfolioSummary("GADDR1");
   expect(result).toEqual(SUMMARY);
   expect(global.fetch).toHaveBeenCalledWith(
@@ -198,15 +246,15 @@ test("fetchPortfolioSummary: returns summary", async () => {
 
 // ─── fetchPayoutEstimate ──────────────────────────────────────────────────────
 
-test("fetchPayoutEstimate: returns BigInt from string estimate", async () => {
-  global.fetch = mockOk({ estimate: "150000000" });
+test("fetchPayoutEstimate: reads estimatedPayout and returns a BigInt", async () => {
+  global.fetch = mockJson({ data: { estimatedPayout: "150000000" } });
   const result = await fetchPayoutEstimate("mkt-1", "FighterA", BigInt(100000000));
   expect(result).toBe(BigInt(150000000));
   expect(typeof result).toBe("bigint");
 });
 
 test("fetchPayoutEstimate: passes correct query params", async () => {
-  global.fetch = mockOk({ estimate: "0" });
+  global.fetch = mockJson({ data: { estimatedPayout: "0" } });
   await fetchPayoutEstimate("mkt-1", "FighterB", BigInt(50000000));
   const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
   expect(url).toContain("market_id=mkt-1");
@@ -222,7 +270,7 @@ test("fetchPayoutEstimate: throws ApiError on non-2xx", async () => {
 // ─── fetchOddsHistory ─────────────────────────────────────────────────────────
 
 test("fetchOddsHistory: returns snapshots array", async () => {
-  global.fetch = mockOk([SNAPSHOT]);
+  global.fetch = mockJson({ data: [SNAPSHOT] });
   const result = await fetchOddsHistory("mkt-1");
   expect(result).toEqual([SNAPSHOT]);
   expect(global.fetch).toHaveBeenCalledWith(
@@ -251,7 +299,7 @@ test("fetchUserPositions: returns positions array", async () => {
     avgOdds: 1.5,
     open: true,
   };
-  global.fetch = mockOk([position]);
+  global.fetch = mockJson({ data: [position] });
   const result = await fetchUserPositions("GADDR1");
   expect(result).toEqual([position]);
   expect(global.fetch).toHaveBeenCalledWith(
@@ -277,7 +325,7 @@ test("createMarketMeta: sends POST request with market metadata", async () => {
     bettingEndsAt: "2026-07-01T19:00:00Z",
     oracleAddress: "GORACLE",
   };
-  global.fetch = mockOk({ success: true, marketId: "mkt-1" });
+  global.fetch = mockJson({ data: { success: true, marketId: "mkt-1" } });
   const result = await createMarketMeta(input);
   expect(result).toEqual({ success: true, marketId: "mkt-1" });
   expect(global.fetch).toHaveBeenCalledWith(
@@ -287,4 +335,48 @@ test("createMarketMeta: sends POST request with market metadata", async () => {
       body: JSON.stringify(input),
     })
   );
+});
+
+// ─── contract: paths and bodies the backend routes expect ─────────────────────
+
+test("resolveMarket: POSTs the market id and outcome to /api/admin/markets/resolve", async () => {
+  global.fetch = mockJson({ data: { success: true } });
+
+  await expect(resolveMarket("mkt-1", "FighterA", "admin-key")).resolves.toEqual({ success: true });
+
+  expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringMatching(/\/api\/admin\/markets\/resolve$/),
+    expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ "x-admin-key": "admin-key" }),
+      body: JSON.stringify({ marketId: "mkt-1", outcome: "FighterA" }),
+    })
+  );
+});
+
+test("fetchLeaderboard: GETs /api/leaderboard with the period and validates entries", async () => {
+  const entry = {
+    rank: 1,
+    address: "GTOP",
+    totalWinnings: "500000000",
+    totalBets: 4,
+    winCount: 3,
+    roi: 0.25,
+  };
+  global.fetch = mockJson({ data: [entry] });
+
+  await expect(fetchLeaderboard("30d")).resolves.toEqual([entry]);
+
+  expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining("/api/leaderboard?period=30d"),
+    expect.any(Object)
+  );
+});
+
+test("fetchLeaderboard: rejects entries with non-string winnings", async () => {
+  global.fetch = mockJson({
+    data: [{ rank: 1, address: "GTOP", totalWinnings: 500, totalBets: 4, winCount: 3, roi: 0 }],
+  });
+
+  await expect(fetchLeaderboard("all")).rejects.toBeInstanceOf(ApiResponseError);
 });

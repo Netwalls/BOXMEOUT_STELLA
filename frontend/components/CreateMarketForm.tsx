@@ -130,6 +130,11 @@ function Label({ htmlFor, children }: { htmlFor: string; children: string }) {
   );
 }
 
+function UtcPreview({ value }: { value: string }) {
+  const text = utcPreview(value);
+  return text ? <p className="mt-1 text-xs text-gray-500">{text}</p> : null;
+}
+
 function Field({
   id,
   value,

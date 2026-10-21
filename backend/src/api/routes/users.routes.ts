@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { getUserHandler, updateUserHandler } from "../controllers/user.controller";
 import {
+  getUserHandler,
+  updateUserHandler,
   getUserBetsHandler,
   getUserPositionsHandler,
 } from "../controllers/bet.controller";
@@ -20,7 +21,7 @@ router.put(
   updateUserHandler
 );
 
-// GET /api/users/:address/bets      — paginated bet history (#1088)
+// GET /api/users/:address/bets      — cursor-paginated bet history (#1088, #1244)
 router.get("/:address/bets", getUserBetsHandler);
 
 // GET /api/users/:address/positions — paginated open positions (#1088)

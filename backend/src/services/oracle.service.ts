@@ -384,7 +384,7 @@ export async function listPendingResolutions(): Promise<Market[]> {
 }
 
 /**
- * Records a dispute in DB and submits raise_dispute() on-chain.
+ * Records a dispute in DB and submits dispute_resolution() on-chain.
  * Notifies admin via internal alert.
  */
 export async function raiseDispute(

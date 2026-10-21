@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { CheckCircle, XCircle, AlertCircle, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 
 import Link from "next/link";
 

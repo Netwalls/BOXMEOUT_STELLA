@@ -17,7 +17,10 @@ export interface UseMarketsOptions {
 
 export interface UseMarketsResult {
   markets: Market[];
+  /** True only until the first fetch settles. Background polls do not set it. */
   isLoading: boolean;
+  /** True while a background refresh (poll, filter change, refetch) is in flight. */
+  isRefreshing: boolean;
   error: Error | null;
   refetch: () => void;
 }
@@ -39,6 +42,7 @@ export function useMarkets(
 ): UseMarketsResult {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   // Keep a ref so the interval callback always sees the latest `filters`
@@ -48,16 +52,33 @@ export function useMarkets(
     filtersRef.current = filters;
   });
 
+  // Each fetch takes a ticket. Only the newest ticket may write state, so a
+  // slow earlier response cannot overwrite the results of a later request.
+  const requestIdRef = useRef(0);
+  const hasLoadedRef = useRef(false);
+
   const doFetch = useCallback(async () => {
-    setIsLoading(true);
+    const requestId = ++requestIdRef.current;
+    const isInitialLoad = !hasLoadedRef.current;
+    if (isInitialLoad) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
     setError(null);
     try {
-      const data = await fetchMarkets(filtersRef.current);
+      const { data } = await fetchMarkets(filtersRef.current);
+      if (requestId !== requestIdRef.current) return;
+      hasLoadedRef.current = true;
       setMarkets(data);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, []); // stable: no deps, reads filters via ref
 
@@ -75,5 +96,5 @@ export function useMarkets(
   // Poll for live odds, paused while the tab is hidden.
   useVisibilityInterval(doFetch, pollingInterval);
 
-  return { markets, isLoading, error, refetch };
+  return { markets, isLoading, isRefreshing, error, refetch };
 }

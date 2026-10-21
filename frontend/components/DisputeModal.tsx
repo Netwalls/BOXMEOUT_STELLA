@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Market, Bet } from "@/lib/api";
 import { CountdownTimer } from "@/components/CountdownTimer";
-import { buildSorobanInvocation, submitTransaction } from "@/lib/stellar";
+import { buildSorobanInvocation, submitTransaction, str } from "@/lib/stellar";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/components/ToastProvider";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
@@ -102,9 +102,9 @@ export function DisputeModal({
     try {
       // Call dispute_resolution on-chain
       const xdr = await buildSorobanInvocation({
-        contractId: market.id,
+        contractId: market.contractAddress,
         method: "dispute_resolution",
-        args: [reason.trim()],
+        args: [await str(reason.trim())],
         signerAddress: address,
       });
 

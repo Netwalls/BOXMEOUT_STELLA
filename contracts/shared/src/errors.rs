@@ -40,6 +40,16 @@ pub enum ContractError {
     AlreadyClaimed = 22,
     /// Bettor placed no bets in this market
     NoBetsFound = 23,
+    /// Bettor has exceeded MAX_BETS_PER_ADDRESS limit
+    TooManyBets = 24,
+    /// Bettor has no unclaimed winning bets
+    NothingToClaim = 25,
+    /// Bet's outcome did not match market resolution
+    NotWinner = 26,
+    /// Requested bet does not belong to the caller
+    NotYourBet = 27,
+    /// Market is not in the correct state for this operation
+    InvalidMarketState = 28,
 
     // ── Oracle / Resolution ────────────────────────────────
     /// Oracle signature verification failed

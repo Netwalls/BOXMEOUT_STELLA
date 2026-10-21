@@ -1,5 +1,4 @@
 /* eslint-disable @next/next/no-img-element */
-// @ts-expect-error -- next/og types resolve after npm install
 import { ImageResponse } from "next/og";
 import { fetchMarketById } from "@/lib/api";
 

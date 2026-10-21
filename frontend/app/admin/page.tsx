@@ -15,19 +15,12 @@ import {
   updateOracle,
 } from "@/lib/api";
 import { truncateAddress } from "@/lib/stellar";
+import { ADMIN_ADDRESSES, ADMIN_API_KEY } from "@/lib/config";
 
 // ─── Admin access list ────────────────────────────────────────────────────────
 
-/**
- * Comma-separated Stellar addresses that have admin access.
- * Set NEXT_PUBLIC_ADMIN_ADDRESSES in your .env.local file.
- */
-const ADMIN_ADDRESSES: string[] = (
-  process.env.NEXT_PUBLIC_ADMIN_ADDRESSES ?? ""
-)
-  .split(",")
-  .map((a) => a.trim())
-  .filter(Boolean);
+// `ADMIN_ADDRESSES` comes from NEXT_PUBLIC_ADMIN_ADDRESSES in `lib/config.ts`
+// (set it in your .env.local file).
 
 function isAdmin(address: string | null): boolean {
   if (!address) return false;
@@ -507,7 +500,7 @@ export default function AdminPage(): JSX.Element {
    * use a signed challenge or a proper JWT. The env var allows overriding
    * for development/testing.
    */
-  const adminKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY ?? address ?? "";
+  const adminKey = ADMIN_API_KEY ?? address ?? "";
 
   if (!isConnected || !address) {
     return (

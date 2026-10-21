@@ -1,34 +1,47 @@
 import { Router, type Request, type Response } from "express";
+import { searchMarketsHandler } from "../controllers/marketSearch.controller";
 import {
-  searchMarketsHandler,
   getMarketsHandler,
   getMarketByIdHandler,
   getMarketStatsHandler,
   getMarketBetsHandler,
   getMarketOddsHistoryHandler,
   createMarketHandler,
-  createMarketSchema,
 } from "../controllers/market.controller";
+import { createMarketSchema } from "../schemas/market.schema";
 import { walletAuthMiddleware } from "../middleware/walletAuth.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { validate } from "../middleware/validate";
+import { subscribeToMarket, type MarketEventPayload } from "../../events/marketEvents";
+
+// B-99 (#1397): search is unauthenticated and runs a full-text query per call,
+// so it gets the shared Redis sliding-window limiter.
+const searchRateLimiter = rateLimitMiddleware({
+  windowMs: 60 * 1000,
+  max: 60,
+  keyPrefix: "markets:search",
+});
 
 const router = Router();
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
-// GET /api/markets/search?q=...  — must come before /:id
-router.get("/search", searchMarketsHandler);
+// GET /api/markets/search?q=...  — must come before /:id (#1405 B-107)
+router.get("/search", searchRateLimiter, searchMarketsHandler);
 
 // GET  /api/markets
 router.get("/", getMarketsHandler);
 
 // POST /api/markets
 // Creator must prove wallet ownership via challenge/response (#1225 B-47).
-// Body is validated with zod before the handler runs.
+// Optional Idempotency-Key (B-103) makes client retries safe; it runs after auth
+// so keys are scoped to the wallet. Body is validated with zod before the handler.
 router.post(
   "/",
   walletAuthMiddleware(),
+  idempotencyMiddleware(),
   validate({ body: createMarketSchema }),
+  enforceCreatorBinding,
   createMarketHandler,
 );
 
@@ -48,11 +61,13 @@ router.get("/:id/stream", (req: Request, res: Response) => {
   // Initial comment so clients/proxies open the stream immediately.
   res.write(": connected\n\n");
 
-  const onPoolChange = (payload: unknown) => send("pool", payload);
-  const onStatusChange = (payload: unknown) => send("status", payload);
+  // Map internal bus event types onto the SSE event names clients subscribe to.
+  const onMarketEvent = (payload: MarketEventPayload) => {
+    if (payload.type === "pool_updated") send("pool", payload.data);
+    else if (payload.type === "status_changed") send("status", payload.data);
+  };
 
-  marketEvents.on("pool", onPoolChange);
-  marketEvents.on("status", onStatusChange);
+  const unsubscribe = subscribeToMarket(id, onMarketEvent);
 
   const heartbeat = setInterval(() => {
     res.write(": heartbeat\n\n");
@@ -60,8 +75,7 @@ router.get("/:id/stream", (req: Request, res: Response) => {
 
   const cleanup = () => {
     clearInterval(heartbeat);
-    marketEvents.off("pool", onPoolChange);
-    marketEvents.off("status", onStatusChange);
+    unsubscribe();
   };
 
   req.on("close", cleanup);
