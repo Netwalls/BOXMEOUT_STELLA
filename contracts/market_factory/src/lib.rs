@@ -3,7 +3,7 @@
 //! BOXMEOUT — MarketFactory Contract
 //! Deploys and tracks Market contract instances.
 //! ============================================================
-use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, String, Symbol, Vec};
 
 use shared::{errors::ContractError, events, types::{MarketInfo, ProtocolConfig}};
 
@@ -21,11 +21,11 @@ const PENDING_ADMIN: &str = "PENDING_ADMIN";
 const ORACLE_WHITELIST: &str = "ORACLE_WL";
 
 // Helper functions for per-market keys (#1191)
-fn market_key(market_id: &Bytes) -> (&str, Bytes) {
+fn market_key(market_id: &Bytes) -> (&'static str, Bytes) {
     ("MARKET", market_id.clone())
 }
 
-fn market_by_index_key(index: u64) -> (&str, u64) {
+fn market_by_index_key(index: u64) -> (&'static str, u64) {
     ("MARKET_BY_IDX", index)
 }
 
@@ -53,6 +53,7 @@ impl MarketFactory {
         min_bet_amount: i128,
         max_bet_amount: i128,
         dispute_window_sec: u64,
+        bet_token: Address,
     ) -> Result<(), ContractError> {
         if env.storage().persistent().has(&ADMIN) {
             return Err(ContractError::AlreadyInitialized);
@@ -66,6 +67,7 @@ impl MarketFactory {
             max_bet_amount,
             dispute_window_sec,
             paused: false,
+            bet_token,
         };
 
         env.storage().persistent().set(&ADMIN, &admin);
@@ -123,16 +125,24 @@ impl MarketFactory {
     }
 
     /// Returns the stored treasury address.
-    pub fn get_treasury(env: Env) -> Address {
+    fn get_treasury_internal(env: &Env) -> Address {
         env.storage().persistent().get(&TREASURY).expect("not initialized")
     }
 
+    pub fn get_treasury(env: Env) -> Address {
+        Self::get_treasury_internal(&env)
+    }
+
     /// Returns the stored protocol configuration.
-    pub fn get_config(env: Env) -> Result<ProtocolConfig, ContractError> {
+    fn get_config_internal(env: &Env) -> Result<ProtocolConfig, ContractError> {
         env.storage()
             .persistent()
             .get(&CONFIG_KEY)
             .ok_or(ContractError::NotInitialized)
+    }
+
+    pub fn get_config(env: Env) -> Result<ProtocolConfig, ContractError> {
+        Self::get_config_internal(&env)
     }
 
     /// Deploys a new Market contract instance and registers its `MarketInfo`.
@@ -184,33 +194,55 @@ impl MarketFactory {
         let market_id_hash = env.crypto().sha256(&preimage);
         let market_id = Bytes::from_array(&env, &market_id_hash);
         let salt = market_id_hash;
+
+        // Load wasm hash from storage
+        let wasm_hash: BytesN<32> = env.storage()
+            .persistent()
+            .get(&MARKET_WASM_HASH)
+            .ok_or(ContractError::NotInitialized)?;
+
         let market_address = env
             .deployer()
             .with_address(env.current_contract_address(), salt)
             .deploy_v2(wasm_hash, ());
 
-        let config = Self::get_config(&env)?;
-        let treasury = Self::get_treasury(&env);
+        let config = Self::get_config_internal(&env)?;
+        let treasury = Self::get_treasury_internal(&env);
+
+        // Prepare Fighter structs from strings
+        use shared::types::Fighter;
+        let fighter_a_struct = Fighter {
+            name: fighter_a.clone(),
+            record: String::new(&env),
+            nationality: String::new(&env),
+            weight_class: String::new(&env),
+        };
+        let fighter_b_struct = Fighter {
+            name: fighter_b.clone(),
+            record: String::new(&env),
+            nationality: String::new(&env),
+            weight_class: String::new(&env),
+        };
 
         env.invoke_contract::<Result<(), ContractError>>(
             &market_address,
             &Symbol::new(&env, "initialize"),
             soroban_sdk::vec![
                 &env,
-                env.current_contract_address().into(),
-                oracle.clone().into(),
-                treasury.clone().into(),
-                config.default_fee_bp.into(),
-                lock_time.into(),
-                end_time.into(),
+                market_id.clone().into_val(&env),
+                fighter_a_struct.into_val(&env),
+                fighter_b_struct.into_val(&env),
+                lock_time.into_val(&env),
+                end_time.into_val(&env),
+                oracle.clone().into_val(&env),
+                env.current_contract_address().into_val(&env),
+                config.default_fee_bp.into_val(&env),
+                config.fee_collector.into_val(&env),
+                config.dispute_window_sec.into_val(&env),
+                treasury.clone().into_val(&env),
+                config.bet_token.into_val(&env),
             ],
         )?;
-
-        let _: () = env.invoke_contract(
-            &treasury,
-            &Symbol::new(&env, "register_market"),
-            soroban_sdk::vec![&env, market_address.clone().into()],
-        );
 
         let info = MarketInfo {
             market_id: market_id.clone(),
@@ -490,7 +522,19 @@ mod tests {
 
     fn init(env: &Env, client: &MarketFactoryClient<'static>, admin: &Address, treasury: &Address) {
         let wasm_hash = env.deployer().upload_contract_wasm(DUMMY_WASM);
-        client.initialize(admin, &wasm_hash, treasury);
+        let fee_collector = Address::generate(env);
+        let bet_token = Address::generate(env);
+        client.initialize(
+            admin,
+            &wasm_hash,
+            treasury,
+            &fee_collector,
+            &100u32,  // default_fee_bp
+            &1_000i128,  // min_bet_amount
+            &1_000_000_000i128,  // max_bet_amount
+            &(7 * 24 * 60 * 60u64),  // dispute_window_sec
+            &bet_token,
+        );
     }
 
     fn whitelisted_oracle(env: &Env, client: &MarketFactoryClient<'static>) -> Address {
@@ -533,7 +577,19 @@ mod tests {
         init(&env, &client, &admin, &treasury);
 
         let wasm_hash = env.deployer().upload_contract_wasm(DUMMY_WASM);
-        let result = client.try_initialize(&admin, &wasm_hash, &treasury);
+        let fee_collector = Address::generate(&env);
+        let bet_token = Address::generate(&env);
+        let result = client.try_initialize(
+            &admin,
+            &wasm_hash,
+            &treasury,
+            &fee_collector,
+            &100u32,
+            &1_000i128,
+            &1_000_000_000i128,
+            &(7 * 24 * 60 * 60u64),
+            &bet_token,
+        );
         assert_eq!(result, Err(Ok(ContractError::AlreadyInitialized)));
     }
 
@@ -866,9 +922,10 @@ mod tests {
         client.add_oracle(&admin, &oracle);
 
         let all = env.events().all();
-        assert!(!all.is_empty(), "expected at least one event");
+        let events = all.events();
+        assert!(!events.is_empty(), "expected at least one event");
         // The last event must be oracle_added.
-        let last = all.events().last().expect("event list was empty");
+        let last = events.last().expect("event list was empty");
         use soroban_sdk::xdr::ContractEventBody;
         let ContractEventBody::V0(body) = &last.body;
         let first_topic = body.topics.first().expect("no topics");
