@@ -1,7 +1,0 @@
-{
-  "/_not-found/page": "app/_not-found/page.js",
-  "/create/page": "app/create/page.js",
-  "/markets/[id]/page": "app/markets/[id]/page.js",
-  "/page": "app/page.js",
-  "/portfolio/page": "app/portfolio/page.js"
-}
