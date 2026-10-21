@@ -67,7 +67,7 @@ export function useMarkets(
     }
     setError(null);
     try {
-      const data = await fetchMarkets(filtersRef.current);
+      const { data } = await fetchMarkets(filtersRef.current);
       if (requestId !== requestIdRef.current) return;
       hasLoadedRef.current = true;
       setMarkets(data);

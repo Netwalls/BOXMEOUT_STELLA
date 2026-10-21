@@ -44,6 +44,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ── Env contract ────────────────────────────────────────────────────────
+      - name: Check .env.example matches the config schema
+        run: node scripts/check-env-example.mjs
+
       # ── Lint ────────────────────────────────────────────────────────────────
       - name: Lint
         run: npm run lint

@@ -1,5 +1,10 @@
 import type { Transaction, xdr } from "@stellar/stellar-sdk";
 import { ContractErrorException, parseContractErrorCode } from "./errors";
+import {
+  NETWORK_PASSPHRASE,
+  SOROBAN_RPC_URL,
+  STELLAR_NETWORK,
+} from "./config";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
@@ -13,28 +18,14 @@ const loadSdk = (): Promise<typeof import("@stellar/stellar-sdk")> => import("@s
  * lowercase so case-sensitive comparisons (e.g. against Freighter's network
  * string) don't trigger a false mismatch banner.
  */
-export const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet").toLowerCase();
-
-/**
- * Canonical network passphrases keyed by normalized network name.
- * Used to derive the passphrase from the network name when an explicit
- * NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE is not provided.
- */
-const NETWORK_PASSPHRASES: Record<string, string> = {
-  testnet: "Test SDF Network ; September 2015",
-  mainnet: "Public Global Stellar Network ; September 2015",
-  futurenet: "Test SDF Future Network ; October 2022",
-};
+export const NETWORK = STELLAR_NETWORK.toLowerCase();
 
 /**
  * The Stellar network passphrase this app is configured to operate against.
  * Wallet network mismatches are detected by comparing against this passphrase.
- * Falls back to the passphrase derived from NETWORK when not explicitly set.
+ * Read from `lib/config.ts`, which derives it from the network when not set.
  */
-export const NETWORK_PASSPHRASE =
-  process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ??
-  NETWORK_PASSPHRASES[NETWORK] ??
-  NETWORK_PASSPHRASES.testnet;
+export { NETWORK_PASSPHRASE };
 
 export const NETWORK_NAME = NETWORK;
 
@@ -50,6 +41,8 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
   return a.toLowerCase() === b.toLowerCase();
 }
 
+export { SOROBAN_RPC_URL };
+
 /**
  * How long a built transaction stays valid, in seconds. Kept short so a signed
  * XDR that is logged, copied or left in a wallet popup cannot be submitted much
@@ -59,9 +52,6 @@ export const TX_TIMEOUT_SECONDS = 120;
 
 /** User-facing message for a transaction that expired before it was submitted. */
 export const TX_EXPIRED_MESSAGE = "This transaction expired before it was submitted. Please try again.";
-
-export const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
 
@@ -288,10 +278,34 @@ export async function buildSorobanInvocation(
   throw decodeContractError(new Error(simulationErrorText(simResult)));
 }
 
+const TX_TIMEOUT_MS = 30_000;
+const TX_INITIAL_DELAY_MS = 1_000;
+const TX_MAX_DELAY_MS = 5_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Extracts the result code (e.g. `txBAD_SEQ`) from the TransactionResult XDR
+ * returned by a rejected `sendTransaction` call.
+ */
+function decodeSendErrorResult(errorResult: unknown): string {
+  try {
+    const result = errorResult as { result: () => { switch: () => { name: string } } };
+
+    return result.result().switch().name;
+  } catch {
+    return "unknown";
+  }
+}
+
 /**
  * Submits a signed XDR transaction to Soroban RPC and waits for ledger confirmation.
- * Polls `getTransaction` with exponential backoff, bounded to a 30s timeout, and
- * reports each state transition (pending/success/failed/timeout) via `onStatus`.
+ * - `TRY_AGAIN_LATER` is re-sent with exponential backoff until the timeout.
+ * - `DUPLICATE` means the network already has the transaction, so it goes straight to polling.
+ * - `ERROR` is decoded from `errorResult` and reported as a failure.
+ * Polls `getTransaction` with exponential backoff, bounded to a 30s timeout. Transient
+ * RPC errors during polling are tolerated until the timeout. Reports each state
+ * transition (pending/success/failed/timeout) via `onStatus`.
  * Returns the TransactionResult containing txHash, ledger, and return value.
  */
 export async function submitTransaction(
@@ -309,14 +323,35 @@ export async function submitTransaction(
   const hash = transaction.hash();
   const txHash = hash.toString("hex");
 
-  const response = await server.sendTransaction(transaction);
+  const submitStartedAt = Date.now();
+  let delay = TX_INITIAL_DELAY_MS;
+  let response = await server.sendTransaction(transaction);
 
-  if (response.status !== "PENDING") {
-    if (isTransactionTooLate(response.errorResult)) {
-      onStatus?.({ status: "failed", txHash, error: TX_EXPIRED_MESSAGE });
-      throw new Error(TX_EXPIRED_MESSAGE);
+  while (response.status === "TRY_AGAIN_LATER") {
+    if (Date.now() - submitStartedAt >= TX_TIMEOUT_MS) {
+      const error = "Transaction submission failed: RPC still busy (TRY_AGAIN_LATER)";
+      onStatus?.({ status: "failed", txHash, error });
+      throw decodeContractError(new Error(error));
     }
 
+    await sleep(delay);
+    delay = Math.min(delay * 2, TX_MAX_DELAY_MS);
+
+    response = await server.sendTransaction(transaction);
+  }
+
+  if (response.status === "ERROR" && isTransactionTooLate(response.errorResult)) {
+    onStatus?.({ status: "failed", txHash, error: TX_EXPIRED_MESSAGE });
+    throw new Error(TX_EXPIRED_MESSAGE);
+  }
+
+  if (response.status === "ERROR") {
+    const error = `Transaction submission failed: ${decodeSendErrorResult(response.errorResult)}`;
+    onStatus?.({ status: "failed", txHash, error });
+    throw decodeContractError(new Error(error));
+  }
+
+  if (response.status !== "PENDING" && response.status !== "DUPLICATE") {
     const error = `Transaction submission failed with status: ${response.status}`;
     onStatus?.({ status: "failed", txHash, error });
     throw decodeContractError(new Error(error));
@@ -324,24 +359,30 @@ export async function submitTransaction(
 
   onStatus?.({ status: "pending", txHash });
 
-  const TIMEOUT_MS = 30_000;
-  const INITIAL_DELAY_MS = 1_000;
-  const MAX_DELAY_MS = 5_000;
-  const startedAt = Date.now();
-  let delay = INITIAL_DELAY_MS;
+  const pollStartedAt = Date.now();
+  delay = TX_INITIAL_DELAY_MS;
 
-  let result = await server.getTransaction(hash);
+  let result;
 
-  while (result.status === "PENDING" || result.status === "NOT_FOUND") {
-    if (Date.now() - startedAt >= TIMEOUT_MS) {
-      onStatus?.({ status: "timeout", txHash });
-      throw new TransactionTimeoutError(txHash, TIMEOUT_MS);
+  for (;;) {
+    try {
+      result = await server.getTransaction(hash);
+    } catch {
+      // A transient RPC error (network blip) must not abort the wait; keep polling until the timeout.
+      result = undefined;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    delay = Math.min(delay * 2, MAX_DELAY_MS);
+    if (result && result.status !== "PENDING" && result.status !== "NOT_FOUND") {
+      break;
+    }
 
-    result = await server.getTransaction(hash);
+    if (Date.now() - pollStartedAt >= TX_TIMEOUT_MS) {
+      onStatus?.({ status: "timeout", txHash });
+      throw new TransactionTimeoutError(txHash, TX_TIMEOUT_MS);
+    }
+
+    await sleep(delay);
+    delay = Math.min(delay * 2, TX_MAX_DELAY_MS);
   }
 
   if (result.status !== "SUCCESS") {
