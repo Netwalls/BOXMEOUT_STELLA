@@ -102,7 +102,7 @@ export function DisputeModal({
     try {
       // Call dispute_resolution on-chain
       const xdr = await buildSorobanInvocation({
-        contractId: market.id,
+        contractId: market.contractAddress,
         method: "dispute_resolution",
         args: [await str(reason.trim())],
         signerAddress: address,

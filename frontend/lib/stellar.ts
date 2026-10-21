@@ -50,6 +50,16 @@ export function isSameNetwork(a: string | null | undefined, b: string | null | u
   return a.toLowerCase() === b.toLowerCase();
 }
 
+/**
+ * How long a built transaction stays valid, in seconds. Kept short so a signed
+ * XDR that is logged, copied or left in a wallet popup cannot be submitted much
+ * later against stale market state.
+ */
+export const TX_TIMEOUT_SECONDS = 120;
+
+/** User-facing message for a transaction that expired before it was submitted. */
+export const TX_EXPIRED_MESSAGE = "This transaction expired before it was submitted. Please try again.";
+
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
@@ -177,6 +187,14 @@ function decodeContractError(error: unknown): unknown {
 }
 
 /**
+ * Reports whether the network rejected a transaction because its validity
+ * window had already closed (`txTooLate`).
+ */
+function isTransactionTooLate(errorResult?: xdr.TransactionResult): boolean {
+  return errorResult?.result().switch().name === "txTooLate";
+}
+
+/**
  * Extracts the raw error string from a failed simulation result.
  */
 function simulationErrorText(simResult: unknown): string {
@@ -192,6 +210,31 @@ function simulationErrorText(simResult: unknown): string {
 
 // ─── FUNCTIONS ────────────────────────────────────────────────────────────────
 
+type StellarSdk = typeof import("@stellar/stellar-sdk");
+
+/**
+ * Converts a contract call argument into an ScVal. Values that are already
+ * ScVals (for example a u64 built with an explicit type) pass through unchanged.
+ */
+function toScVal(sdk: StellarSdk, arg: unknown): xdr.ScVal {
+  if (arg instanceof sdk.xdr.ScVal) return arg;
+  if (typeof arg === "string" && (sdk.StrKey.isValidEd25519PublicKey(arg) || sdk.StrKey.isValidContract(arg))) {
+    return sdk.Address.fromString(arg).toScVal();
+  }
+  return sdk.nativeToScVal(arg as any);
+}
+
+/**
+ * Encodes an unsigned 64-bit integer, such as a Unix timestamp in seconds, as a
+ * u64 ScVal. Plain bigints default to i128, so contract arguments declared as u64
+ * must be encoded with this helper.
+ */
+export async function toU64ScVal(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u64" });
+}
+
 /**
  * Builds a Soroban contract invocation XDR string ready for wallet signing.
  * Fetches the current account sequence number from Horizon.
@@ -200,16 +243,17 @@ function simulationErrorText(simResult: unknown): string {
 export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
-  const { Operation, SorobanRpc, TransactionBuilder, Timeout } = await loadSdk();
+  const sdk = await loadSdk();
+  const { Contract, SorobanRpc, StrKey, TransactionBuilder } = sdk;
+
+  if (!StrKey.isValidContract(params.contractId)) {
+    throw new Error(`Invalid contract address: ${params.contractId}`);
+  }
+
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
-  const operation = Operation.invokeHostFunction({
-    hostFunction: {
-      functionName: params.method,
-      args: params.args,
-    },
-    auth: [],
-  });
+  const contract = new Contract(params.contractId);
+  const operation = contract.call(params.method, ...params.args.map((arg) => toScVal(sdk, arg)));
 
   const account = await server.getAccount(params.signerAddress);
 
@@ -219,7 +263,7 @@ export async function buildSorobanInvocation(
   });
 
   transaction.addOperation(operation);
-  transaction.setTimeout(Timeout.INFINITE);
+  transaction.setTimeout(TX_TIMEOUT_SECONDS);
 
   const tx = transaction.build();
 
@@ -235,13 +279,10 @@ export async function buildSorobanInvocation(
     });
 
     withFee.addOperation(preparedTx.operations[0]);
-    withFee.setTimeout(Timeout.INFINITE);
+    withFee.setTimeout(TX_TIMEOUT_SECONDS);
 
-    // Returned unsigned on purpose: the wallet adds the real signature, so no
-    // placeholder signature is attached here.
-    const finalTx = withFee.build();
-
-    return finalTx.toXDR();
+    // Left unsigned: the connected wallet signs the XDR returned here.
+    return withFee.build().toXDR();
   }
 
   throw decodeContractError(new Error(simulationErrorText(simResult)));
@@ -271,6 +312,11 @@ export async function submitTransaction(
   const response = await server.sendTransaction(transaction);
 
   if (response.status !== "PENDING") {
+    if (isTransactionTooLate(response.errorResult)) {
+      onStatus?.({ status: "failed", txHash, error: TX_EXPIRED_MESSAGE });
+      throw new Error(TX_EXPIRED_MESSAGE);
+    }
+
     const error = `Transaction submission failed with status: ${response.status}`;
     onStatus?.({ status: "failed", txHash, error });
     throw decodeContractError(new Error(error));
