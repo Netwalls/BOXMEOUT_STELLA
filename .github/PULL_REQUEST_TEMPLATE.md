@@ -16,7 +16,7 @@ Closes #
 
 ## Checklist
 
-- [ ] I have read `docs/contributing.md`
+- [ ] I have read `CONTRIBUTING.md`
 - [ ] My code follows the naming conventions in the guidelines
 - [ ] I have added or updated tests for my changes
 - [ ] All tests pass locally (`cargo test` / `npm test`)
