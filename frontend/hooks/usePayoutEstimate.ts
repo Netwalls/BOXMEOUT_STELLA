@@ -19,10 +19,6 @@ export function usePayoutEstimate(
 ): UsePayoutEstimateResult {
   const [estimate, setEstimate] = useState<bigint | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>();
-
-  useEffect(() => {
-    // Clear previous timeout
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {

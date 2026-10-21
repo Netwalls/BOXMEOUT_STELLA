@@ -15,13 +15,27 @@
  *   TREASURY_CONTRACT_ID       - Treasury contract address
  *   DATABASE_URL               - PostgreSQL connection string
  *   REDIS_URL                  - Redis connection URL
+ *
+ * Optional:
+ *   INDEXER_METRICS_PORT       - Port for the Prometheus /metrics endpoint (default 9100)
  */
+import express from "express";
 import { startIndexer, stopIndexer } from "../services/indexer.service";
 import { db } from "../db";
 import { redis } from "../lib/redis";
 import { logger } from "../logger";
+import { metricsRouter } from "../metrics";
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+
+// B-112: the indexer runs in its own process, so it serves its own /metrics for
+// Prometheus. Without this the lag gauges and histograms are not scrapeable.
+const METRICS_PORT = parseInt(process.env.INDEXER_METRICS_PORT ?? "9100", 10);
+const metricsServer = express()
+  .use(metricsRouter)
+  .listen(METRICS_PORT, () => {
+    logger.info({ port: METRICS_PORT }, "Indexer metrics endpoint listening");
+  });
 
 startIndexer().catch((err) => {
   logger.fatal({ err }, "Indexer crashed");
@@ -59,11 +73,14 @@ async function shutdown(signal: string): Promise<void> {
     await stopIndexer();
     logger.info("Indexer loop stopped");
 
-    // 2. Close Prisma connection pool.
+    // 2. Stop serving metrics.
+    await new Promise<void>((resolve) => metricsServer.close(() => resolve()));
+
+    // 3. Close Prisma connection pool.
     await db.$disconnect();
     logger.info("Prisma disconnected");
 
-    // 3. Close the shared Redis connection.
+    // 4. Close the shared Redis connection.
     await redis.quit();
     logger.info("Redis connection closed");
 

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TxStatus = "pending" | "success" | "error";
+export type TransactionStatus = TxStatus;
 
 export interface TransactionStatusModalProps {
   /** Whether the modal is visible */
@@ -140,22 +142,15 @@ export function TransactionStatusModal({
   explorerBaseUrl = DEFAULT_EXPLORER,
 }: TransactionStatusModalProps): JSX.Element | null {
   const canDismiss = status === "success" || status === "error";
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [announcement, setAnnouncement] = useState("");
 
   const handleClose = useCallback(() => {
-    if (canDismiss) onClose();
-  }, [canDismiss, onClose]);
-
-  // Keyboard ESC to close (only when dismissable)
-  useEffect(() => {
-    if (!isOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") handleClose();
+    if (canDismiss) {
+      setAnnouncement("");
+      onClose();
     }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, handleClose]);
-
-  if (!isOpen) return null;
+  }, [canDismiss, onClose]);
 
   // ── Derived display content ──
   const defaultTitles: Record<TxStatus, string> = {
@@ -168,6 +163,33 @@ export function TransactionStatusModal({
   const friendlyError = humanizeError(errorMessage);
   const explorerUrl = txHash ? buildExplorerUrl(txHash, explorerBaseUrl) : null;
 
+  // Announce status changes to assistive technology
+  useEffect(() => {
+    if (!isOpen) {
+      setAnnouncement("");
+      return;
+    }
+    if (status === "pending") {
+      setAnnouncement(`${displayTitle}. Please keep this window open while your transaction is confirmed.`);
+    } else if (status === "success") {
+      setAnnouncement(`${displayTitle}. Your transaction was successfully confirmed on-chain.`);
+    } else if (status === "error") {
+      setAnnouncement(`${displayTitle}. ${friendlyError}`);
+    }
+  }, [isOpen, status, displayTitle, friendlyError]);
+
+  useAccessibleDialog({
+    isOpen,
+    containerRef: dialogRef,
+    onClose: handleClose,
+    isBusy: status === "pending",
+    onBlockedEscape: () => {
+      setAnnouncement("Transaction is in progress. Please keep this window open while confirmation completes.");
+    },
+  });
+
+  if (!isOpen) return null;
+
   return createPortal(
     /* Backdrop */
     <div
@@ -177,13 +199,19 @@ export function TransactionStatusModal({
     >
       {/* Panel */}
       <div
-        className="bg-gray-900 rounded-2xl border border-gray-700 p-8 w-full max-w-sm mx-4 space-y-5 text-center shadow-2xl"
+        ref={dialogRef}
+        tabIndex={-1}
+        className="bg-gray-900 rounded-2xl border border-gray-700 p-8 w-full max-w-sm mx-4 space-y-5 text-center shadow-2xl focus:outline-none"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="tx-modal-title"
         aria-describedby="tx-modal-body"
       >
+        {/* Screen reader announcement region for live status changes & escape blocks */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </div>
         {/* Icon */}
         <div className="flex justify-center">
           {status === "pending" && <Spinner />}

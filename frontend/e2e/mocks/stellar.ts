@@ -12,8 +12,12 @@ export async function buildSorobanInvocation(params: SorobanInvokeParams): Promi
   return `E2E_UNSIGNED:${params.method}`;
 }
 
-export async function submitTransaction(_signedXdr: string): Promise<TransactionResult> {
-  return { txHash: E2E_TX_HASH, ledger: 1, returnValue: E2E_CLAIM_PAYOUT };
+// create_market returns the new market's id; every other call returns a payout
+export const E2E_CREATED_MARKET_ID = "e2e-created";
+
+export async function submitTransaction(signedXdr: string): Promise<TransactionResult> {
+  const returnValue = signedXdr.includes("create_market") ? E2E_CREATED_MARKET_ID : E2E_CLAIM_PAYOUT;
+  return { txHash: E2E_TX_HASH, ledger: 1, returnValue };
 }
 
 export async function decodeScVal(scVal: unknown): Promise<unknown> {

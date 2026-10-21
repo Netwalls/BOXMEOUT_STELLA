@@ -1,5 +1,5 @@
 import type { Transaction, xdr } from "@stellar/stellar-sdk";
-import { ContractError, ContractErrorException, parseContractErrorCode } from "./errors";
+import { ContractErrorException, parseContractErrorCode } from "./errors";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
@@ -63,6 +63,44 @@ export const TX_EXPIRED_MESSAGE = "This transaction expired before it was submit
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
+
+/**
+ * Decides whether the Soroban RPC client may use plain HTTP for `url`.
+ * Plain HTTP is allowed only for localhost/127.0.0.1 outside production and
+ * off mainnet. Any other non-HTTPS URL throws, so transactions cannot be sent
+ * unencrypted by a misconfigured environment variable.
+ */
+export function allowHttpForRpc(
+  url: string,
+  options: { production?: boolean; network?: string } = {}
+): boolean {
+  const production = options.production ?? process.env.NODE_ENV === "production";
+  const network = (options.network ?? NETWORK).toLowerCase();
+  const parsed = new URL(url);
+
+  if (parsed.protocol === "https:") {
+    return false;
+  }
+
+  const isLocalDevelopment =
+    parsed.protocol === "http:" &&
+    LOCAL_HOSTNAMES.has(parsed.hostname) &&
+    !production &&
+    network !== "mainnet";
+
+  if (isLocalDevelopment) {
+    return true;
+  }
+
+  throw new Error(`Insecure Soroban RPC URL rejected (HTTPS required): ${url}`);
+}
+
+/** Options for `new SorobanRpc.Server`, validated against the configured RPC URL. */
+function rpcServerOptions(): { allowHttp: boolean } {
+  return { allowHttp: allowHttpForRpc(SOROBAN_RPC_URL) };
+}
+
 /**
  * Base URL for the stellar.expert explorer, derived from the configured network.
  * Used to link a transaction hash to its on-chain record.
@@ -79,12 +117,19 @@ export function stellarExpertTxUrl(txHash: string): string {
   return `${STELLAR_EXPERT_BASE_URL}/tx/${txHash}`;
 }
 
+/**
+ * Builds a stellar.expert URL for a given contract address / ID.
+ */
+export function stellarExpertContractUrl(contractId: string): string {
+  return `${STELLAR_EXPERT_BASE_URL}/contract/${contractId}`;
+}
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 export interface SorobanInvokeParams {
   contractId: string;
   method: string;
-  args: unknown[];
+  args: xdr.ScVal[];
   signerAddress: string;
 }
 
@@ -205,9 +250,7 @@ export async function buildSorobanInvocation(
     throw new Error(`Invalid contract address: ${params.contractId}`);
   }
 
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
-    allowHttp: true,
-  });
+  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const contract = new Contract(params.contractId);
   const operation = contract.call(params.method, ...params.args.map((arg) => toScVal(sdk, arg)));
@@ -256,9 +299,7 @@ export async function submitTransaction(
   onStatus?: (update: TransactionStatusUpdate) => void
 ): Promise<TransactionResult> {
   const { SorobanRpc, TransactionBuilder } = await loadSdk();
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, {
-    allowHttp: true,
-  });
+  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const transaction = TransactionBuilder.fromXDR(
     signedXdr,
@@ -330,7 +371,7 @@ export async function decodeScVal(scVal: unknown): Promise<unknown> {
   const { scValToNative } = await loadSdk();
 
   try {
-    return scValToNative(scVal as any);
+    return scValToNative(scVal as xdr.ScVal);
   } catch (error) {
     if (error instanceof Error && error.message.includes("LedgerKey")) {
       return null;
@@ -345,35 +386,135 @@ export async function decodeScVal(scVal: unknown): Promise<unknown> {
   }
 }
 
-/**
- * Converts a XLM amount in stroops (bigint) to a human-readable string.
- * e.g. 10_000_000n -> "1"
- */
-export function stroopsToXlm(stroops: bigint): string {
-  const xlm = Number(stroops) / 10000000;
+// ─── SCVAL ARGUMENT HELPERS ───────────────────────────────────────────────────
+// Each helper states the Soroban type explicitly, so no value is guessed at
+// runtime. They are async because the SDK is loaded lazily.
 
-  return xlm.toString();
+/** Soroban `i128`. Keeps amounts above Number.MAX_SAFE_INTEGER exact. */
+export async function i128(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "i128" });
+}
+
+/** Soroban `u64`. */
+export async function u64(value: bigint): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u64" });
+}
+
+/** Soroban `u32`. */
+export async function u32(value: number): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "u32" });
+}
+
+/** Soroban `Address` from a G… account or C… contract strkey. */
+export async function address(strkey: string): Promise<xdr.ScVal> {
+  const { Address } = await loadSdk();
+
+  return new Address(strkey).toScVal();
+}
+
+/** Soroban `Bytes` from a hex string. Rejects odd length and non-hex characters. */
+export async function bytes(hex: string): Promise<xdr.ScVal> {
+  if (!/^([0-9a-fA-F]{2})*$/.test(hex)) {
+    throw new TypeError("bytes() expects an even-length hex string");
+  }
+
+  const { xdr } = await loadSdk();
+
+  return xdr.ScVal.scvBytes(Buffer.from(hex, "hex"));
+}
+
+/** Soroban `Symbol`. */
+export async function sym(value: string): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "symbol" });
+}
+
+/** Soroban `String`. */
+export async function str(value: string): Promise<xdr.ScVal> {
+  const { nativeToScVal } = await loadSdk();
+
+  return nativeToScVal(value, { type: "string" });
+}
+
+const STROOPS_PER_XLM = 10_000_000n;
+const STELLAR_DECIMALS = 7;
+const I128_MAX = 2n ** 127n - 1n;
+
+/**
+ * Thrown by `xlmToStroops` when user input cannot be converted exactly.
+ * `reason` lets callers pick a message without parsing the text.
+ */
+export class InvalidAmountError extends Error {
+  readonly reason: "empty" | "negative" | "non-numeric" | "over-precision" | "out-of-range";
+
+  constructor(reason: InvalidAmountError["reason"], message: string) {
+    super(message);
+    this.name = "InvalidAmountError";
+    this.reason = reason;
+  }
 }
 
 /**
- * Converts a human-readable XLM string to stroops (bigint).
+ * Converts a XLM amount in stroops (bigint) to an exact decimal string.
+ * Uses BigInt arithmetic only, so no float artefacts appear.
+ * e.g. 10_000_000n -> "1", 1n -> "0.0000001", -15_000_000n -> "-1.5"
+ */
+export function stroopsToXlm(stroops: bigint): string {
+  const sign = stroops < 0n ? "-" : "";
+  const magnitude = stroops < 0n ? -stroops : stroops;
+  const whole = magnitude / STROOPS_PER_XLM;
+  const fraction = (magnitude % STROOPS_PER_XLM)
+    .toString()
+    .padStart(STELLAR_DECIMALS, "0")
+    .replace(/0+$/, "");
+
+  return `${sign}${whole}${fraction ? `.${fraction}` : ""}`;
+}
+
+/**
+ * Converts a human-readable XLM string to stroops (bigint), exactly.
  * e.g. "1.5" -> 15_000_000n
+ * Throws `InvalidAmountError` for empty, negative, non-numeric, over-precise
+ * (more than 7 significant decimals) or out-of-range input.
  */
 export function xlmToStroops(xlm: string): bigint {
-  const parts = xlm.split(".");
-  const integer = BigInt(parts[0] || "0");
-  let fractional = "0";
+  const input = xlm.trim();
 
-  if (parts.length > 1) {
-    fractional = parts[1];
-    if (fractional.length > 7) {
-      fractional = fractional.slice(0, 7);
-    } else if (fractional.length < 7) {
-      fractional = fractional.padEnd(7, "0");
-    }
+  if (input === "") {
+    throw new InvalidAmountError("empty", "Amount is required");
   }
 
-  const stroops = integer * BigInt(10000000) + BigInt(fractional);
+  if (input.startsWith("-")) {
+    throw new InvalidAmountError("negative", "Amount cannot be negative");
+  }
+
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(input)) {
+    throw new InvalidAmountError("non-numeric", `"${input}" is not a valid amount`);
+  }
+
+  const [whole, fraction = ""] = input.split(".");
+
+  if (/[1-9]/.test(fraction.slice(STELLAR_DECIMALS))) {
+    throw new InvalidAmountError(
+      "over-precision",
+      `Amount supports at most ${STELLAR_DECIMALS} decimal places`
+    );
+  }
+
+  const stroops =
+    BigInt(whole || "0") * STROOPS_PER_XLM +
+    BigInt(fraction.slice(0, STELLAR_DECIMALS).padEnd(STELLAR_DECIMALS, "0"));
+
+  if (stroops > I128_MAX) {
+    throw new InvalidAmountError("out-of-range", "Amount is too large");
+  }
 
   return stroops;
 }

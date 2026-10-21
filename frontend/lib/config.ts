@@ -25,6 +25,7 @@ const envSchema = z.object({
       message: "NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID must be a Soroban contract address (C...)",
     })
     .optional(),
+  NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
@@ -36,6 +37,7 @@ function loadConfig(): EnvConfig {
     NEXT_PUBLIC_SOROBAN_RPC_URL: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL,
     NEXT_PUBLIC_MARKET_CONTRACT_ID: process.env.NEXT_PUBLIC_MARKET_CONTRACT_ID,
     NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID: process.env.NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   });
 
   if (!parsed.success) {
@@ -69,3 +71,10 @@ export const MARKET_CONTRACT_ID: string | undefined =
   config.NEXT_PUBLIC_MARKET_CONTRACT_ID;
 export const MARKET_FACTORY_CONTRACT_ID: string | undefined =
   config.NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID;
+export const SITE_URL: string =
+  config.NEXT_PUBLIC_SITE_URL ||
+  (process.env.NEXT_PUBLIC_VERCEL_URL
+    ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+    : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");

@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import Redis from "ioredis";
+import { db as prisma } from "../db";
 
-const prisma = new PrismaClient();
 const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
 
 const CACHE_TTL = 10; // seconds
@@ -13,7 +12,9 @@ export interface SearchResult {
 
 /**
  * Full-text search across question + description using tsvector.
- * Results are sorted by relevance and cached in Redis for 10 s.
+ * Uses websearch_to_tsquery, which accepts quoted phrases, "or" and "-" and
+ * never raises a syntax error on arbitrary user input. q is always a bound
+ * parameter. Results are sorted by relevance and cached in Redis for 10 s.
  */
 export async function searchMarkets(
   q: string,
@@ -28,16 +29,16 @@ export async function searchMarkets(
 
   const [rows, countRows] = await Promise.all([
     prisma.$queryRaw<Record<string, unknown>[]>`
-      SELECT *, ts_rank("tsVector", plainto_tsquery('english', ${q})) AS rank
+      SELECT *, ts_rank("tsVector", websearch_to_tsquery('english', ${q})) AS rank
       FROM "Market"
-      WHERE "tsVector" @@ plainto_tsquery('english', ${q})
+      WHERE "tsVector" @@ websearch_to_tsquery('english', ${q})
       ORDER BY rank DESC
       LIMIT ${limit} OFFSET ${offset}
     `,
     prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*)::bigint AS count
       FROM "Market"
-      WHERE "tsVector" @@ plainto_tsquery('english', ${q})
+      WHERE "tsVector" @@ websearch_to_tsquery('english', ${q})
     `,
   ]);
 

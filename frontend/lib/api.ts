@@ -180,6 +180,15 @@ export async function fetchMarketBets(market_id: string, filters?: MarketBetsFil
  * GET /api/bets/:address
  * Fetches a user's full bet history.
  */
+/**
+ * GET /api/users/:address/bets
+ * One page of a wallet's bet history, newest first. Pages are 1-based.
+ */
+export async function fetchUserBets(address: string, page: number, limit: number): Promise<Bet[]> {
+  const qs = toQueryString({ page, limit });
+  return apiFetch<Bet[]>(`/api/users/${address}/bets${qs}`);
+}
+
 export async function fetchBetsByAddress(address: string): Promise<Bet[]> {
   return apiFetch<Bet[]>(`/api/bets/${address}`);
 }
