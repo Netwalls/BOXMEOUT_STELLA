@@ -13,7 +13,7 @@ const mockClaimRefund = jest.fn();
 
 const fighter = (name: string) => ({ name, record: "10-0", nationality: "USA", weightClass: "Heavyweight" });
 
-const makeMarket = (overrides: Partial<{ status: string; outcome: string | null }> = {}) =>
+const makeMarket = (overrides: Partial<{ status: string; outcome: string | null; resolvedAt: string | null }> = {}) =>
   ({
     id: "market-1",
     contractAddress: "market-1",
@@ -28,6 +28,7 @@ const makeMarket = (overrides: Partial<{ status: string; outcome: string | null 
     totalPool: "0",
     oracleAddress: "GORACLE",
     createdBy: "GCREATOR",
+    resolvedAt: null as string | null,
     ...overrides,
   }) as never;
 
@@ -135,5 +136,54 @@ describe("ClaimButton", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Claim Winnings" })).toBeEnabled());
     expect(onClaimed).not.toHaveBeenCalled();
+  });
+
+  // ── Dispute window blocking (merged from resolution test) ────────────────
+
+  const RESOLVED_AT = "2026-10-01T12:00:00Z";
+  const RESOLVED_AT_MS = new Date(RESOLVED_AT).getTime();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  it("shows a disabled claim with the reason during the dispute window", () => {
+    jest.spyOn(Date, "now").mockReturnValue(RESOLVED_AT_MS + 1000);
+    render(
+      <ClaimButton
+        bet={makeBet()}
+        market={makeMarket({ resolvedAt: RESOLVED_AT })}
+        onClaimed={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Claim Winnings" })).toBeDisabled();
+    expect(screen.getByText("Claimable after the dispute window closes.")).toBeInTheDocument();
+    jest.restoreAllMocks();
+  });
+
+  it("shows a disabled claim with the reason while the result is disputed", () => {
+    render(
+      <ClaimButton
+        bet={makeBet()}
+        market={makeMarket({ status: "Disputed", outcome: "FighterA" })}
+        onClaimed={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Claim Winnings" })).toBeDisabled();
+    expect(screen.getByText(/decided by an admin/)).toBeInTheDocument();
+  });
+
+  it("enables the claim once the dispute window has passed", () => {
+    jest.spyOn(Date, "now").mockReturnValue(RESOLVED_AT_MS + DAY_MS + 1);
+    render(
+      <ClaimButton
+        bet={makeBet()}
+        market={makeMarket({ resolvedAt: RESOLVED_AT })}
+        onClaimed={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Claim Winnings" })).toBeEnabled();
+    expect(screen.queryByText(/dispute window/)).not.toBeInTheDocument();
+    jest.restoreAllMocks();
   });
 });

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DisputeModal } from "./DisputeModal";
 import { Market } from "@/lib/api";
+import * as stellar from "@/lib/stellar";
 
 jest.mock("@/hooks/useWallet", () => ({
   useWallet: jest.fn(() => ({
@@ -130,6 +131,20 @@ describe("DisputeModal", () => {
     render(<DisputeModal market={buildMarket()} isOpen onDisputed={jest.fn()} onClose={onClose} />);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("builds dispute_resolution against the market contract address", async () => {
+    const user = userEvent.setup();
+    render(
+      <DisputeModal market={buildMarket()} userBets={mockUserBets} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
+    );
+    await user.type(screen.getByRole("textbox"), "This is a valid reason with enough characters.");
+    await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
+    await waitFor(() =>
+      expect(stellar.buildSorobanInvocation).toHaveBeenCalledWith(
+        expect.objectContaining({ contractId: "CA1", method: "dispute_resolution" })
+      )
+    );
   });
 
   it("matches snapshot when open within window", () => {
