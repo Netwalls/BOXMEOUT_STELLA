@@ -21,6 +21,8 @@ export interface Market {
   fighterB: Fighter;
   scheduledAt: string;
   bettingEndsAt: string;
+  /** ISO time the outcome was recorded; absent on markets not yet resolved or from older API responses */
+  resolvedAt?: string | null;
   status: MarketStatus;
   outcome: Outcome | null;
   poolA: string;  // BigInt serialized as string

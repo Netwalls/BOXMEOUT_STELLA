@@ -2,7 +2,8 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { Bet, BetSide, Market } from "@/lib/api";
 import { BetAmountInput } from "./BetAmountInput";
-import { TransactionStatusModal, TransactionStatus } from "./TransactionStatusModal";
+import { TransactionStatusModal } from "./TransactionStatusModal";
+import type { TransactionStatus } from "@/lib/stellar";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
 
 const MIN_AMOUNT_XLM = 1;

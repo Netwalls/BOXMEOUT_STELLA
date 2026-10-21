@@ -15,6 +15,8 @@ import { CountdownTimer } from "@/components/CountdownTimer";
 import { DisputeModal } from "@/components/DisputeModal";
 import { useWallet } from "@/hooks/useWallet";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { ResolutionTimeline } from "@/components/ResolutionTimeline";
+import { getResolutionStage } from "@/lib/resolution";
 import { truncateAddress, stellarExpertContractUrl } from "@/lib/stellar";
 
 // recharts is only needed on this page; keep it out of the shared bundle
@@ -26,15 +28,6 @@ const MarketOddsChart = dynamic(
   () => import("@/components/MarketOddsChart").then((m) => m.MarketOddsChart),
   { ssr: false, loading: () => <LoadingSkeleton variant="chart" /> }
 );
-
-const DISPUTE_WINDOW_SEC = 24 * 60 * 60; // 24 h
-
-function isInDisputeWindow(market: Market): boolean {
-  if (market.status !== "Resolved") return false;
-  // scheduledAt is the closest proxy for resolvedAt we have on the type
-  const resolvedAt = new Date(market.scheduledAt).getTime();
-  return Date.now() - resolvedAt < DISPUTE_WINDOW_SEC * 1000;
-}
 
 function BetHistoryRow({ bet }: { bet: Bet }): JSX.Element {
   const xlm = (Number(BigInt(bet.amount)) / 1e7).toFixed(2);
@@ -274,6 +267,8 @@ export function MarketDetailClient({
         expiredLabel="Locked"
       />
 
+      <ResolutionTimeline market={m} />
+
       {/* Fighter cards */}
       <div className="flex flex-col md:flex-row gap-4">
         <FighterCard fighter={m.fighterA} side="A" poolAmount={poolA} impliedOdds={oddsA} />
@@ -317,7 +312,7 @@ export function MarketDetailClient({
       )}
 
       {/* Dispute section */}
-      {isInDisputeWindow(m) && !showDispute && (
+      {getResolutionStage(m) === "dispute-window" && !showDispute && (
         <button
           onClick={() => setShowDispute(true)}
           className="w-full rounded-xl border border-amber-500 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
