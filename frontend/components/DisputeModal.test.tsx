@@ -4,7 +4,34 @@ import userEvent from "@testing-library/user-event";
 import { DisputeModal } from "./DisputeModal";
 import { Market } from "@/lib/api";
 
+jest.mock("@/hooks/useWallet", () => ({
+  useWallet: jest.fn(() => ({
+    address: "GBX...",
+    isConnected: true,
+    walletNotInstalled: false,
+    networkPassphrase: null,
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    signTransaction: jest.fn().mockResolvedValue("signed-xdr"),
+  })),
+}));
+
+jest.mock("@/components/ToastProvider", () => ({
+  useToast: () => ({
+    addToast: jest.fn(),
+  }),
+}));
+
+jest.mock("@/lib/stellar", () => ({
+  buildSorobanInvocation: jest.fn().mockResolvedValue("mock-xdr"),
+  submitTransaction: jest.fn().mockResolvedValue({ status: "SUCCESS" }),
+}));
+
 const now = Date.now();
+
+const mockUserBets = [
+  { id: "b1", marketId: "m1", user: "GBX...", side: "A" as const, amount: "100", timestamp: now },
+];
 
 const buildMarket = (overrides: Partial<Market> = {}): Market => ({
   id: "m1",
@@ -70,7 +97,7 @@ describe("DisputeModal", () => {
   it("shows validation error when reason is too short", async () => {
     const user = userEvent.setup();
     render(
-      <DisputeModal market={buildMarket()} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
+      <DisputeModal market={buildMarket()} userBets={mockUserBets} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
     );
     await user.type(screen.getByRole("textbox"), "Too short");
     await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
@@ -81,7 +108,7 @@ describe("DisputeModal", () => {
     const user = userEvent.setup();
     const onDisputed = jest.fn();
     render(
-      <DisputeModal market={buildMarket()} isOpen onDisputed={onDisputed} onClose={jest.fn()} />
+      <DisputeModal market={buildMarket()} userBets={mockUserBets} isOpen onDisputed={onDisputed} onClose={jest.fn()} />
     );
     await user.type(screen.getByRole("textbox"), "This is a valid reason with enough characters.");
     await user.click(screen.getByRole("button", { name: /Submit Dispute/i }));
@@ -106,11 +133,14 @@ describe("DisputeModal", () => {
   });
 
   it("matches snapshot when open within window", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(now);
     const market = buildMarket();
-    const { baseElement } = render(
+    render(
       <DisputeModal market={market} isOpen onDisputed={jest.fn()} onClose={jest.fn()} />
     );
     expect(document.body.querySelector('[role="dialog"]')).toMatchSnapshot();
+    jest.useRealTimers();
   });
 
   it("matches snapshot when not visible (outside window)", () => {

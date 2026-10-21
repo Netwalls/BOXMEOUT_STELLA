@@ -12,9 +12,7 @@
 //!   5. Winners claim their proportional payouts
 //!   6. Assert final balances match expected payouts *exactly*
 
-use market::types::{
-    BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig,
-};
+use market::types::{BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig};
 use market::{DataKey, MarketContract, MarketContractClient};
 use soroban_sdk::{
     contract, contractimpl,

@@ -93,7 +93,7 @@ describe("GET /api/markets", () => {
       expect.any(Object),
       { page: 2, limit: 5 }
     );
-    expect(res.body.page).toBe(2);
+    expect(res.body.meta.page).toBe(2);
     expect(res.body.limit).toBe(5);
   });
 
@@ -125,7 +125,7 @@ describe("GET /api/markets/:id", () => {
     const res = await request(createTestApp()).get("/api/markets/nonexistent");
 
     expect(res.status).toBe(404);
-    expect(res.body.error).toBe("Market not found");
+    expect(res.body.error.message).toBe("Market not found");
   });
 
   it("serializes BigInt fields as strings", async () => {

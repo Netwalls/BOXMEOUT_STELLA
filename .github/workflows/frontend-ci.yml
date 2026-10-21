@@ -36,6 +36,11 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Verify package-lock sync
+        run: |
+          npm install --package-lock-only
+          git diff --exit-code package-lock.json
+
       - name: Install dependencies
         run: npm ci
 
@@ -66,6 +71,10 @@ jobs:
           NEXT_PUBLIC_SOROBAN_RPC_URL: "https://soroban-testnet.stellar.org"
           NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID: "CDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
+      # ── Bundle size budget ───────────────────────────────────────────────────
+      - name: Check bundle budget
+        run: npm run check:bundle
+
       # ── Storybook build ──────────────────────────────────────────────────────
       - name: Build Storybook
         run: npm run build-storybook
@@ -88,6 +97,16 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
+
+      # Fail fast when package.json and package-lock.json disagree. Regenerating
+      # the lock must leave it unchanged; otherwise the lock needs updating.
+      - name: Verify package-lock.json is in sync
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          git diff --exit-code -- package-lock.json || {
+            echo "::error::package-lock.json is out of sync with package.json. Run 'npm install' in frontend/ and commit the lock."
+            exit 1
+          }
 
       - name: Install dependencies
         run: npm ci

@@ -1,9 +1,12 @@
 import { Router } from "express";
 import {
   getPendingResolutionsHandler,
-  resolveMarketHandler,
   resolveDisputeHandler,
 } from "../controllers/market.controller";
+import {
+  resolveMarketByIdHandler,
+  resolveMarketHandler,
+} from "../controllers/marketResolution.controller";
 import {
   getAllOraclesHandler,
   createOracleHandler,
@@ -11,6 +14,7 @@ import {
   deleteOracleHandler,
 } from "../controllers/oracle.controller";
 import { getAuditLogsHandler } from "../controllers/audit.controller";
+import { reconcileMarketHandler } from "../controllers/market-reconciliation.controller";
 import {
   getFailedSubmissionsHandler,
   retryFailedSubmissionHandler,
@@ -51,8 +55,10 @@ const oracleSubmissionLimiter = rateLimitMiddleware({
 
 // Market management
 router.get("/markets/pending", getPendingResolutionsHandler);
-router.post("/markets/resolve", marketResolutionLimiter, resolveMarketHandler);
+// Registered before "/markets/:marketId/resolve" so "dispute" is not captured as a market id.
 router.post("/markets/dispute/resolve", marketResolutionLimiter, resolveDisputeHandler);
+// #1412: reconcile one market against on-chain state (report-only unless autoRepair).
+router.post("/markets/:id/reconcile", reconcileMarketHandler);
 
 // Oracle address management (Issue #455)
 router.get("/oracles", getAllOraclesHandler);

@@ -40,7 +40,50 @@ const markets = {
     oracleAddress: "GORACLE",
     createdBy: "GCREATOR",
   },
+  "e2e-cancelled": {
+    id: "e2e-cancelled",
+    contractAddress: "CE2ECANCELLED",
+    fighterA: fighter("Ana Costa", "11-2"),
+    fighterB: fighter("Ben Hart", "10-3"),
+    scheduledAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+    bettingEndsAt: new Date(Date.now() - 6 * 86_400_000).toISOString(),
+    status: "Cancelled",
+    outcome: null,
+    poolA: "300000000",
+    poolB: "200000000",
+    totalPool: "500000000",
+    oracleAddress: "GORACLE",
+    createdBy: "GCREATOR",
+  },
+  // Resolved an hour ago, so it is inside the 24-hour dispute window
+  "e2e-disputable": {
+    id: "e2e-disputable",
+    contractAddress: "CE2EDISPUTABLE",
+    fighterA: fighter("Ivy Brooks", "17-0"),
+    fighterB: fighter("Dan Kowal", "16-1"),
+    scheduledAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+    bettingEndsAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    status: "Resolved",
+    outcome: "FighterB",
+    poolA: "400000000",
+    poolB: "600000000",
+    totalPool: "1000000000",
+    oracleAddress: "GORACLE",
+    createdBy: "GCREATOR",
+  },
 };
+
+// Markets waiting for an admin to pick an outcome
+const pendingResolutions = [
+  {
+    marketId: "e2e-pending",
+    contractAddress: "CE2EPENDING",
+    fighterA: fighter("Sam Reyes", "14-2"),
+    fighterB: fighter("Tom Okafor", "13-3"),
+    scheduledAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    status: "Locked",
+  },
+];
 
 const bets = [
   {
@@ -50,6 +93,26 @@ const bets = [
     side: "FighterA",
     amount: "100000000",
     placedAt: new Date(Date.now() - 4 * 86_400_000).toISOString(),
+    claimed: false,
+    payout: null,
+  },
+  {
+    id: "e2e-bet-refund",
+    marketId: "e2e-cancelled",
+    bettor: E2E_ADDRESS,
+    side: "FighterA",
+    amount: "50000000",
+    placedAt: new Date(Date.now() - 6 * 86_400_000).toISOString(),
+    claimed: false,
+    payout: null,
+  },
+  {
+    id: "e2e-bet-dispute",
+    marketId: "e2e-disputable",
+    bettor: E2E_ADDRESS,
+    side: "FighterA",
+    amount: "100000000",
+    placedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
     claimed: false,
     payout: null,
   },
@@ -78,6 +141,9 @@ function oddsHistory(market) {
 function route(pathname) {
   let m;
   if (pathname === "/api/markets") return Object.values(markets);
+  if (pathname === "/api/admin/markets/pending") return pendingResolutions;
+  if (pathname === "/api/admin/oracles") return [];
+  if (/^\/api\/admin\/markets\/[^/]+\/resolve$/.test(pathname)) return { success: true };
   if ((m = pathname.match(/^\/api\/markets\/([^/]+)$/))) return markets[m[1]];
   if ((m = pathname.match(/^\/api\/markets\/([^/]+)\/bets$/))) return bets.filter((b) => b.marketId === m[1]);
   if ((m = pathname.match(/^\/api\/markets\/([^/]+)\/stats$/))) return markets[m[1]] && stats(markets[m[1]]);

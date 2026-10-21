@@ -2,7 +2,7 @@
 
 pub mod types;
 
-use shared::{events, market_id_to_u64};
+use shared::{events, errors::ContractError, market_id_to_u64};
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, Bytes, Env, IntoVal, String, Symbol, Vec,
 };
@@ -27,6 +27,11 @@ pub const MAX_BETS_PER_ADDRESS: u32 = 50;
 /// to claim. Once it elapses, `sweep_dust` may move rounding residue to fees.
 pub const CLAIM_WINDOW_SEC: u64 = 30 * 24 * 60 * 60;
 
+/// Maximum length in bytes of a dispute reason. Bounds persistent storage
+/// cost; a bettor cannot stuff an arbitrarily large blob into storage via the
+/// dispute flow (C-83).
+pub const MAX_DISPUTE_REASON_LEN: u32 = 512;
+
 #[contracttype]
 pub enum DataKey {
     MarketInfo,
@@ -39,6 +44,9 @@ pub enum DataKey {
     /// Guard flag: set to `true` once `deposit_fees` has been called on the
     /// Treasury for this market. Prevents double-crediting (C-68).
     FeeDeposited,
+    /// Guard flag: set to `true` once `sweep_dust` has been called on this
+    /// market. Prevents re-running the dust sweep (C-69 / C-83).
+    DustSwept,
 }
 
 #[contract]
@@ -55,6 +63,53 @@ impl MarketContract {
 
     fn write_market(env: &Env, market: &Market) {
         env.storage().persistent().set(&DataKey::MarketInfo, market);
+    }
+
+    /// Check if a bet side wins against a resolved outcome.
+    fn bet_wins(side: &BetSide, outcome: &Outcome) -> bool {
+        match (side, outcome) {
+            (BetSide::FighterA, Outcome::FighterA) => true,
+            (BetSide::FighterB, Outcome::FighterB) => true,
+            _ => false,
+        }
+    }
+
+    /// Get the total pool for the winning side, or None if no winners.
+    fn winning_pool_for(market: &Market, outcome: &Outcome) -> Option<i128> {
+        match outcome {
+            Outcome::FighterA => {
+                if market.pool_a > 0 {
+                    Some(market.pool_a)
+                } else {
+                    None
+                }
+            }
+            Outcome::FighterB => {
+                if market.pool_b > 0 {
+                    Some(market.pool_b)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Calculate net_pool after deducting protocol fees.
+    fn net_pool(market: &Market) -> i128 {
+        market
+            .total_pool
+            .checked_sub(shared::calculate_fee(market.total_pool, market.protocol_fee_bp))
+            .expect("net_pool underflow")
+    }
+
+    /// Calculate pro-rata payout: (bettor_stake / winning_pool) * net_pool.
+    fn pro_rata_payout(bettor_stake: i128, net: i128, winning_pool: i128) -> i128 {
+        bettor_stake
+            .checked_mul(net)
+            .expect("payout overflow (mult)")
+            .checked_div(winning_pool)
+            .expect("payout division error")
     }
 
     /// Called by MarketFactory immediately after contract deployment.
@@ -125,6 +180,8 @@ impl MarketContract {
             dispute_window_sec,
             treasury,
             bet_token,
+            stake_sum_a: 0,
+            stake_sum_b: 0,
         };
         env.storage().persistent().set(&DataKey::MarketInfo, &market);
         env.storage().persistent().set(&DataKey::Factory, &factory);
@@ -155,14 +212,14 @@ impl MarketContract {
     ///
     /// Returns the unique `bet_id` (`Bytes`) assigned to this bet.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - The market status is not `Open`.
-    /// - The current ledger time is at or after `betting_ends_at`.
-    /// - `amount` is below the configured `min_bet_amount`.
-    /// - `amount` is above the configured `max_bet_amount`.
-    /// - `bettor` has not authorized the call.
+    /// Returns:
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Open`.
+    /// - `ContractError::BettingClosed` if the current ledger time is at or after `betting_ends_at`.
+    /// - `ContractError::BetTooSmall` if `amount` is below the configured `min_bet_amount`.
+    /// - `ContractError::BetTooLarge` if `amount` is above the configured `max_bet_amount`.
+    /// - `ContractError::TooManyBets` if the bettor has already placed MAX_BETS_PER_ADDRESS bets.
     pub fn place_bet(
         env: Env,
         bettor: Address,
@@ -182,13 +239,18 @@ impl MarketContract {
 
         let factory: Address = env.storage().persistent()
             .get(&DataKey::Factory)
-            .expect("factory not set");
+            .ok_or(ContractError::NotInitialized)?;
         let config: Result<ProtocolConfig, ContractError> = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_config"),
             soroban_sdk::vec![&env],
         );
         let config = config?;
+
+        // Check if protocol is paused (claims and refunds remain available)
+        if config.paused {
+            return Err(ContractError::ProtocolPaused);
+        }
 
         // Prevent dust bets that consume on-chain storage without contributing
         // meaningful opposing liquidity. The configured min_bet_amount is checked
@@ -202,6 +264,16 @@ impl MarketContract {
 
         if amount <= 0 {
             return Err(ContractError::BetTooSmall);
+        }
+
+        // Check MAX_BETS_PER_ADDRESS limit before placing bet
+        let existing_bets: Vec<Bytes> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BetsByAddr(bettor.clone()))
+            .unwrap_or(Vec::new(&env));
+        if existing_bets.len() >= MAX_BETS_PER_ADDRESS as usize {
+            return Err(ContractError::TooManyBets);
         }
 
         // Escrow the bet amount via the Treasury. This is a cross-contract call
@@ -220,10 +292,16 @@ impl MarketContract {
         );
 
         match side {
-            BetSide::FighterA => market.pool_a = market.pool_a.checked_add(amount).expect("pool_a overflow"),
-            BetSide::FighterB => market.pool_b = market.pool_b.checked_add(amount).expect("pool_b overflow"),
+            BetSide::FighterA => {
+                market.pool_a = market.pool_a.checked_add(amount).ok_or(ContractError::InvalidMarketStatus)?;
+                market.stake_sum_a = market.stake_sum_a.checked_add(amount).ok_or(ContractError::InvalidMarketStatus)?;
+            },
+            BetSide::FighterB => {
+                market.pool_b = market.pool_b.checked_add(amount).ok_or(ContractError::InvalidMarketStatus)?;
+                market.stake_sum_b = market.stake_sum_b.checked_add(amount).ok_or(ContractError::InvalidMarketStatus)?;
+            },
         }
-        market.total_pool = market.total_pool.checked_add(amount).expect("total_pool overflow");
+        market.total_pool = market.total_pool.checked_add(amount).ok_or(ContractError::InvalidMarketStatus)?;
 
         let bet_count: u64 = env.storage().persistent()
             .get(&Symbol::new(&env, "BET_COUNT"))
@@ -267,41 +345,46 @@ impl MarketContract {
                 bet_id: bet_id.clone(),
                 bettor,
                 market_id: market_id_u64,
-                side: side.into(),
+                side,
                 amount,
                 placed_at,
                 claimed: false,
             },
         );
 
-        bet_id
+        Ok(bet_id)
     }
 
-    /// Transitions market status from Open to Locked.
+    /// Transitions market status to Cancelled.
     /// Admin-only. Cancels a market (e.g. fight postponed).
-    /// require_auth() is the first call. Verifies caller is the factory admin.
     /// Valid only when status is Open or Locked. Emits MarketCancelled event.
-    pub fn cancel_market(env: Env, admin: Address) {
+    ///
+    /// # Errors
+    ///
+    /// Returns:
+    /// - `ContractError::Unauthorized` if `admin` is not the factory admin.
+    /// - `ContractError::InvalidMarketStatus` if market is not Open or Locked.
+    pub fn cancel_market(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
 
         let factory: Address = env
             .storage()
             .persistent()
             .get(&DataKey::Factory)
-            .expect("factory not set");
+            .ok_or(ContractError::NotInitialized)?;
         let config: ProtocolConfig = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_config"),
             soroban_sdk::vec![&env],
         );
         if config.admin != admin {
-            panic!("not factory admin");
+            return Err(ContractError::Unauthorized);
         }
 
         let mut market = Self::read_market(&env);
         match market.status {
             MarketStatus::Open | MarketStatus::Locked => {}
-            _ => panic!("cannot cancel: market already resolved or cancelled"),
+            _ => return Err(ContractError::InvalidMarketStatus),
         }
 
         market.status = MarketStatus::Cancelled;
@@ -312,6 +395,52 @@ impl MarketContract {
             market_id_to_u64(&market.market_id),
             String::from_str(&env, "cancelled_by_admin"),
         );
+        Ok(())
+    }
+
+    /// Permissionless escape hatch: cancel an unresolved market after the resolution timeout.
+    ///
+    /// If the oracle never calls resolve_market within resolution_timeout_sec after the
+    /// scheduled fight time, anyone can call this to cancel the market and enable refunds.
+    /// This prevents markets from staying locked indefinitely.
+    pub fn cancel_unresolved(env: Env, market_id: Bytes) -> Result<(), ContractError> {
+        let mut market = Self::read_market(&env);
+
+        // Only Locked markets can be cancelled via this escape hatch
+        if market.status != MarketStatus::Locked {
+            return Err(ContractError::InvalidMarketStatus);
+        }
+
+        // Check if market has been locked for too long
+        let factory: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Factory)
+            .expect("factory not set");
+        let config: ProtocolConfig = env.invoke_contract(
+            &factory,
+            &Symbol::new(&env, "get_config"),
+            soroban_sdk::vec![&env],
+        );
+
+        let now = env.ledger().timestamp();
+        let timeout_deadline = market.scheduled_at + config.resolution_timeout_sec;
+
+        if now <= timeout_deadline {
+            return Err(ContractError::InvalidTimestamp);
+        }
+
+        // Cancel the market, enabling refunds for all bettors
+        market.status = MarketStatus::Cancelled;
+        Self::write_market(&env, &market);
+
+        events::emit_market_cancelled(
+            &env,
+            market_id_to_u64(&market.market_id),
+            String::from_str(&env, "oracle_timeout"),
+        );
+
+        Ok(())
     }
 
     /// Transitions the market status from `Open` to `Locked`.
@@ -325,15 +454,16 @@ impl MarketContract {
     /// * `env` - The Soroban execution environment.
     /// * `oracle` - Address of the oracle or any caller after the betting period ends.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the market status is not `Open`, or if `oracle` is not the
-    /// authorized oracle address and the betting period has not yet ended.
-    pub fn lock_market(env: Env, oracle: Address) {
+    /// Returns:
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Open`.
+    /// - `ContractError::OracleNotWhitelisted` if `oracle` is not the authorized oracle and the betting period has not ended.
+    pub fn lock_market(env: Env, oracle: Address) -> Result<(), ContractError> {
         let mut market = Self::read_market(&env);
 
         if market.status != MarketStatus::Open {
-            panic!("market already locked");
+            return Err(ContractError::InvalidMarketStatus);
         }
 
         let now = env.ledger().timestamp();
@@ -341,7 +471,7 @@ impl MarketContract {
             // Early lock: only the market's oracle may lock before lock_time passes.
             oracle.require_auth();
             if oracle != market.oracle_address {
-                panic!("not authorized oracle");
+                return Err(ContractError::OracleNotWhitelisted);
             }
         }
         // Once lock_time has passed, locking is permissionless — no auth required.
@@ -350,6 +480,7 @@ impl MarketContract {
         Self::write_market(&env, &market);
 
         events::emit_market_locked(&env, market_id_to_u64(&market.market_id), now);
+        Ok(())
     }
 
     /// Called by oracle after fight concludes.
@@ -366,29 +497,31 @@ impl MarketContract {
     /// * `oracle` - Address of the authorized oracle. Must authorize this call.
     /// * `outcome` - The fight result (`FighterA`, `FighterB`, `Draw`, or `NoContest`).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - The caller is not the authorized oracle address.
-    /// - The market status is not `Locked`.
-    pub fn resolve_market(env: Env, oracle: Address, outcome: Outcome) {
+    /// Returns:
+    /// - `ContractError::InvalidOutcome` if the outcome is `Undetermined`.
+    /// - `ContractError::NotInitialized` if the market has not been initialized.
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Locked`.
+    /// - `ContractError::OracleNotWhitelisted` if the caller is not the authorized oracle.
+    pub fn resolve_market(env: Env, oracle: Address, outcome: Outcome) -> Result<(), ContractError> {
         oracle.require_auth();
 
         // `Undetermined` is the shared "not yet resolved" sentinel, not a result.
         if outcome == Outcome::Undetermined {
-            panic!("invalid outcome");
+            return Err(ContractError::InvalidOracleSignature);
         }
 
         let mut market: Market = env.storage().persistent()
             .get(&DataKey::MarketInfo)
-            .expect("market not initialized");
+            .ok_or(ContractError::NotInitialized)?;
 
         if market.status != MarketStatus::Locked {
-            panic!("market not locked");
+            return Err(ContractError::InvalidMarketStatus);
         }
 
         if market.oracle_address != oracle {
-            panic!("not authorized oracle");
+            return Err(ContractError::OracleNotWhitelisted);
         }
 
         // Set resolved_at timestamp for dispute window enforcement
@@ -407,25 +540,14 @@ impl MarketContract {
         let resolution_time = env.ledger().timestamp();
         env.storage().persistent().set(&DataKey::MarketInfo, &market);
 
+        let market_id_u64 = market_id_to_u64(&market.market_id);
         if winning_pool_empty {
-            env.events().publish(
-                (Symbol::new(&env, "AutoRefund"),),
-                (market.market_id.clone(), outcome.clone()),
-            );
+            events::emit_auto_refund(&env, market_id_u64, outcome.clone());
         }
 
         // Emit market_resolved event with market_id, outcome, and resolution_time
-        let market_id_u64 = u64::from_le_bytes([
-            market.market_id.as_ref()[0],
-            market.market_id.as_ref()[1],
-            market.market_id.as_ref()[2],
-            market.market_id.as_ref()[3],
-            market.market_id.as_ref()[4],
-            market.market_id.as_ref()[5],
-            market.market_id.as_ref()[6],
-            market.market_id.as_ref()[7],
-        ]);
         events::emit_market_resolved(&env, market_id_u64, outcome, resolution_time);
+        Ok(())
     }
 
     /// Allows a winning bettor to claim their proportional share of the pool.
@@ -447,45 +569,55 @@ impl MarketContract {
     ///
     /// Returns the payout amount transferred to `bettor`, in stroops.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - `bettor` has not authorized the call.
-    /// - `bet_id` does not exist.
-    /// - `bettor` is not the owner of the bet.
-    /// - The market status is not `Resolved`.
-    /// - The bet's side does not match the winning outcome.
-    /// - The bet has already been claimed.
-    pub fn claim_winnings(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
+    /// Returns:
+    /// - `ContractError::NoBetsFound` if the `bet_id` does not exist.
+    /// - `ContractError::NotYourBet` if the `bettor` is not the owner of the bet.
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Resolved`.
+    /// - `ContractError::NotWinner` if the bet's side does not match the winning outcome.
+    /// - `ContractError::AlreadyClaimed` if the bet has already been claimed.
+    pub fn claim_winnings(env: Env, bettor: Address, bet_id: Bytes) -> Result<i128, ContractError> {
         bettor.require_auth();
 
         let bet: Bet = env.storage().persistent()
             .get(&DataKey::Bet(bet_id.clone()))
-            .expect("bet not found");
+            .ok_or(ContractError::NoBetsFound)?;
         if bet.bettor != bettor {
-            panic!("not your bet");
+            return Err(ContractError::NotYourBet);
         }
 
         let market: Market = env.storage().persistent()
             .get(&DataKey::MarketInfo)
-            .expect("market not initialized");
+            .ok_or(ContractError::NotInitialized)?;
         if market.status != MarketStatus::Resolved {
-            panic!("market not resolved");
+            return Err(ContractError::InvalidMarketStatus);
         }
 
-        let outcome = market.outcome.clone().expect("no outcome set");
+        // Block claims during dispute window
+        let dispute_window_end = market.resolved_at + market.dispute_window_sec;
+        let now = env.ledger().timestamp();
+        let dispute_active: bool = env.storage().persistent()
+            .get(&DataKey::DisputeRaised)
+            .unwrap_or(false);
+
+        if now < dispute_window_end || dispute_active {
+            panic!("claims not yet available");
+        }
+
+        let outcome = market.outcome.require_resolved();
         if !bet_wins(&bet.side, &outcome) {
-            panic!("bet did not win");
+            return Err(ContractError::NotWinner);
         }
 
         let already_claimed: bool = env.storage().persistent()
             .get(&DataKey::Claimed(bet_id.clone()))
             .unwrap_or(false);
         if already_claimed {
-            panic!("already claimed");
+            return Err(ContractError::AlreadyClaimed);
         }
 
-        let winning_pool = winning_pool_for(&market, &outcome).expect("no winning side");
+        let winning_pool = winning_pool_for(&market, &outcome).ok_or(ContractError::InvalidMarketStatus)?;
         let payout = pro_rata_payout(bet.amount, net_pool(&market), winning_pool);
 
         // Mark claimed BEFORE any transfer (re-entrancy guard).
@@ -494,26 +626,18 @@ impl MarketContract {
         // Transfer payout from Treasury to bettor (issue #1179)
         if payout > 0 {
             let treasury_addr = market.treasury.clone();
-            soroban_sdk::Address::from_contract_id(&env, &treasury_addr.to_contract_id());
-            // Call release_winnings on Treasury
             env.invoke_contract::<()>(
                 &treasury_addr,
                 &Symbol::new(&env, "release_winnings"),
-                soroban_sdk::vec![&env, env.current_contract_address(), market.market_id.clone(), bettor.clone(), soroban_sdk::IntoVal::into_val(&payout, &env)],
+                soroban_sdk::vec![
+                    &env,
+                    env.current_contract_address().into_val(&env),
+                    market.market_id.clone().into_val(&env),
+                    bettor.clone().into_val(&env),
+                    payout.into_val(&env),
+                ],
             );
         }
-
-        // Emit winnings_claimed event with market_id, claimant, and amount (payout after fee)
-        let market_id_u64 = u64::from_le_bytes([
-            market.market_id.as_ref()[0],
-            market.market_id.as_ref()[1],
-            market.market_id.as_ref()[2],
-            market.market_id.as_ref()[3],
-            market.market_id.as_ref()[4],
-            market.market_id.as_ref()[5],
-            market.market_id.as_ref()[6],
-            market.market_id.as_ref()[7],
-        ]);
 
         // Create ClaimReceipt for event emission
         use shared::types::ClaimReceipt;
@@ -525,7 +649,7 @@ impl MarketContract {
         };
         events::emit_winnings_claimed(&env, market_id_to_u64(&market.market_id), receipt);
 
-        payout
+        Ok(payout)
     }
 
     /// Claims every unclaimed winning bet owned by `bettor` in one call (C-71).
@@ -539,21 +663,32 @@ impl MarketContract {
     ///
     /// Returns the total payout across all claimed bets, in stroops.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - `bettor` has not authorized the call.
-    /// - The market status is not `Resolved`.
-    /// - `bettor` has no unclaimed winning bets.
-    pub fn claim_all(env: Env, bettor: Address) -> i128 {
+    /// Returns:
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Resolved`.
+    /// - `ContractError::NothingToClaim` if `bettor` has no unclaimed winning bets.
+    pub fn claim_all(env: Env, bettor: Address) -> Result<i128, ContractError> {
         bettor.require_auth();
 
         let market = Self::read_market(&env);
         if market.status != MarketStatus::Resolved {
-            panic!("market not resolved");
+            return Err(ContractError::InvalidMarketStatus);
         }
-        let outcome = market.outcome.clone().expect("no outcome set");
-        let winning_pool = winning_pool_for(&market, &outcome).expect("no winning side");
+
+        // Block claims during dispute window
+        let dispute_window_end = market.resolved_at + market.dispute_window_sec;
+        let now = env.ledger().timestamp();
+        let dispute_active: bool = env.storage().persistent()
+            .get(&DataKey::DisputeRaised)
+            .unwrap_or(false);
+
+        if now < dispute_window_end || dispute_active {
+            panic!("claims not yet available");
+        }
+
+        let outcome = market.outcome.require_resolved();
+        let winning_pool = winning_pool_for(&market, &outcome).ok_or(ContractError::InvalidMarketStatus)?;
         let net = net_pool(&market);
 
         let bet_ids: Vec<Bytes> = env.storage().persistent()
@@ -581,26 +716,24 @@ impl MarketContract {
             env.storage().persistent().set(&DataKey::Claimed(bet_id.clone()), &true);
             total = total
                 .checked_add(pro_rata_payout(bet.amount, net, winning_pool))
-                .expect("total payout overflow");
+                .ok_or(ContractError::InvalidMarketStatus)?;
             claimed_ids.push_back(bet_id);
         }
 
         if claimed_ids.is_empty() {
-            panic!("nothing to claim");
+            return Err(ContractError::NothingToClaim);
         }
 
-        env.events().publish(
-            (Symbol::new(&env, "AllWinningsClaimed"),),
-            (market.market_id.clone(), bettor, claimed_ids, total),
-        );
+        events::emit_all_winnings_claimed(&env, market_id_to_u64(&market.market_id), bettor, claimed_ids, total);
 
-        total
+        Ok(total)
     }
 
     /// Moves pro-rata rounding residue ("dust") into the treasury fee balance (C-69).
     ///
     /// Permissionless. Callable once the claim deadline
     /// (`resolved_at + dispute_window_sec + CLAIM_WINDOW_SEC`) has passed.
+    /// Dust is calculated from pre-computed winning_stake_sum without iterating bets.
     /// Dust is `net_pool - Σ floor(stake * net_pool / winning_pool)` over all
     /// winning bets, so it never touches funds owed to unclaimed winners.
     /// Emits a `DustSwept` event.
@@ -609,57 +742,49 @@ impl MarketContract {
     ///
     /// Returns the swept amount, in stroops (may be `0`).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - `market_id` does not match this market.
-    /// - The market status is not `Resolved`.
-    /// - The claim deadline has not passed.
-    /// - Dust has already been swept.
-    pub fn sweep_dust(env: Env, market_id: Bytes) -> i128 {
+    /// Returns:
+    /// - `ContractError::InvalidMarketState` if `market_id` does not match this market.
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Resolved`.
+    /// - `ContractError::InvalidMarketState` if the claim deadline has not passed.
+    /// - `ContractError::InvalidMarketState` if dust has already been swept.
+    pub fn sweep_dust(env: Env, market_id: Bytes) -> Result<i128, ContractError> {
         let market = Self::read_market(&env);
         if market.market_id != market_id {
-            panic!("market id mismatch");
+            return Err(ContractError::InvalidMarketState);
         }
         if market.status != MarketStatus::Resolved {
-            panic!("market not resolved");
+            return Err(ContractError::InvalidMarketStatus);
         }
         let claim_deadline = market
             .resolved_at
             .checked_add(market.dispute_window_sec)
             .and_then(|t| t.checked_add(CLAIM_WINDOW_SEC))
-            .expect("deadline overflow");
+            .ok_or(ContractError::InvalidMarketState)?;
         if env.ledger().timestamp() <= claim_deadline {
-            panic!("claim deadline not reached");
+            return Err(ContractError::InvalidMarketState);
         }
         let already_swept: bool = env.storage().persistent()
             .get(&DataKey::DustSwept)
             .unwrap_or(false);
         if already_swept {
-            panic!("dust already swept");
+            return Err(ContractError::InvalidMarketState);
         }
 
-        let outcome = market.outcome.clone().expect("no outcome set");
-        let winning_pool = winning_pool_for(&market, &outcome).expect("no winning side");
+        let outcome = market.outcome.require_resolved();
+        let winning_pool = winning_pool_for(&market, &outcome).ok_or(ContractError::InvalidMarketStatus)?;
         let net = net_pool(&market);
 
-        let bet_count: u64 = env.storage().persistent()
-            .get(&Symbol::new(&env, "BET_COUNT"))
-            .unwrap_or(0u64);
-        let mut owed: i128 = 0;
-        for n in 1..=bet_count {
-            let mut id_bytes = [0u8; 32];
-            id_bytes[..8].copy_from_slice(&n.to_be_bytes());
-            let bet_id = Bytes::from_array(&env, &id_bytes);
-            if let Some(bet) = env.storage().persistent().get::<_, Bet>(&DataKey::Bet(bet_id)) {
-                if bet_wins(&bet.side, &outcome) {
-                    owed = owed
-                        .checked_add(pro_rata_payout(bet.amount, net, winning_pool))
-                        .expect("owed overflow");
-                }
-            }
-        }
-        let dust = net.checked_sub(owed).expect("dust underflow");
+        // Use pre-calculated winning_stake_sum for O(1) calculation
+        let winning_stake_sum = match outcome {
+            Outcome::FighterA => market.stake_sum_a,
+            Outcome::FighterB => market.stake_sum_b,
+            _ => 0,
+        };
+
+        let owed = pro_rata_payout(winning_stake_sum, net, winning_pool);
+        let dust = net.checked_sub(owed).ok_or(ContractError::InvalidMarketState)?;
 
         env.storage().persistent().set(&DataKey::DustSwept, &true);
 
@@ -676,12 +801,9 @@ impl MarketContract {
             );
         }
 
-        env.events().publish(
-            (Symbol::new(&env, "DustSwept"),),
-            (market.market_id.clone(), dust, env.ledger().timestamp()),
-        );
+        events::emit_dust_swept(&env, market_id_to_u64(&market.market_id), dust, env.ledger().timestamp());
 
-        dust
+        Ok(dust)
     }
 
     /// Issues a full refund when market is Cancelled (includes Draw and NoContest outcomes).
@@ -701,25 +823,23 @@ impl MarketContract {
     ///
     /// Returns the refund amount (equal to the original `bet.amount`), in stroops.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - `bettor` has not authorized the call.
-    /// - `bet_id` does not exist.
-    /// - `bettor` is not the owner of the bet.
-    /// - The market status is not `Cancelled` and outcome is not `NoContest`.
-    /// - The bet has already been claimed.
-    /// Full refund for a bet when market is Cancelled. No protocol fee.
-    pub fn claim_refund(env: Env, bettor: Address, bet_id: Bytes) -> i128 {
+    /// Returns:
+    /// - `ContractError::NoBetsFound` if `bet_id` does not exist.
+    /// - `ContractError::NotYourBet` if `bettor` is not the owner of the bet.
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Cancelled` and outcome is not `NoContest`.
+    /// - `ContractError::AlreadyClaimed` if the bet has already been claimed.
+    pub fn claim_refund(env: Env, bettor: Address, bet_id: Bytes) -> Result<i128, ContractError> {
         bettor.require_auth();
 
         let bet: Bet = env
             .storage()
             .persistent()
             .get(&DataKey::Bet(bet_id.clone()))
-            .expect("bet not found");
+            .ok_or(ContractError::NoBetsFound)?;
         if bet.bettor != bettor {
-            panic!("not your bet");
+            return Err(ContractError::NotYourBet);
         }
 
         let market = Self::read_market(&env);
@@ -732,7 +852,7 @@ impl MarketContract {
             _ => false,
         };
         if !is_eligible {
-            panic!("market not eligible for refund");
+            return Err(ContractError::InvalidMarketStatus);
         }
 
         let already_claimed: bool = env
@@ -741,7 +861,7 @@ impl MarketContract {
             .get(&DataKey::Claimed(bet_id.clone()))
             .unwrap_or(false);
         if already_claimed {
-            panic!("already claimed");
+            return Err(ContractError::AlreadyClaimed);
         }
 
         // Mark claimed BEFORE any transfer (re-entrancy guard)
@@ -751,19 +871,21 @@ impl MarketContract {
 
         // Transfer refund from Treasury to bettor (issue #1180)
         let treasury_addr = market.treasury.clone();
-        soroban_sdk::Address::from_contract_id(&env, &treasury_addr.to_contract_id());
         env.invoke_contract::<()>(
             &treasury_addr,
             &Symbol::new(&env, "release_winnings"),
-            soroban_sdk::vec![&env, env.current_contract_address(), market.market_id.clone(), bettor.clone(), soroban_sdk::IntoVal::into_val(&bet.amount, &env)],
+            soroban_sdk::vec![
+                &env,
+                env.current_contract_address().into_val(&env),
+                market.market_id.clone().into_val(&env),
+                bettor.clone().into_val(&env),
+                bet.amount.into_val(&env),
+            ],
         );
 
-        env.events().publish(
-            (Symbol::new(&env, "RefundClaimed"),),
-            (bettor.clone(), bet_id, bet.amount),
-        );
+        events::emit_refund_claimed(&env, market_id_to_u64(&market.market_id), bettor, bet_id, bet.amount);
 
-        bet.amount
+        Ok(bet.amount)
     }
 
 
@@ -781,21 +903,21 @@ impl MarketContract {
     /// * `reason` - Free-form bytes describing the reason for the dispute
     ///   (at most [`MAX_DISPUTE_REASON_LEN`] bytes).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - `bettor` has not authorized the call.
-    /// - `bettor` has no bet in this market.
-    /// - The dispute window has elapsed since resolution.
-    /// - A dispute is already active on this market.
-    /// - The market status is not `Resolved`.
-    pub fn dispute_resolution(env: Env, bettor: Address, reason: Bytes) {
+    /// Returns:
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Resolved`.
+    /// - `ContractError::InvalidMarketState` if a dispute is already active.
+    /// - `ContractError::NoBetsFound` if `bettor` has no bet in this market.
+    /// - `ContractError::InvalidMarketState` if the dispute window has elapsed.
+    /// - `ContractError::InvalidMarketState` if reason exceeds MAX_DISPUTE_REASON_LEN.
+    pub fn dispute_resolution(env: Env, bettor: Address, reason: Bytes) -> Result<(), ContractError> {
         bettor.require_auth();
 
         let mut market = Self::read_market(&env);
 
         if market.status != MarketStatus::Resolved {
-            panic!("market not resolved");
+            return Err(ContractError::InvalidMarketStatus);
         }
 
         // Check if a dispute has already been raised
@@ -803,7 +925,7 @@ impl MarketContract {
             .get(&DataKey::DisputeRaised)
             .unwrap_or(false);
         if already_disputed {
-            panic!("dispute already raised");
+            return Err(ContractError::InvalidMarketState);
         }
 
         // Verify bettor has a bet in this market
@@ -811,7 +933,7 @@ impl MarketContract {
             .get(&DataKey::BetsByAddr(bettor.clone()))
             .unwrap_or(Vec::new(&env));
         if bettor_bets.is_empty() {
-            panic!("bettor has no bets in this market");
+            return Err(ContractError::NoBetsFound);
         }
 
         // The dispute window is half-open: [resolved_at, resolved_at + dispute_window_sec).
@@ -821,12 +943,12 @@ impl MarketContract {
         let current_time = env.ledger().timestamp();
         let dispute_deadline = market.resolved_at + market.dispute_window_sec;
         if current_time >= dispute_deadline {
-            panic!("dispute window has closed");
+            return Err(ContractError::InvalidMarketState);
         }
 
         // Cap reason length to prevent storage abuse.
-        if reason.len() > MAX_DISPUTE_REASON_LEN {
-            panic!("dispute reason exceeds maximum length");
+        if reason.len() > MAX_DISPUTE_REASON_LEN as usize {
+            return Err(ContractError::InvalidMarketState);
         }
 
         // Transition to Disputed status
@@ -843,6 +965,7 @@ impl MarketContract {
             bettor,
             reason,
         );
+        Ok(())
     }
 
     /// Settles a disputed market with a final admin-override outcome.
@@ -857,14 +980,15 @@ impl MarketContract {
     /// * `admin` - Address of the protocol admin. Must authorize this call.
     /// * `override_outcome` - The admin-determined final outcome for the market.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - `admin` has not authorized the call or is not the configured admin.
-    /// - The market status is not `Disputed`.
-    pub fn resolve_dispute(env: Env, admin: Address, override_outcome: Outcome) {
+    /// Returns:
+    /// - `ContractError::InvalidOracleSignature` if the outcome is `Undetermined`.
+    /// - `ContractError::Unauthorized` if `admin` is not the configured admin.
+    /// - `ContractError::InvalidMarketStatus` if the market status is not `Disputed`.
+    pub fn resolve_dispute(env: Env, admin: Address, override_outcome: Outcome) -> Result<(), ContractError> {
         if override_outcome == Outcome::Undetermined {
-            panic!("invalid outcome");
+            return Err(ContractError::InvalidOracleSignature);
         }
         admin.require_auth();
 
@@ -872,19 +996,19 @@ impl MarketContract {
             .storage()
             .persistent()
             .get(&DataKey::Factory)
-            .expect("factory not set");
+            .ok_or(ContractError::NotInitialized)?;
         let config: ProtocolConfig = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_config"),
             soroban_sdk::vec![&env],
         );
         if config.admin != admin {
-            panic!("not factory admin");
+            return Err(ContractError::Unauthorized);
         }
 
         let mut market = Self::read_market(&env);
         if market.status != MarketStatus::Disputed {
-            panic!("market not in disputed state");
+            return Err(ContractError::InvalidMarketStatus);
         }
 
         market.outcome = override_outcome.clone().into();
@@ -894,8 +1018,9 @@ impl MarketContract {
         events::emit_dispute_resolved(
             &env,
             market_id_to_u64(&market.market_id),
-            override_outcome.into(),
+            override_outcome,
         );
+        Ok(())
     }
 
     /// Finalizes the market resolution after dispute window expires or admin override.
@@ -918,13 +1043,13 @@ impl MarketContract {
     /// * `admin` - (Optional) Address of the protocol admin. Required only when market is Disputed.
     ///           If market is Resolved and window has elapsed, any caller can finalize.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if:
-    /// - Market status is Resolved but dispute window has not elapsed yet.
-    /// - Market status is Disputed but caller is not the admin.
-    /// - Market is in any other status (Open, Locked, Cancelled).
-    pub fn finalize_resolution(env: Env, admin: Option<Address>) {
+    /// Returns:
+    /// - `ContractError::InvalidMarketStatus` if the market status is Resolved but the dispute window has not elapsed.
+    /// - `ContractError::Unauthorized` if the market status is Disputed but the caller is not the admin.
+    /// - `ContractError::InvalidMarketStatus` if the market is in any other status.
+    pub fn finalize_resolution(env: Env, admin: Option<Address>) -> Result<(), ContractError> {
         let mut market = Self::read_market(&env);
 
         match market.status {
@@ -934,7 +1059,7 @@ impl MarketContract {
                 // Mirrors dispute_resolution: the window closes at exactly
                 // resolved_at + dispute_window_sec.
                 if current_time < dispute_deadline {
-                    panic!("dispute window still open");
+                    return Err(ContractError::InvalidMarketStatus);
                 }
                 market.status = MarketStatus::Resolved;
                 Self::write_market(&env, &market);
@@ -946,23 +1071,23 @@ impl MarketContract {
                         .storage()
                         .persistent()
                         .get(&DataKey::Factory)
-                        .expect("factory not set");
+                        .ok_or(ContractError::NotInitialized)?;
                     let config: ProtocolConfig = env.invoke_contract(
                         &factory,
                         &Symbol::new(&env, "get_config"),
                         soroban_sdk::vec![&env],
                     );
                     if config.admin != admin_addr {
-                        panic!("not factory admin");
+                        return Err(ContractError::Unauthorized);
                     }
                 } else {
-                    panic!("admin required for disputed market");
+                    return Err(ContractError::Unauthorized);
                 }
 
                 market.status = MarketStatus::Resolved;
                 Self::write_market(&env, &market);
             }
-            _ => panic!("market cannot be finalized in current state"),
+            _ => return Err(ContractError::InvalidMarketStatus),
         }
 
         // ── C-68: Credit protocol fee to Treasury exactly once ────────────────
@@ -1000,10 +1125,8 @@ impl MarketContract {
             }
         }
 
-        env.events().publish(
-            (Symbol::new(&env, "ResolutionFinalized"),),
-            (market.market_id.clone(), env.ledger().timestamp()),
-        );
+        events::emit_resolution_finalized(&env, market_id_to_u64(&market.market_id), env.ledger().timestamp());
+        Ok(())
     }
 
     /// Returns the full [`Market`] struct for this contract.
@@ -1102,9 +1225,12 @@ impl MarketContract {
             .get(&DataKey::MarketInfo)
             .expect("market not initialized");
 
-        let outcome = match market.outcome.outcome() {
-            Some(o) => o,
-            None => return 0,
+        let outcome = match market.outcome {
+            SettledOutcome::Pending => return 0,
+            SettledOutcome::FighterA => shared::types::Outcome::FighterA,
+            SettledOutcome::FighterB => shared::types::Outcome::FighterB,
+            SettledOutcome::Draw => shared::types::Outcome::Draw,
+            SettledOutcome::NoContest => shared::types::Outcome::NoContest,
         };
 
         if !bet_wins(&bet.side, &outcome) {
@@ -1527,5 +1653,38 @@ mod tests {
         for name in names.iter() {
             assert!(is_snake_case(name), "topic `{}` is not snake_case", name);
         }
+    }
+
+    // ─── C-83: MAX_DISPUTE_REASON_LEN and DustSwept guard ────────────────────
+
+    #[test]
+    fn test_dispute_reason_at_max_length_accepted() {
+        let (ctx, bettor, _) = resolved_ctx(Outcome::FighterA);
+        let reason = Bytes::from_slice(
+            &ctx.env,
+            &vec![b'x'; MAX_DISPUTE_REASON_LEN as usize],
+        );
+        ctx.client.dispute_resolution(&bettor, &reason);
+    }
+
+    #[test]
+    #[should_panic(expected = "dispute reason exceeds maximum length")]
+    fn test_dispute_reason_over_max_length_rejected() {
+        let (ctx, bettor, _) = resolved_ctx(Outcome::FighterA);
+        let reason = Bytes::from_slice(
+            &ctx.env,
+            &vec![b'x'; (MAX_DISPUTE_REASON_LEN + 1) as usize],
+        );
+        ctx.client.dispute_resolution(&bettor, &reason);
+    }
+
+    #[test]
+    #[should_panic(expected = "dust already swept")]
+    fn test_sweep_dust_cannot_run_twice() {
+        let (ctx, _, _) = resolved_ctx(Outcome::FighterA);
+        // Jump well past resolved_at + dispute_window_sec + CLAIM_WINDOW_SEC.
+        set_time(&ctx.env, 10_000_000);
+        ctx.client.sweep_dust(&ctx.market_id);
+        ctx.client.sweep_dust(&ctx.market_id);
     }
 }

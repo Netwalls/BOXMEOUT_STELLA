@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { Keypair } from "@stellar/stellar-sdk";
 import Redis from "ioredis";
+import { fail } from "../response";
 
 const CHALLENGE_TTL_MS = Number(process.env.WALLET_AUTH_CHALLENGE_TTL_MS ?? 5 * 60 * 1000);
 const CHALLENGE_PREFIX = "BOXMEOUT-AUTH";
@@ -155,13 +156,13 @@ export function walletAuthMiddleware(options: WalletAuthOptions = {}) {
     const signature = req.headers["x-wallet-signature"];
 
     if (typeof address !== "string" || typeof signature !== "string" || !address || !signature) {
-      res.status(401).json({ error: "Wallet signature required", code: "WALLET_AUTH_REQUIRED" });
+      fail(res, 401, "WALLET_AUTH_REQUIRED", "Wallet signature required");
       return;
     }
 
     // Only enforce whitelist when one is configured.
     if (whitelist.length > 0 && !isWhitelisted(address, whitelist)) {
-      res.status(403).json({ error: "Address is not whitelisted", code: "WALLET_NOT_WHITELISTED" });
+      fail(res, 403, "WALLET_NOT_WHITELISTED", "Address is not whitelisted");
       return;
     }
 
@@ -170,12 +171,12 @@ export function walletAuthMiddleware(options: WalletAuthOptions = {}) {
       entry = await consumeChallenge(address);
     } catch {
       // Redis unavailable — fail closed to protect the route.
-      res.status(503).json({ error: "Auth service unavailable", code: "SERVICE_UNAVAILABLE" });
+      fail(res, 503, "SERVICE_UNAVAILABLE", "Auth service unavailable");
       return;
     }
 
     if (!entry) {
-      res.status(401).json({ error: "Challenge expired or not found", code: "CHALLENGE_EXPIRED" });
+      fail(res, 401, "CHALLENGE_EXPIRED", "Challenge expired or not found");
       return;
     }
 
@@ -190,11 +191,27 @@ export function walletAuthMiddleware(options: WalletAuthOptions = {}) {
     }
 
     if (!verified) {
-      res.status(401).json({ error: "Invalid signature", code: "INVALID_SIGNATURE" });
+      fail(res, 401, "INVALID_SIGNATURE", "Invalid signature");
       return;
     }
 
     (req as Request & { walletAddress?: string }).walletAddress = address;
     next();
   };
+}
+
+/**
+ * Must follow `walletAuthMiddleware` on routes keyed by `:address`. Rejects
+ * with 403 unless the authenticated wallet is the address in the path, so a
+ * valid signature from one wallet cannot act on another wallet's resource.
+ */
+export function requireOwnAddress(req: Request, res: Response, next: NextFunction): void {
+  const authenticated = (req as Request & { walletAddress?: string }).walletAddress;
+
+  if (!authenticated || authenticated !== req.params.address) {
+    res.status(403).json({ error: "Wallet does not own this address", code: "FORBIDDEN" });
+    return;
+  }
+
+  next();
 }

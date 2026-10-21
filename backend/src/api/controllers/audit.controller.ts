@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as auditService from "../../services/audit.service";
+import { ok, fail } from "../response";
 
 /**
  * GET /api/admin/audit-logs
@@ -36,16 +37,16 @@ export async function getAuditLogsHandler(
 
     // Validate dates if provided
     if (query.startDate && isNaN(query.startDate.getTime())) {
-      res.status(400).json({ error: "Invalid startDate format. Use ISO date string." });
+      fail(res, 400, "VALIDATION_ERROR", "Invalid startDate format. Use ISO date string.");
       return;
     }
     if (query.endDate && isNaN(query.endDate.getTime())) {
-      res.status(400).json({ error: "Invalid endDate format. Use ISO date string." });
+      fail(res, 400, "VALIDATION_ERROR", "Invalid endDate format. Use ISO date string.");
       return;
     }
 
-    const result = await auditService.getAuditLogs(query);
-    res.status(200).json(result);
+    const { logs, pagination } = await auditService.getAuditLogs(query);
+    ok(res, logs, { meta: { pagination } });
   } catch (err) {
     next(err);
   }
