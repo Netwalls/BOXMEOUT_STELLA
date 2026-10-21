@@ -2,13 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dark is the default/original palette (this app shipped dark-only), so
+   :root holds the dark values and .dark is a no-op; :not(.dark) (light mode)
+   overrides them. Components keep using bg-gray-900/text-white/etc as before
+   — only the underlying token values change per theme. */
+:root {
+  --color-fg: 255 255 255;
+  --color-gray-50: 249 250 251;
+  --color-gray-100: 243 244 246;
+  --color-gray-200: 229 231 235;
+  --color-gray-300: 209 213 219;
+  --color-gray-400: 156 163 175;
+  --color-gray-500: 107 114 128;
+  --color-gray-600: 75 85 99;
+  --color-gray-700: 55 65 81;
+  --color-gray-800: 31 41 55;
+  --color-gray-900: 17 24 39;
+}
+
+html:not(.dark) {
+  --color-fg: 17 24 39;
+  --color-gray-50: 17 24 39;
+  --color-gray-100: 31 41 55;
+  --color-gray-200: 55 65 81;
+  --color-gray-300: 75 85 99;
+  --color-gray-400: 107 114 128;
+  --color-gray-500: 156 163 175;
+  --color-gray-600: 209 213 219;
+  --color-gray-700: 229 231 235;
+  --color-gray-800: 243 244 246;
+  --color-gray-900: 249 250 251;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
+  overflow-x: hidden;
+  background-color: rgb(var(--color-gray-900));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;

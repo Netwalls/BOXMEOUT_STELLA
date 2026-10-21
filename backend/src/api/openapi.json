@@ -1,0 +1,1879 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "BOXMEOUT API",
+    "version": "0.1.0",
+    "description": "REST API for the BOXMEOUT decentralized boxing prediction market on Stellar."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001",
+      "description": "Local dev"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "Users"
+    },
+    {
+      "name": "Markets"
+    },
+    {
+      "name": "Bets"
+    },
+    {
+      "name": "Oracle"
+    },
+    {
+      "name": "Admin"
+    },
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "Users"
+    },
+    {
+      "name": "Search"
+    },
+    {
+      "name": "Stats"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "AdminKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Admin-Key",
+        "description": "ADMIN_API_KEY — required for /api/admin/* routes and GET /api/oracle/results"
+      },
+      "OracleKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Oracle-Key",
+        "description": "ORACLE_API_KEY — required for POST /api/oracle/submit"
+      },
+      "WalletSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-wallet-signature",
+        "description": "Base64 Ed25519 signature over a server-issued challenge. Also requires x-wallet-address header. Obtain a challenge via GET /api/auth/challenge."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "description": "Error envelope (#1392). Every non-2xx response from the API uses this shape.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "NOT_FOUND"
+              },
+              "message": {
+                "type": "string",
+                "example": "Market not found"
+              },
+              "details": {
+                "description": "Optional, e.g. field-level validation errors"
+              },
+              "requestId": {
+                "type": "string",
+                "description": "Echoes X-Request-Id for log correlation"
+              }
+            }
+          }
+        }
+      },
+      "Fighter": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Canelo Alvarez"
+          },
+          "record": {
+            "type": "string",
+            "example": "60-2-2"
+          },
+          "nationality": {
+            "type": "string",
+            "example": "Mexico"
+          },
+          "weightClass": {
+            "type": "string",
+            "example": "Super Middleweight"
+          }
+        }
+      },
+      "Market": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "abc123"
+          },
+          "contractAddress": {
+            "type": "string",
+            "example": "CABC..."
+          },
+          "fighterA": {
+            "$ref": "#/components/schemas/Fighter"
+          },
+          "fighterB": {
+            "$ref": "#/components/schemas/Fighter"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "bettingEndsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Open",
+              "Locked",
+              "Resolved",
+              "Cancelled",
+              "Disputed"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "poolA": {
+            "type": "string",
+            "example": "500000000"
+          },
+          "poolB": {
+            "type": "string",
+            "example": "300000000"
+          },
+          "totalPool": {
+            "type": "string",
+            "example": "800000000"
+          },
+          "oracleAddress": {
+            "type": "string",
+            "example": "GABC..."
+          },
+          "createdBy": {
+            "type": "string",
+            "example": "GABC..."
+          }
+        }
+      },
+      "MarketStats": {
+        "type": "object",
+        "properties": {
+          "totalBets": {
+            "type": "integer",
+            "example": 142
+          },
+          "uniqueBettors": {
+            "type": "integer",
+            "example": 89
+          },
+          "poolA": {
+            "type": "string",
+            "example": "500000000"
+          },
+          "poolB": {
+            "type": "string",
+            "example": "300000000"
+          },
+          "totalVolume": {
+            "type": "string",
+            "example": "800000000"
+          },
+          "impliedOddsA": {
+            "type": "number",
+            "example": 62.5
+          },
+          "impliedOddsB": {
+            "type": "number",
+            "example": 37.5
+          }
+        }
+      },
+      "Bet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "bet_xyz"
+          },
+          "marketId": {
+            "type": "string",
+            "example": "abc123"
+          },
+          "bettor": {
+            "type": "string",
+            "example": "GABC..."
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "FighterA",
+              "FighterB"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "example": "10000000"
+          },
+          "placedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "claimed": {
+            "type": "boolean"
+          },
+          "payout": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
+      "Portfolio": {
+        "type": "object",
+        "properties": {
+          "totalStaked": {
+            "type": "string",
+            "example": "1500000000"
+          },
+          "totalWinnings": {
+            "type": "string",
+            "example": "2100000000"
+          },
+          "pendingClaims": {
+            "type": "string",
+            "example": "350000000"
+          },
+          "activeBets": {
+            "type": "integer",
+            "example": 3
+          },
+          "completedBets": {
+            "type": "integer",
+            "example": 12
+          },
+          "roi": {
+            "type": "number",
+            "example": 40.0
+          }
+        }
+      },
+      "OracleResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "marketId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "FighterA",
+              "FighterB",
+              "Draw",
+              "NoContest"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "example": "BoxRec"
+          },
+          "reportedBy": {
+            "type": "string"
+          },
+          "reportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "confirmed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Oracle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "example": "GABC..."
+          },
+          "name": {
+            "type": "string",
+            "example": "BoxRec Bot"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AuditLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "actionType": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PaginatedMarkets": {
+        "type": "object",
+        "description": "Success envelope for market lists: data plus pagination in meta.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Market"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "GABC..."
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Satoshi"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://..."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check",
+        "description": "Returns API and database status.",
+        "responses": {
+          "200": {
+            "description": "Healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "db": {
+                      "type": "string",
+                      "example": "connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Degraded — database unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "degraded"
+                    },
+                    "db": {
+                      "type": "string",
+                      "example": "disconnected"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/markets": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "List markets",
+        "description": "Returns a paginated list of boxing markets.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Open",
+                "Locked",
+                "Resolved",
+                "Cancelled",
+                "Disputed"
+              ]
+            }
+          },
+          {
+            "name": "weightClass",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of markets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedMarkets"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Create a market",
+        "description": "Creates a new boxing market record. Caller must prove wallet ownership via the challenge/response flow (see GET /api/auth/challenge).",
+        "security": [
+          {
+            "WalletSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-wallet-address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Caller's Stellar public key"
+          },
+          {
+            "in": "header",
+            "name": "x-wallet-signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Base64 signature over the server-issued challenge"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "contractAddress",
+                  "fighterA",
+                  "fighterB",
+                  "scheduledAt",
+                  "bettingEndsAt",
+                  "createdBy",
+                  "oracleAddress"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "contractAddress": {
+                    "type": "string"
+                  },
+                  "fighterA": {
+                    "type": "object"
+                  },
+                  "fighterB": {
+                    "type": "object"
+                  },
+                  "scheduledAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "bettingEndsAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "createdBy": {
+                    "type": "string"
+                  },
+                  "oracleAddress": {
+                    "type": "string"
+                  },
+                  "txHash": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Market created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Market"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature required or challenge expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/challenge": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Request a sign-in challenge",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "address"
+                ],
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "example": "GABC..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Challenge issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AuthChallenge"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{address}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user profile",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stellar public key"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update user profile",
+        "description": "Update display name or avatar URL. Requires wallet-signature auth matching :address.",
+        "security": [
+          {
+            "WalletSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-wallet-signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-wallet-message",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "avatarUrl": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid wallet auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{address}/bets": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get bets by user address",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated bet history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Bet"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{address}/positions": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get open positions by user address",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated open positions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/markets/search": {
+      "get": {
+        "tags": [
+          "Markets",
+          "Search"
+        ],
+        "summary": "Full-text market search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching markets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SearchResults"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search markets and users",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "markets",
+                "users",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SearchResults"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Platform-wide statistics",
+        "responses": {
+          "200": {
+            "description": "Aggregate platform stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformStats"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/verify": {
+      "post": {
+        "tags": [
+          "Oracle"
+        ],
+        "summary": "Submit a fight result",
+        "security": [
+          {
+            "OracleKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "address",
+                  "signature"
+                ],
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "example": "GABC..."
+                  },
+                  "signature": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Oracle result created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OracleResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/leaderboard": {
+      "get": {
+        "tags": ["Leaderboard"],
+        "summary": "Top bettors ranked by realised profit",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["7d", "30d", "all"], "default": "all" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked leaderboard entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "rank": { "type": "integer" },
+                      "bettor": { "type": "string" },
+                      "realisedProfit": { "type": "string", "description": "stroops, as a string" },
+                      "totalStaked": { "type": "string" },
+                      "totalPayout": { "type": "string" },
+                      "settledBets": { "type": "integer" },
+                      "wonBets": { "type": "integer" },
+                      "winRate": { "type": "number" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid period or limit" }
+        }
+      }
+    },
+    "/api/oracle/results": {
+      "get": {
+        "tags": [
+          "Oracle"
+        ],
+        "summary": "List all oracle submissions (admin)",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AuthToken"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid signature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List markets pending resolution",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/markets/{marketId}/resolve": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Queue on-chain resolution of a market with the given outcome",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "marketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "outcome"
+                ],
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "FighterA",
+                      "FighterB",
+                      "Draw",
+                      "NoContest"
+                    ],
+                    "example": "FighterA"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Resolution queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "marketId": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Outcome is missing or not a known value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid X-Admin-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Market not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/markets/resolve": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "deprecated": true,
+        "summary": "Deprecated: use POST /api/admin/markets/{marketId}/resolve",
+        "description": "Kept for existing callers. Responses include a `Deprecation: true` header and a `Link` header pointing at the successor route.",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "outcome"
+                ],
+                "properties": {
+                  "market_id": {
+                    "type": "string",
+                    "description": "Also accepted as marketId"
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "FighterA",
+                      "FighterB",
+                      "Draw",
+                      "NoContest"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Resolution queued"
+          },
+          "400": {
+            "description": "market_id and outcome are required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid X-Admin-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/markets/dispute/resolve": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Resolve a disputed market with admin override",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "dispute_id",
+                  "override_outcome"
+                ],
+                "properties": {
+                  "dispute_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "override_outcome": {
+                    "type": "string",
+                    "enum": [
+                      "FighterA",
+                      "FighterB",
+                      "Draw",
+                      "NoContest"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Oracle results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "example": "ok"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/oracles": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List all registered oracles",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Oracle list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Oracle"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Register a new oracle",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "marketId",
+                  "outcome"
+                ],
+                "properties": {
+                  "marketId": {
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "FighterA",
+                      "FighterB",
+                      "Draw",
+                      "NoContest"
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "example": "BoxRec"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Oracle created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Oracle"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/oracles/{id}": {
+      "patch": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update oracle name or active status",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Oracle updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Oracle"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No fields provided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Deactivate (soft-delete) an oracle",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Oracle deactivated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Oracle"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/audit-logs": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get audit logs",
+        "security": [
+          {
+            "AdminKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AuditLog"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { ClaimReceipt } from "@/components/ClaimButton";
-import { buildSorobanInvocation, submitTransaction, decodeScVal } from "@/lib/stellar";
+import type { ClaimReceipt } from "@/components/ClaimButton";
+import { buildSorobanInvocation, submitTransaction, decodeScVal, bytes } from "@/lib/stellar";
 import { fetchMarketById, fetchMarketBets } from "@/lib/api";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -12,18 +12,21 @@ export interface UseClaimWinningsResult {
 }
 
 /**
- * Detects whether to call claim_winnings() or claim_refund() based on market outcome.
+ * Detects whether to call claim_winnings() or claim_refund() based on market status.
  * Builds and submits the correct Soroban transaction via the connected wallet.
  * Returns a ClaimReceipt with the final payout amount on success.
  */
 export function useClaimWinnings(): UseClaimWinningsResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const { address, signTransaction } = useWallet();
+  const { address, signTransaction, isNetworkMismatched } = useWallet();
 
   const claim = async (bet_id: string, market_id: string): Promise<ClaimReceipt> => {
     if (!address) {
       throw new Error("Wallet not connected");
+    }
+    if (isNetworkMismatched) {
+      throw new Error("Wallet is connected to the wrong network");
     }
 
     setIsLoading(true);
@@ -53,7 +56,7 @@ export function useClaimWinnings(): UseClaimWinningsResult {
       const xdr = await buildSorobanInvocation({
         contractId: market_id,
         method,
-        args: [bet_id],
+        args: [await bytes(bet_id)],
         signerAddress: address,
       });
 
@@ -61,7 +64,7 @@ export function useClaimWinnings(): UseClaimWinningsResult {
       const result = await submitTransaction(signedXdr);
 
       // Decode payout from return value
-      const payout = decodeScVal(result.returnValue) as bigint;
+      const payout = (await decodeScVal(result.returnValue)) as bigint;
 
       return {
         betId: bet_id,

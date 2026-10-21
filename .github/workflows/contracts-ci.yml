@@ -1,0 +1,271 @@
+name: Contracts CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - ".github/workflows/contracts-ci.yml"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - ".github/workflows/contracts-ci.yml"
+
+defaults:
+  run:
+    working-directory: contracts
+
+env:
+  # Maximum allowed size (bytes) for each optimised contract .wasm.
+  # Soroban's network limit for contract code is 64 KiB (65,536 bytes);
+  # anything above this cannot be deployed, so CI fails early.
+  MAX_WASM_SIZE_BYTES: 65536
+
+# Each job below has a stable name so it can be selected as a required status
+# check. The jobs run in parallel and share one Rust cache key, so a cold run
+# compiles dependencies once rather than once per job.
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+          shared-key: contracts
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32v1-none
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+          shared-key: contracts
+
+      - name: Install Stellar CLI
+        env:
+          STELLAR_CLI_VERSION: 28.1.0
+          STELLAR_CLI_SHA256: c1680deee94301d33ada7a17f98411e642a4248c727afbd2e43050d345746462
+        run: |
+          archive="stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/$archive"
+          echo "${STELLAR_CLI_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/bin" stellar
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Check Stellar CLI version
+        run: stellar --version
+
+      - name: Build (optimised release profile)
+        run: stellar contract build
+
+      - name: Upload wasm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-wasm
+          path: contracts/target/wasm32v1-none/release/*.wasm
+          if-no-files-found: error
+
+  wasm-size:
+    name: wasm-size
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download wasm artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contracts-wasm
+          path: contracts/target/wasm32v1-none/release
+
+      - name: Check wasm sizes
+        run: |
+          status=0
+          shopt -s nullglob
+          files=(target/wasm32v1-none/release/*.wasm)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No .wasm files found in target/wasm32v1-none/release"
+            exit 1
+          fi
+          echo "| Contract | Size (bytes) | Limit (bytes) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for f in "${files[@]}"; do
+            size=$(stat -c%s "$f")
+            name=$(basename "$f")
+            echo "$name: $size bytes (limit $MAX_WASM_SIZE_BYTES)"
+            echo "| $name | $size | $MAX_WASM_SIZE_BYTES |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$size" -gt "$MAX_WASM_SIZE_BYTES" ]; then
+              echo "::error file=contracts/$f::$name is $size bytes, exceeds limit of $MAX_WASM_SIZE_BYTES"
+              status=1
+            fi
+          done
+          exit $status
+
+  test:
+    name: test
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32v1-none
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+          shared-key: contracts
+
+      - name: Download wasm artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contracts-wasm
+          path: contracts/target/wasm32v1-none/release
+
+      - name: Test
+        run: cargo test
+
+  coverage:
+    name: coverage
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+          shared-key: contracts-coverage
+
+      - name: Download wasm artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contracts-wasm
+          path: contracts/target/wasm32v1-none/release
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run tests with coverage
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+
+      - name: Coverage summary
+        run: |
+          {
+            echo "## Contracts coverage"
+            echo '```'
+            cargo llvm-cov report --summary-only
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload lcov artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-lcov
+          path: contracts/lcov.info
+          if-no-files-found: error
+
+  # Branch protection on `main` requires the "Contracts CI" status check to
+  # pass before merging. GitHub matches required checks against the workflow
+  # *name* (or job name), so expose a single stable, always-run check that
+  # aggregates the real jobs. This keeps the required check green only when
+  # every Contracts CI job succeeds, and lets it be selected as a required
+  # status check in the branch protection rule for `main`.
+  contracts-ci:
+    name: Contracts CI
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy, build, wasm-size, test, coverage]
+    if: always()
+    steps:
+      - name: Summarise job results
+        env:
+          FMT: ${{ needs.fmt.result }}
+          CLIPPY: ${{ needs.clippy.result }}
+          BUILD: ${{ needs.build.result }}
+          WASM_SIZE: ${{ needs.wasm-size.result }}
+          TEST: ${{ needs.test.result }}
+          COVERAGE: ${{ needs.coverage.result }}
+        run: |
+          {
+            echo "## Contracts CI results"
+            echo ""
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| fmt | $FMT |"
+            echo "| clippy | $CLIPPY |"
+            echo "| build | $BUILD |"
+            echo "| wasm-size | $WASM_SIZE |"
+            echo "| test | $TEST |"
+            echo "| coverage | $COVERAGE |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failed=0
+          for result in "$FMT" "$CLIPPY" "$BUILD" "$WASM_SIZE" "$TEST" "$COVERAGE"; do
+            if [ "$result" != "success" ]; then
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::Contracts CI failed (fmt=$FMT, clippy=$CLIPPY, build=$BUILD, wasm-size=$WASM_SIZE, test=$TEST, coverage=$COVERAGE)"
+            exit 1
+          fi
+          echo "All Contracts CI jobs passed."

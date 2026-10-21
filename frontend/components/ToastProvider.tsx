@@ -1,57 +1,104 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode } from 'react';
+import { Toast as ToastComponent, ToastType } from '@/components/Toast';
 
-interface Toast {
+// Internal toast item stored in state
+export interface ToastItem {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: ToastType;
+  title?: string;
+  href?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
-interface ToastContextType {
-  toasts: Toast[];
-  addToast: (message: string, type: Toast['type']) => void;
+export type ToastOptions = {
+  title?: string;
+  href?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+};
+
+export interface ToastContextType {
+  toasts: ToastItem[];
+  addToast: (
+    message: string,
+    type: ToastType,
+    optionsOrHref?: string | ToastOptions,
+    extraHref?: string
+  ) => void;
   removeToast: (id: string) => void;
 }
 
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
+export const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  const addToast = (message: string, type: Toast['type']) => {
+  const addToast = (
+    message: string,
+    type: ToastType,
+    optionsOrHref?: string | ToastOptions,
+    extraHref?: string
+  ) => {
     const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => removeToast(id), 3000);
+    let title: string | undefined;
+    let href: string | undefined;
+    let action: { label: string; onClick: () => void } | undefined;
+
+    if (typeof optionsOrHref === "string") {
+      if (optionsOrHref.startsWith("/") || optionsOrHref.startsWith("http")) {
+        href = optionsOrHref;
+      } else {
+        title = optionsOrHref;
+      }
+    } else if (optionsOrHref && typeof optionsOrHref === "object") {
+      title = optionsOrHref.title;
+      href = optionsOrHref.href;
+      action = optionsOrHref.action;
+    }
+
+    if (extraHref) {
+      href = extraHref;
+    }
+
+    setToasts((prev) => [...prev, { id, message, type, title, href, action }]);
   };
 
   const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 space-y-2">
+      <div className="fixed bottom-4 right-4 space-y-2 z-50">
         {toasts.map(toast => (
-          <div
+          <ToastComponent
             key={toast.id}
-            className={`px-4 py-2 rounded text-white ${
-              toast.type === 'success' ? 'bg-green-500' :
-              toast.type === 'error' ? 'bg-red-500' :
-              'bg-blue-500'
-            }`}
-          >
-            {toast.message}
-          </div>
+            toast={toast}
+            onDismiss={removeToast}
+          />
         ))}
       </div>
     </ToastContext.Provider>
   );
 }
 
-export function useToastProvider() {
+export function useToast() {
   const context = useContext(ToastContext);
-  if (!context) throw new Error('useToastProvider must be used within ToastProvider');
+  if (!context) throw new Error('useToast must be used within ToastProvider');
   return context;
 }
+
+/**
+ * Alias for useToast — exported as useToastProvider for backwards compatibility
+ * with pages that import it under this name (e.g. app/create/page.tsx).
+ */
+export const useToastProvider = useToast;

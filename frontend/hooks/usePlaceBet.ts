@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Bet, BetSide } from "@/lib/api";
-import { buildSorobanInvocation, submitTransaction } from "@/lib/stellar";
+import { buildSorobanInvocation, submitTransaction, i128, sym } from "@/lib/stellar";
 import { useWallet } from "@/hooks/useWallet";
 
 export interface UsePlaceBetResult {
@@ -18,11 +18,14 @@ export interface UsePlaceBetResult {
 export function usePlaceBet(market_id: string): UsePlaceBetResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const { address, signTransaction } = useWallet();
+  const { address, signTransaction, isNetworkMismatched } = useWallet();
 
   const placeBet = async (side: BetSide, amount: bigint): Promise<Bet> => {
     if (!address) {
       throw new Error("Wallet not connected");
+    }
+    if (isNetworkMismatched) {
+      throw new Error("Wallet is connected to the wrong network");
     }
 
     setIsLoading(true);
@@ -32,7 +35,7 @@ export function usePlaceBet(market_id: string): UsePlaceBetResult {
       const xdr = await buildSorobanInvocation({
         contractId: market_id,
         method: "place_bet",
-        args: [side, amount],
+        args: await Promise.all([sym(side), i128(amount)]),
         signerAddress: address,
       });
 
@@ -40,7 +43,6 @@ export function usePlaceBet(market_id: string): UsePlaceBetResult {
 
       const result = await submitTransaction(signedXdr);
 
-      // Return confirmed bet object
       return {
         id: result.txHash,
         marketId: market_id,

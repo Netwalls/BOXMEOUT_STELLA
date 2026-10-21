@@ -1,3 +1,5 @@
+"use client";
+import { useState, useCallback } from "react";
 import { ToastType } from "@/components/Toast";
 
 export interface ToastItem {
@@ -19,5 +21,28 @@ export interface UseToastResult {
  * Intended to be used with a React context provider at the app root.
  */
 export function useToast(): UseToastResult {
-  throw new Error("Not implemented");
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timersRef = new Map<string, NodeJS.Timeout>();
+
+  const dismissToast = useCallback((id: string) => {
+    const timer = timersRef.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const showToast = useCallback(
+    (message: string, type: ToastType) => {
+      const id = Date.now().toString() + Math.random();
+      setToasts((prev) => [...prev, { id, message, type }]);
+
+      const timer = setTimeout(() => dismissToast(id), 5000);
+      timersRef.set(id, timer);
+    },
+    [dismissToast]
+  );
+
+  return { toasts, showToast, dismissToast };
 }

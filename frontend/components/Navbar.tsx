@@ -1,52 +1,91 @@
 "use client";
-import { useState } from "react";
+
+import { useState, useCallback } from "react";
 import Link from "next/link";
+import { WalletConnectButton } from "./WalletConnectButton";
+import { useTheme } from "@/hooks/useTheme";
 
 const NAV_LINKS = [
-  { href: "/", label: "Markets" },
+  { href: "/", label: "Home" },
+  { href: "/create", label: "Create" },
   { href: "/portfolio", label: "Portfolio" },
-  { href: "/create", label: "Create Market" },
+  { href: "/leaderboard", label: "Leaderboard" },
 ];
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const [, setWalletAddress] = useState<string | null>(null);
+  const { theme, toggleTheme } = useTheme();
+
+  const handleWalletConnected = useCallback((address: string) => {
+    setWalletAddress(address);
+  }, []);
 
   return (
     <nav className="bg-gray-900 border-b border-gray-800">
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
-        <Link href="/" className="text-xl font-bold text-amber-400 min-h-0">
+        {/* Logo */}
+        <Link
+          href="/"
+          className="text-xl font-bold text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 rounded"
+        >
           BOXMEOUT
         </Link>
 
-        {/* Desktop links */}
+        {/* Desktop nav links */}
         <ul className="hidden md:flex items-center gap-6">
           {NAV_LINKS.map((l) => (
             <li key={l.href}>
               <Link
                 href={l.href}
-                className="text-gray-300 hover:text-white transition-colors"
+                className="text-gray-300 hover:text-white transition-colors px-2 py-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
               >
                 {l.label}
               </Link>
             </li>
           ))}
+          <li>
+            <button
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="w-9 h-9 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+            >
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+          </li>
         </ul>
 
-        {/* Hamburger — mobile only */}
+        {/* Desktop: WalletConnectButton slot */}
+        <div className="hidden md:flex items-center">
+          <WalletConnectButton onConnected={handleWalletConnected} />
+        </div>
+
+        {/* Hamburger button — mobile only */}
         <button
-          className="md:hidden flex items-center justify-center w-11 h-11 text-gray-300 hover:text-white"
+          className="md:hidden flex items-center justify-center w-11 h-11 text-gray-300 hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
           onClick={() => setOpen((o) => !o)}
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
+          aria-controls="mobile-menu"
         >
           {open ? (
-            // X icon
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           ) : (
-            // Hamburger icon
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           )}
@@ -55,19 +94,28 @@ export function Navbar() {
 
       {/* Mobile dropdown */}
       {open && (
-        <ul className="md:hidden border-t border-gray-800 bg-gray-900 px-4 pb-4">
-          {NAV_LINKS.map((l) => (
-            <li key={l.href}>
-              <Link
-                href={l.href}
-                className="flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors"
-                onClick={() => setOpen(false)}
-              >
-                {l.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div
+          id="mobile-menu"
+          className="md:hidden border-t border-gray-800 bg-gray-900 px-4 pb-4"
+        >
+          <ul>
+            {NAV_LINKS.map((l) => (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  className="flex items-center min-h-[44px] text-gray-300 hover:text-white transition-colors px-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                  onClick={() => setOpen(false)}
+                >
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {/* WalletConnectButton slot — mobile */}
+          <div className="mt-3">
+            <WalletConnectButton onConnected={handleWalletConnected} />
+          </div>
+        </div>
       )}
     </nav>
   );

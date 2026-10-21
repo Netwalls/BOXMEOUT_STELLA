@@ -1,43 +1,144 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import type { Market, Bet, PortfolioSummary } from "@/lib/api";
+import {
+  BET,
+  SUMMARY,
+  apiError,
+  mockFetchBetsByAddress,
+  mockFetchPortfolioSummary,
+  pending,
+} from "./mockApiClient";
 
-const MARKET: Market = {
-  id: "mkt-1", contractAddress: "CA1",
-  fighterA: { name: "Ali", record: "20-0", nationality: "USA", weightClass: "HW" },
-  fighterB: { name: "Foreman", record: "18-2", nationality: "USA", weightClass: "HW" },
-  scheduledAt: "2026-07-01T20:00:00Z", bettingEndsAt: "2026-07-01T19:00:00Z",
-  status: "Open", outcome: null, poolA: "1000000000", poolB: "500000000",
-  totalPool: "1500000000", oracleAddress: "GORACLE", createdBy: "GCREATOR",
-};
-const BET: Bet = { id: "bet-1", marketId: "mkt-1", bettor: "GADDR1", side: "FighterA", amount: "100000000", placedAt: "2026-06-20T10:00:00Z", claimed: false, payout: null };
-const SUMMARY: PortfolioSummary = { totalStaked: "100000000", totalWinnings: "0", pendingClaims: "0", activeBets: 1, completedBets: 0, roi: 0 };
+jest.mock("@/lib/api");
 
-afterEach(() => jest.restoreAllMocks());
+let consoleError: jest.SpyInstance;
 
-test("happy path: fetches bets, summary and markets for a valid address", async () => {
-  global.fetch = jest.fn()
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([BET]) })      // fetchBetsByAddress
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(SUMMARY) })    // fetchPortfolioSummary
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(MARKET) });    // fetchMarketById mkt-1
-  const { result } = renderHook(() => usePortfolio("GADDR1"));
-  await waitFor(() => expect(result.current.isLoading).toBe(false));
-  expect(result.current.bets).toEqual([BET]);
-  expect(result.current.summary).toEqual(SUMMARY);
-  expect(result.current.markets["mkt-1"]).toEqual(MARKET);
+beforeEach(() => {
+  consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
 });
 
-test("error path: keeps empty state when API returns 500", async () => {
-  global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
-  const { result } = renderHook(() => usePortfolio("GADDR1"));
-  await waitFor(() => expect(result.current.isLoading).toBe(false));
-  expect(result.current.bets).toEqual([]);
-  expect(result.current.summary).toBeNull();
+afterEach(() => {
+  jest.clearAllMocks();
+  consoleError.mockRestore();
 });
 
-test("edge case: null address — never fetches, stays idle", () => {
-  const { result } = renderHook(() => usePortfolio(null));
-  expect(result.current.isLoading).toBe(false);
-  expect(result.current.bets).toEqual([]);
-  expect(result.current.summary).toBeNull();
+describe("usePortfolio", () => {
+  describe("loading state", () => {
+    it("is loading with empty state while both requests are in flight", async () => {
+      mockFetchBetsByAddress.mockReturnValue(pending());
+      mockFetchPortfolioSummary.mockReturnValue(pending());
+
+      const { result } = renderHook(() => usePortfolio("GADDR1"));
+
+      await waitFor(() => expect(result.current.isLoading).toBe(true));
+      expect(result.current.bets).toEqual([]);
+      expect(result.current.summary).toBeNull();
+    });
+
+    it("stays idle and never calls the API when no wallet is connected", async () => {
+      const { result } = renderHook(() => usePortfolio(null));
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.bets).toEqual([]);
+      expect(result.current.summary).toBeNull();
+      expect(mockFetchBetsByAddress).not.toHaveBeenCalled();
+      expect(mockFetchPortfolioSummary).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("success state", () => {
+    it("exposes bets and summary for a connected address", async () => {
+      mockFetchBetsByAddress.mockResolvedValue([BET]);
+      mockFetchPortfolioSummary.mockResolvedValue(SUMMARY);
+
+      const { result } = renderHook(() => usePortfolio("GADDR1"));
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.bets).toEqual([BET]);
+      expect(result.current.summary).toEqual(SUMMARY);
+      expect(mockFetchBetsByAddress).toHaveBeenCalledWith("GADDR1");
+      expect(mockFetchPortfolioSummary).toHaveBeenCalledWith("GADDR1");
+    });
+
+    it("refetches for the new address when the wallet changes", async () => {
+      mockFetchBetsByAddress.mockResolvedValue([BET]);
+      mockFetchPortfolioSummary.mockResolvedValue(SUMMARY);
+
+      const { result, rerender } = renderHook(({ address }) => usePortfolio(address), {
+        initialProps: { address: "GADDR1" as string | null },
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      rerender({ address: "GADDR2" });
+
+      await waitFor(() => expect(mockFetchBetsByAddress).toHaveBeenLastCalledWith("GADDR2"));
+    });
+
+    it("refetches on demand", async () => {
+      mockFetchBetsByAddress.mockResolvedValue([BET]);
+      mockFetchPortfolioSummary.mockResolvedValue(SUMMARY);
+      const { result } = renderHook(() => usePortfolio("GADDR1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.refetch();
+      });
+
+      expect(mockFetchBetsByAddress).toHaveBeenCalledTimes(2);
+      expect(mockFetchPortfolioSummary).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("error state", () => {
+    it("keeps empty state and logs when the API fails", async () => {
+      mockFetchBetsByAddress.mockRejectedValue(apiError(500, "Internal Server Error"));
+      mockFetchPortfolioSummary.mockRejectedValue(apiError(500, "Internal Server Error"));
+
+      const { result } = renderHook(() => usePortfolio("GADDR1"));
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.bets).toEqual([]);
+      expect(result.current.summary).toBeNull();
+      expect(consoleError).toHaveBeenCalledWith(
+        "Failed to fetch portfolio data:",
+        expect.stringContaining("500")
+      );
+    });
+
+    it("discards the partial result when only one of the two requests fails", async () => {
+      mockFetchBetsByAddress.mockResolvedValue([BET]);
+      mockFetchPortfolioSummary.mockRejectedValue(apiError(500, "Internal Server Error"));
+
+      const { result } = renderHook(() => usePortfolio("GADDR1"));
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.bets).toEqual([]);
+      expect(result.current.summary).toBeNull();
+    });
+
+    it("clears loading after a failure so the UI is not stuck in a spinner", async () => {
+      mockFetchBetsByAddress.mockRejectedValue(apiError(503, "Service Unavailable"));
+      mockFetchPortfolioSummary.mockRejectedValue(apiError(503, "Service Unavailable"));
+
+      const { result } = renderHook(() => usePortfolio("GADDR1"));
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+    });
+
+    it("recovers on a successful retry after a failure", async () => {
+      mockFetchBetsByAddress.mockRejectedValueOnce(apiError(500, "Internal Server Error"));
+      mockFetchPortfolioSummary.mockRejectedValueOnce(apiError(500, "Internal Server Error"));
+      const { result } = renderHook(() => usePortfolio("GADDR1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      mockFetchBetsByAddress.mockResolvedValueOnce([BET]);
+      mockFetchPortfolioSummary.mockResolvedValueOnce(SUMMARY);
+      await act(async () => {
+        result.current.refetch();
+      });
+
+      expect(result.current.bets).toEqual([BET]);
+      expect(result.current.summary).toEqual(SUMMARY);
+    });
+  });
 });

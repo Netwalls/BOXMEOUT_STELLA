@@ -2,7 +2,7 @@
 // Run: npx prisma migrate dev
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
 }
 
 datasource db {
@@ -30,16 +30,34 @@ enum BetSide {
   FighterB
 }
 
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  iconUrl   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  markets   Market[]
+
+  @@index([deletedAt])
+}
+
 model Market {
   id              String       @id
   contractAddress String       @unique
   fighterA        Json
   fighterB        Json
+  question        String       @default("")
+  description     String       @default("")
   scheduledAt     DateTime
   bettingEndsAt   DateTime
   createdAt       DateTime
   createdBy       String
   status          MarketStatus @default(Open)
+
+  @@index([createdBy])
+  @@index([status, scheduledAt])
   outcome         Outcome?
   resolvedAt      DateTime?
   poolA           BigInt       @default(0)
@@ -47,9 +65,16 @@ model Market {
   totalPool       BigInt       @default(0)
   oracleAddress   String
   txHash          String?
+  categoryId      String?
+  category        Category?    @relation(fields: [categoryId], references: [id])
   bets            Bet[]
   disputes        Dispute[]
   oracleResult    OracleResult?
+  /// @db.Unsupported("tsvector")
+  tsVector        Unsupported("tsvector")?
+
+  @@index([categoryId])
+  @@index([tsVector(ops: raw("tsvector_ops"))], type: Gin)
 }
 
 model Bet {
@@ -64,6 +89,9 @@ model Bet {
   claimedAt DateTime?
   payout    BigInt?
   txHash    String?
+
+  @@index([marketId, bettor])
+  @@index([bettor, placedAt])
 }
 
 model Dispute {
@@ -101,4 +129,46 @@ model AdminLog {
   target    String?
   metadata  Json?
   createdAt DateTime @default(now())
+}
+
+model Oracle {
+  id        String   @id @default(uuid())
+  address   String   @unique
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  userId        String
+  ipAddress     String
+  method        String
+  path          String
+  requestBody   Json?
+  statusCode    Int
+  timestamp     DateTime @default(now())
+
+  @@index([timestamp])
+}
+
+model User {
+  address   String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EventLog {
+  id            Int       @id @default(autoincrement())
+  txHash        String
+  eventType     String
+  contractId    String
+  ledger        Int
+  ledgerClosedAt DateTime
+  body          Json
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([txHash, eventType])
+  @@index([processedAt])
 }

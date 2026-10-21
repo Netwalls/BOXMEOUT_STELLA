@@ -1,0 +1,8 @@
+# Budget thresholds for hot contract paths, enforced by the budget tests in
+# market/tests/budget.rs and market_factory/tests/budget.rs (run by CI's test job).
+#
+# Format: <name> <max_cpu_instructions> <max_memory_bytes>
+#
+# A path with no line below fails its test and prints the measured cost, so
+# record a baseline by copying those numbers here. Raise a threshold only in
+# the same change that makes the path more expensive, and say why in the PR.

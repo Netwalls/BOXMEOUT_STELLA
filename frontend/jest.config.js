@@ -1,13 +1,19 @@
+const nextJest = require("next/jest");
+
+const createJestConfig = nextJest({ dir: "./" });
+
 /** @type {import('jest').Config} */
 const config = {
-  testEnvironment: "jest-environment-jsdom",
-  transform: {
-    "^.+\\.(ts|tsx)$": ["ts-jest", { tsconfig: { jsx: "react-jsx" } }],
-  },
-  setupFilesAfterFramework: ["<rootDir>/jest.setup.ts"],
+  coverageProvider: "v8",
+  testEnvironment: "jsdom",
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
+    "^zod$": "<rootDir>/node_modules/next/dist/compiled/zod",
   },
+  // Fixture modules live beside the tests that use them and must not run as suites
+  testPathIgnorePatterns: ["<rootDir>/node_modules/", "<rootDir>/.next/", "<rootDir>/e2e/"],
+  testMatch: ["**/__tests__/**/*.test.[jt]s?(x)", "**/?(*.)+(spec|test).[jt]s?(x)"],
 };
 
-module.exports = config;
+module.exports = createJestConfig(config);
