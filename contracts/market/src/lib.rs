@@ -247,6 +247,11 @@ impl MarketContract {
         );
         let config = config?;
 
+        // Check if protocol is paused (claims and refunds remain available)
+        if config.paused {
+            return Err(ContractError::ProtocolPaused);
+        }
+
         // Prevent dust bets that consume on-chain storage without contributing
         // meaningful opposing liquidity. The configured min_bet_amount is checked
         // before any escrow transfer or state mutation.
@@ -390,6 +395,51 @@ impl MarketContract {
             market_id_to_u64(&market.market_id),
             String::from_str(&env, "cancelled_by_admin"),
         );
+        Ok(())
+    }
+
+    /// Permissionless escape hatch: cancel an unresolved market after the resolution timeout.
+    ///
+    /// If the oracle never calls resolve_market within resolution_timeout_sec after the
+    /// scheduled fight time, anyone can call this to cancel the market and enable refunds.
+    /// This prevents markets from staying locked indefinitely.
+    pub fn cancel_unresolved(env: Env, market_id: Bytes) -> Result<(), ContractError> {
+        let mut market = Self::read_market(&env);
+
+        // Only Locked markets can be cancelled via this escape hatch
+        if market.status != MarketStatus::Locked {
+            return Err(ContractError::InvalidMarketStatus);
+        }
+
+        // Check if market has been locked for too long
+        let factory: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Factory)
+            .expect("factory not set");
+        let config: ProtocolConfig = env.invoke_contract(
+            &factory,
+            &Symbol::new(&env, "get_config"),
+            soroban_sdk::vec![&env],
+        );
+
+        let now = env.ledger().timestamp();
+        let timeout_deadline = market.scheduled_at + config.resolution_timeout_sec;
+
+        if now <= timeout_deadline {
+            return Err(ContractError::InvalidTimestamp);
+        }
+
+        // Cancel the market, enabling refunds for all bettors
+        market.status = MarketStatus::Cancelled;
+        Self::write_market(&env, &market);
+
+        events::emit_market_cancelled(
+            &env,
+            market_id_to_u64(&market.market_id),
+            String::from_str(&env, "oracle_timeout"),
+        );
+
         Ok(())
     }
 
@@ -544,6 +594,17 @@ impl MarketContract {
             return Err(ContractError::InvalidMarketStatus);
         }
 
+        // Block claims during dispute window
+        let dispute_window_end = market.resolved_at + market.dispute_window_sec;
+        let now = env.ledger().timestamp();
+        let dispute_active: bool = env.storage().persistent()
+            .get(&DataKey::DisputeRaised)
+            .unwrap_or(false);
+
+        if now < dispute_window_end || dispute_active {
+            panic!("claims not yet available");
+        }
+
         let outcome = market.outcome.require_resolved();
         if !bet_wins(&bet.side, &outcome) {
             return Err(ContractError::NotWinner);
@@ -614,6 +675,18 @@ impl MarketContract {
         if market.status != MarketStatus::Resolved {
             return Err(ContractError::InvalidMarketStatus);
         }
+
+        // Block claims during dispute window
+        let dispute_window_end = market.resolved_at + market.dispute_window_sec;
+        let now = env.ledger().timestamp();
+        let dispute_active: bool = env.storage().persistent()
+            .get(&DataKey::DisputeRaised)
+            .unwrap_or(false);
+
+        if now < dispute_window_end || dispute_active {
+            panic!("claims not yet available");
+        }
+
         let outcome = market.outcome.require_resolved();
         let winning_pool = winning_pool_for(&market, &outcome).ok_or(ContractError::InvalidMarketStatus)?;
         let net = net_pool(&market);
