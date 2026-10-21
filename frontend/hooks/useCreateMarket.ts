@@ -1,7 +1,14 @@
 "use client";
 import { useState } from "react";
 import { CreateMarketFormData } from "@/components/CreateMarketForm";
-import { buildSorobanInvocation, submitTransaction, decodeScVal } from "@/lib/stellar";
+import {
+  buildSorobanInvocation,
+  submitTransaction,
+  decodeScVal,
+  str,
+  u64,
+  address,
+} from "@/lib/stellar";
 import { useWallet } from "@/hooks/useWallet";
 
 export interface UseCreateMarketResult {
@@ -35,19 +42,19 @@ export function useCreateMarket(): UseCreateMarketResult {
       const xdr = await buildSorobanInvocation({
         contractId: "MARKET_FACTORY_ID",
         method: "create_market",
-        args: [
-          data.fighterAName,
-          data.fighterARecord,
-          data.fighterANationality,
-          data.fighterAWeightClass,
-          data.fighterBName,
-          data.fighterBRecord,
-          data.fighterBNationality,
-          data.fighterBWeightClass,
-          new Date(data.scheduledAt).getTime() / 1000,
-          new Date(data.bettingEndsAt).getTime() / 1000,
-          data.oracleAddress,
-        ],
+        args: await Promise.all([
+          str(data.fighterAName),
+          str(data.fighterARecord),
+          str(data.fighterANationality),
+          str(data.fighterAWeightClass),
+          str(data.fighterBName),
+          str(data.fighterBRecord),
+          str(data.fighterBNationality),
+          str(data.fighterBWeightClass),
+          u64(BigInt(Math.floor(new Date(data.scheduledAt).getTime() / 1000))),
+          u64(BigInt(Math.floor(new Date(data.bettingEndsAt).getTime() / 1000))),
+          address(data.oracleAddress),
+        ]),
         signerAddress: address,
       });
 
