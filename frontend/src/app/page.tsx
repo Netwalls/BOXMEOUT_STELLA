@@ -10,7 +10,7 @@
 // Lists all boxing markets with filters and sorting.
 // ============================================================
 
-import { useCallback } from 'react';
+import { Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMarkets } from '../hooks/useMarkets';
 import { MarketCard } from '../components/market/MarketCard';
@@ -36,7 +36,7 @@ const WEIGHT_CLASSES = [
 ];
 const STATUSES = ['All', 'Open', 'Resolved'];
 
-export default function HomePage(): JSX.Element {
+function HomePageContent(): JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -103,5 +103,13 @@ export default function HomePage(): JSX.Element {
         </div>
       )}
     </main>
+  );
+}
+
+export default function HomePage(): JSX.Element {
+  return (
+    <Suspense fallback={<main className="max-w-6xl mx-auto px-4 py-6">Loading markets...</main>}>
+      <HomePageContent />
+    </Suspense>
   );
 }

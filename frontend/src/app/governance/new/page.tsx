@@ -118,8 +118,12 @@ export default function NewProposalPage() {
       setTxStatus({ hash, status: 'success', error: null });
       // Redirect to proposals list or similar after success
       setTimeout(() => router.push('/governance'), 2000);
-    } catch (err: any) {
-      setTxStatus({ hash: null, status: 'error', error: err.message });
+    } catch (err: unknown) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   };
 

@@ -6,7 +6,7 @@
 import {
   Contract,
   Networks,
-  SorobanRpc,
+  rpc,
   TransactionBuilder,
   BASE_FEE,
   nativeToScVal,
@@ -26,6 +26,21 @@ const NETWORK_PASSPHRASE =
   NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
 
 const LS_KEY = 'boxmeout_wallet_address';
+
+interface FreighterApi {
+  requestAccess(): Promise<unknown>;
+  getPublicKey(): Promise<{ publicKey: string }>;
+  signTransaction(
+    transactionXdr: string,
+    options: { networkPassphrase: string },
+  ): Promise<{ signedTxXdr: string }>;
+}
+
+interface AlbedoApi {
+  publicKey(options: { token: string }): Promise<{ pubkey: string }>;
+}
+
+type WalletWindow = Window & { freighter?: FreighterApi; albedo?: AlbedoApi };
 
 // ─── Custom Errors ───────────────────────────────────────────────────────────
 
@@ -53,7 +68,7 @@ async function buildAndSubmit(
   const address = getConnectedAddress();
   if (!address) throw new Error('WalletNotConnected');
 
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL);
+  const server = new rpc.Server(SOROBAN_RPC_URL);
   const account = await server.getAccount(address);
   const contract = new Contract(contractAddress);
 
@@ -68,7 +83,7 @@ async function buildAndSubmit(
   const preparedTx = await server.prepareTransaction(tx);
   const txXdr = preparedTx.toXDR();
 
-  const freighter = (window as any).freighter;
+  const freighter = (window as WalletWindow).freighter;
   if (!freighter) throw new Error('WalletNotInstalledError');
 
   // Sign with Freighter, capturing signing errors
@@ -118,8 +133,7 @@ async function buildAndSubmit(
 
 export async function connectWallet(): Promise<string> {
   if (typeof window === 'undefined') throw new Error('Browser only');
-  const freighter = (window as any).freighter;
-  const albedo = (window as any).albedo;
+  const { freighter, albedo } = window as WalletWindow;
   if (freighter) {
     await freighter.requestAccess();
     const { publicKey } = await freighter.getPublicKey();
@@ -287,8 +301,10 @@ export async function getWalletBalance(): Promise<number> {
   try {
     const res = await fetch(`${HORIZON_URL}/accounts/${address}`);
     if (!res.ok) return 0;
-    const data = await res.json();
-    const native = (data.balances as any[]).find((b: any) => b.asset_type === 'native');
+    const data = (await res.json()) as {
+      balances?: Array<{ asset_type: string; balance: string }>;
+    };
+    const native = data.balances?.find((balance) => balance.asset_type === 'native');
     return native ? parseFloat(native.balance) : 0;
   } catch {
     return 0;
@@ -297,10 +313,22 @@ export async function getWalletBalance(): Promise<number> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export function xlmToStroops(xlm: number): bigint {
-  const [whole, frac = ''] = xlm.toString().split('.');
-  const fracPadded = frac.slice(0, 7).padEnd(7, '0');
-  return BigInt(whole) * 10_000_000n + BigInt(fracPadded);
+export function xlmToStroops(xlm: number | string): bigint {
+  const match = /^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/.exec(
+    String(xlm).trim().toLowerCase(),
+  );
+  if (!match || (!match[2] && !match[3])) {
+    throw new TypeError(`Invalid XLM amount: ${xlm}`);
+  }
+
+  const [, sign, whole = '0', fraction = '', exponent = '0'] = match;
+  const digits = BigInt(`${whole || '0'}${fraction}` || '0');
+  const decimalShift = 7 + Number(exponent) - fraction.length;
+  const stroops = decimalShift >= 0
+    ? digits * 10n ** BigInt(decimalShift)
+    : digits / 10n ** BigInt(-decimalShift);
+
+  return sign === '-' ? -stroops : stroops;
 }
 
 export function stroopsToXlm(stroops: bigint | string): number {

@@ -2,10 +2,10 @@
  * Unit tests for useMarket hook using @testing-library/react and MSW.
  */
 
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { useMarket } from '../../hooks/useMarket';
-import { server } from '../mocks/handlers';
-import { openMarket, lockedMarket, resolvedMarket } from '../mocks/handlers';
+import { server } from '../../__tests__/mocks/handlers';
+import { openMarket, lockedMarket } from '../../__tests__/mocks/handlers';
 import { http, HttpResponse } from 'msw';
 
 describe('useMarket', () => {
@@ -78,10 +78,11 @@ describe('useMarket', () => {
 
   describe('Polling starts for open market', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      jest.useFakeTimers({ legacyFakeTimers: true });
     });
 
     afterEach(() => {
+      cleanup();
       jest.useRealTimers();
     });
 
@@ -105,7 +106,9 @@ describe('useMarket', () => {
       const initialCallCount = callCount;
 
       // Advance time by 10 seconds (the poll interval)
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(callCount).toBeGreaterThan(initialCallCount);
@@ -131,7 +134,9 @@ describe('useMarket', () => {
       const countAfterFirstLoad = callCount;
 
       // Advance 10 seconds
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(callCount).toBeGreaterThan(countAfterFirstLoad);
@@ -140,7 +145,9 @@ describe('useMarket', () => {
       const countAfterFirstPoll = callCount;
 
       // Advance another 10 seconds
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(callCount).toBeGreaterThan(countAfterFirstPoll);
@@ -170,13 +177,17 @@ describe('useMarket', () => {
         expect(result.current.market?.pool_a).toBe('1000000000');
       });
 
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(result.current.market?.pool_a).toBe('1200000000');
       });
 
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(result.current.market?.pool_a).toBe('1500000000');
@@ -207,7 +218,9 @@ describe('useMarket', () => {
         expect(result.current.market).not.toBeNull();
       });
 
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(result.current.error).not.toBeNull();
@@ -220,10 +233,11 @@ describe('useMarket', () => {
 
   describe('Polling stops when market becomes locked', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      jest.useFakeTimers({ legacyFakeTimers: true });
     });
 
     afterEach(() => {
+      cleanup();
       jest.useRealTimers();
     });
 
@@ -247,13 +261,13 @@ describe('useMarket', () => {
         expect(result.current.market?.status).toBe('open');
       });
 
-      const countBeforeStatusChange = callCount;
-
       // Simulate market becoming locked
       marketStatus = 'locked';
 
       // Advance time to trigger next poll
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(result.current.market?.status).toBe('locked');
@@ -326,7 +340,9 @@ describe('useMarket', () => {
       const countAfterResolution = callCount;
 
       // Advance more time
-      jest.advanceTimersByTime(20_000);
+      await act(async () => {
+        jest.advanceTimersByTime(20_000);
+      });
 
       // Should not make more requests
       expect(callCount).toBeLessThanOrEqual(countAfterResolution);
@@ -354,7 +370,9 @@ describe('useMarket', () => {
 
       marketStatus = 'cancelled';
 
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       await waitFor(() => {
         expect(result.current.market?.status).toBe('cancelled');
@@ -363,7 +381,9 @@ describe('useMarket', () => {
       const countAfterCancellation = callCount;
 
       // Advance more time
-      jest.advanceTimersByTime(20_000);
+      await act(async () => {
+        jest.advanceTimersByTime(20_000);
+      });
 
       // Should not make more requests
       expect(callCount).toBeLessThanOrEqual(countAfterCancellation);
@@ -372,10 +392,11 @@ describe('useMarket', () => {
 
   describe('Component unmounting', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      jest.useFakeTimers({ legacyFakeTimers: true });
     });
 
     afterEach(() => {
+      cleanup();
       jest.useRealTimers();
     });
 
@@ -391,16 +412,13 @@ describe('useMarket', () => {
 
       // No errors should occur when advancing timers after unmount
       expect(() => {
-        jest.advanceTimersByTime(10_000);
+        act(() => jest.advanceTimersByTime(10_000));
       }).not.toThrow();
     });
 
     it('should not update state after unmount', async () => {
-      let callCount = 0;
-
       server.use(
         http.get('http://localhost:3001/api/markets/market-1', () => {
-          callCount++;
           return HttpResponse.json(openMarket);
         })
       );
@@ -416,7 +434,9 @@ describe('useMarket', () => {
       unmount();
 
       // Advance time after unmount
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       // No state updates should have occurred (would cause error in strict mode)
       expect(result.current.market).toEqual(initialData);
@@ -425,10 +445,11 @@ describe('useMarket', () => {
 
   describe('Market ID changes', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      jest.useFakeTimers({ legacyFakeTimers: true });
     });
 
     afterEach(() => {
+      cleanup();
       jest.useRealTimers();
     });
 
@@ -487,7 +508,9 @@ describe('useMarket', () => {
       });
 
       // Advance time
-      jest.advanceTimersByTime(10_000);
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
 
       // Market 1 should not make new calls after switching away
       expect(market1Calls).toBe(market1CallsAtChange);
@@ -499,9 +522,9 @@ describe('useMarket', () => {
 
   describe('Edge cases', () => {
     it('should handle market with undefined optional fields', async () => {
-      const marketWithoutOptional = { ...openMarket };
-      delete (marketWithoutOptional as any).oracle_address;
-      delete (marketWithoutOptional as any).resolution_tx_hash;
+      const marketWithoutOptional: Partial<typeof openMarket> = { ...openMarket };
+      delete marketWithoutOptional.oracle_address;
+      delete marketWithoutOptional.resolution_tx_hash;
 
       server.use(
         http.get('http://localhost:3001/api/markets/market-1', () => {

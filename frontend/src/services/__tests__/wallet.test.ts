@@ -45,7 +45,7 @@ describe('xlmToStroops', () => {
 
     it('should convert 922337203685.4775807 XLM (near MAX_INT64 in stroops)', () => {
       // This is close to the maximum safe integer for JavaScript when divided
-      const result = xlmToStroops(922337203685.4775807);
+      const result = xlmToStroops('922337203685.4775807');
       expect(result).toBe(9223372036854775807n);
     });
 

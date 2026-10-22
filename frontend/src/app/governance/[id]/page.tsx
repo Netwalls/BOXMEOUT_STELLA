@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getConnectedAddress, voteProposal, executeProposal } from '@/services/wallet';
 import { TxStatusToast } from '@/components/ui/TxStatusToast';
@@ -21,7 +20,6 @@ const MOCK_PROPOSALS: Record<string, Proposal> = {
 };
 
 export default function ProposalDetail({ params }: { params: { id: string } }) {
-  const router = useRouter();
   const connectedAddress = getConnectedAddress();
 
   const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -69,8 +67,12 @@ export default function ProposalDetail({ params }: { params: { id: string } }) {
           votesAbstain: vote === 'abstain' ? prev.votesAbstain + votingPower : prev.votesAbstain,
         };
       });
-    } catch (err: any) {
-      setTxStatus({ hash: null, status: 'error', error: err.message });
+    } catch (err: unknown) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   };
 
@@ -80,8 +82,12 @@ export default function ProposalDetail({ params }: { params: { id: string } }) {
       const hash = await executeProposal(proposal.id);
       setTxStatus({ hash, status: 'success', error: null });
       setProposal(prev => prev ? { ...prev, status: 'Executed' } : prev);
-    } catch (err: any) {
-      setTxStatus({ hash: null, status: 'error', error: err.message });
+    } catch (err: unknown) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   };
 

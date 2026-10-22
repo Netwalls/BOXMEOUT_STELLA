@@ -88,8 +88,12 @@ export default function CreateMarketPage() {
 
       setTxStatus({ hash, status: 'success', error: null });
       setTimeout(() => router.push(`/markets/${matchId}`), 2000);
-    } catch (err: any) {
-      setTxStatus({ hash: null, status: 'error', error: err.message });
+    } catch (err: unknown) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   };
 

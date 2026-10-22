@@ -10,12 +10,6 @@ import { stellarExplorerUrl } from '../../../services/wallet';
 import { fetchBetsByMarket, NotFoundError } from '../../../services/api';
 import type { Bet } from '../../../types';
 
-const SIDE_LABEL: Record<string, string> = {
-  fighter_a: 'Fighter A',
-  fighter_b: 'Fighter B',
-  draw: 'Draw',
-};
-
 function truncate(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }

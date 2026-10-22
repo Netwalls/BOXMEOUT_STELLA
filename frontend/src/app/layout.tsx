@@ -4,6 +4,7 @@
 // ============================================================
 
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { Header } from '../components/layout/Header';
 
 export const metadata: Metadata = {
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 interface RootLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 /**
@@ -27,5 +28,12 @@ interface RootLayoutProps {
  * Font: use next/font to load Inter or a boxing-appropriate typeface.
  */
 export default function RootLayout({ children }: RootLayoutProps): JSX.Element {
-  // TODO: implement
+  return (
+    <html lang="en">
+      <body>
+        <Header />
+        {children}
+      </body>
+    </html>
+  );
 }

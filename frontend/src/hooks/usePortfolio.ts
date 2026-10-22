@@ -41,7 +41,7 @@ export function usePortfolio(): UsePortfolioResult {
     setError(null);
     try {
       setPortfolio(await fetchPortfolio(address));
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(e instanceof Error ? e : new Error(String(e)));
     } finally {
       setIsLoading(false);
@@ -56,8 +56,12 @@ export function usePortfolio(): UsePortfolioResult {
       const hash = await fn();
       setClaimTxStatus({ hash, status: 'success', error: null });
       await load();
-    } catch (e: any) {
-      setClaimTxStatus({ hash: null, status: 'error', error: e?.message ?? String(e) });
+    } catch (e: unknown) {
+      setClaimTxStatus({
+        hash: null,
+        status: 'error',
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }, [load]);
 

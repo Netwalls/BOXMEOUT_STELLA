@@ -2,11 +2,13 @@
  * Unit tests for useMarkets hook using @testing-library/react and MSW.
  */
 
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useMarkets } from '../../hooks/useMarkets';
-import { server } from '../mocks/handlers';
-import { mockMarkets } from '../mocks/handlers';
+import { server } from '../../__tests__/mocks/handlers';
+import { mockMarkets } from '../../__tests__/mocks/handlers';
+import type { UseMarketsResult } from '../../hooks/useMarkets';
 import { http, HttpResponse } from 'msw';
+import type { MarketFilters } from '../../services/api';
 
 describe('useMarkets', () => {
   describe('Initial loading state', () => {
@@ -111,7 +113,10 @@ describe('useMarkets', () => {
     });
 
     it('should clear previous data on error', async () => {
-      const { result, rerender } = renderHook(
+      const { result, rerender } = renderHook<
+        UseMarketsResult,
+        { filters: MarketFilters | undefined }
+      >(
         ({ filters }) => useMarkets(filters),
         { initialProps: { filters: undefined } }
       );
@@ -129,7 +134,7 @@ describe('useMarkets', () => {
         })
       );
 
-      rerender({ filters: undefined });
+      rerender({ filters: { status: 'open' } });
 
       await waitFor(() => {
         expect(result.current.error).not.toBeNull();
@@ -223,7 +228,10 @@ describe('useMarkets', () => {
     });
 
     it('should update when filters change', async () => {
-      const { result, rerender } = renderHook(
+      const { result, rerender } = renderHook<
+        UseMarketsResult,
+        { filters: MarketFilters | undefined }
+      >(
         ({ filters }) => useMarkets(filters),
         { initialProps: { filters: undefined } }
       );
@@ -245,7 +253,7 @@ describe('useMarkets', () => {
 
   describe('Auto-polling every 30 seconds', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      jest.useFakeTimers({ legacyFakeTimers: true });
     });
 
     afterEach(() => {
@@ -276,7 +284,9 @@ describe('useMarkets', () => {
       const initialCallCount = callCount;
 
       // Fast-forward 30 seconds
-      jest.advanceTimersByTime(30_000);
+      await act(async () => {
+        jest.advanceTimersByTime(30_000);
+      });
 
       await waitFor(() => {
         expect(callCount).toBeGreaterThan(initialCallCount);
@@ -293,7 +303,7 @@ describe('useMarkets', () => {
       unmount();
 
       // No errors should occur after unmount
-      jest.advanceTimersByTime(30_000);
+      act(() => jest.advanceTimersByTime(30_000));
     });
   });
 
@@ -321,8 +331,8 @@ describe('useMarkets', () => {
     });
 
     it('should handle invalid market_id in response gracefully', async () => {
-      const marketWithoutId = { ...mockMarkets[0] };
-      delete (marketWithoutId as any).market_id;
+      const marketWithoutId: Partial<(typeof mockMarkets)[number]> = { ...mockMarkets[0] };
+      delete marketWithoutId.market_id;
 
       server.use(
         http.get('http://localhost:3001/api/markets', () => {

@@ -23,7 +23,7 @@ export function useWallet(): UseWalletResult {
     if (stored) {
       getWalletBalance().then((bal) => setWallet(stored, bal)).catch(() => {});
     }
-  }, []);
+  }, [setWallet]);
 
   const connect = useCallback(async () => {
     setError(null);
@@ -33,8 +33,8 @@ export function useWallet(): UseWalletResult {
       const balance = await getWalletBalance();
       localStorage.setItem(STORAGE_KEY, address);
       setWallet(address, balance);
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to connect wallet');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to connect wallet');
     } finally {
       useAppStore.setState({ isConnecting: false });
     }

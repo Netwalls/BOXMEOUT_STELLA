@@ -83,7 +83,7 @@ export default function GovernanceList() {
         <div className="flex gap-4">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
+            onChange={(e) => setStatusFilter(e.target.value as ProposalStatus | 'All')}
             className="px-4 py-2 bg-gray-800 border border-gray-700 rounded text-sm font-medium"
           >
             <option value="All">All Proposals</option>

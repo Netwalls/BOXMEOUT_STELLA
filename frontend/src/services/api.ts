@@ -121,5 +121,12 @@ export async function fetchPortfolio(address: string): Promise<Portfolio> {
 export async function fetchMarketStats(
   market_id: string,
 ): Promise<MarketStats> {
-  // TODO: implement
+  try {
+    const res = await fetch(`${API_BASE}/api/markets/${market_id}/stats`);
+    if (!res.ok) throw new NetworkError(`Unexpected response: ${res.status}`);
+    return (await res.json()) as MarketStats;
+  } catch (error) {
+    if (error instanceof NetworkError) throw error;
+    throw new NetworkError(error instanceof Error ? error.message : String(error));
+  }
 }

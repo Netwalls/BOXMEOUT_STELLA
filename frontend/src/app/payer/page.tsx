@@ -94,8 +94,12 @@ export default function PayerDashboard() {
         setInvoices(prev => prev.filter(inv => inv.id !== selectedInvoice.id));
       }, 3000);
 
-    } catch (err: any) {
-      setTxStatus({ hash: null, status: 'error', error: err.message });
+    } catch (err: unknown) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      });
       setSelectedInvoice(null);
     }
   };
