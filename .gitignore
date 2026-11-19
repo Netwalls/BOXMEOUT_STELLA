@@ -53,6 +53,9 @@ lcov.info
 *.lcov
 
 # ─── Test snapshots & Jest cache ─────────────────────────────────────────────
+# Soroban rewrites contracts/**/test_snapshots/*.json on every `cargo test`.
+# They are generated, not committed (see contracts/README.md "Test snapshots").
+contracts/**/test_snapshots/
 **/__snapshots__/
 *.snap
 .jest-cache/

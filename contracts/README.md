@@ -11,6 +11,14 @@ cargo test                 # run all contract tests
 stellar contract build     # optimised wasm build (same as CI)
 ```
 
+### Test snapshots
+
+Soroban writes `test_snapshots/**/*.json` files whenever `cargo test` runs. These
+are generated output, so they are **not tracked in git**: the pattern
+`contracts/**/test_snapshots/` is in the root `.gitignore`, and the previously
+committed files were removed. Do not `git add` them; `cargo test` recreates them
+locally and CI regenerates them on every run, so no snapshot diff is expected in a PR.
+
 ### Coverage
 
 CI runs [`cargo llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov), uploads an
