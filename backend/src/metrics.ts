@@ -170,6 +170,16 @@ export const retentionRowsPruned = new client.Counter({
   registers: [metricsRegistry],
 });
 
+// ─── Scheduled job single-flight lock (#1582) ─────────────────────────────────
+
+/** A replica did not get the cross-replica lock, so it skipped this tick. */
+export const lifecycleLockSkipped = new client.Counter({
+  name: "lifecycle_lock_skipped_total",
+  help: "Scheduled job runs skipped because another replica holds the lock",
+  labelNames: ["job"],
+  registers: [metricsRegistry],
+});
+
 // ─── Outbound webhook deliveries (#1581) ──────────────────────────────────────
 
 /** Terminal webhook outcomes: status is "delivered" or "failed". */
