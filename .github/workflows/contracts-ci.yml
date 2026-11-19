@@ -3,6 +3,7 @@ name: Contracts CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "contracts/**"
       - ".github/workflows/contracts-ci.yml"
@@ -20,6 +21,10 @@ env:
   # Soroban's network limit for contract code is 64 KiB (65,536 bytes);
   # anything above this cannot be deployed, so CI fails early.
   MAX_WASM_SIZE_BYTES: 65536
+  # Pinned toolchain + CLI so builds are reproducible across runs.
+  RUST_TOOLCHAIN: "1.84.0"
+  STELLAR_CLI_VERSION: "28.1.0"
+  STELLAR_CLI_SHA256: c1680deee94301d33ada7a17f98411e642a4248c727afbd2e43050d345746462
 
 # Each job below has a stable name so it can be selected as a required status
 # check. The jobs run in parallel and share one Rust cache key, so a cold run
@@ -66,6 +71,8 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
+    # Pinned container so the wasm build is reproducible across runners.
+    container: rust:${{"1.84.0"}}-bookworm
 
     steps:
       - name: Checkout
@@ -74,6 +81,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: wasm32-unknown-unknown, wasm32v1-none
 
       - name: Cache Rust build
@@ -84,8 +92,8 @@ jobs:
 
       - name: Install Stellar CLI
         env:
-          STELLAR_CLI_VERSION: 28.1.0
-          STELLAR_CLI_SHA256: c1680deee94301d33ada7a17f98411e642a4248c727afbd2e43050d345746462
+          STELLAR_CLI_VERSION: ${{ env.STELLAR_CLI_VERSION }}
+          STELLAR_CLI_SHA256: ${{ env.STELLAR_CLI_SHA256 }}
         run: |
           archive="stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
           curl -sSfL -o "$RUNNER_TEMP/$archive" \
@@ -98,15 +106,75 @@ jobs:
       - name: Check Stellar CLI version
         run: stellar --version
 
-      - name: Build (optimised release profile)
-        run: stellar contract build
+      - name: Build (optimised release profile, locked)
+        run: stellar contract build --locked
+
+      - name: Save first build hashes
+        run: |
+          shopt -s nullglob
+          files=(target/wasm32v1-none/release/*.wasm)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No .wasm files produced by first build"
+            exit 1
+          fi
+          sha256sum "${files[@]}" | sort -k2 > "$RUNNER_TEMP/first-build.sha256"
+          cat "$RUNNER_TEMP/first-build.sha256"
+
+      - name: Rebuild from clean target (locked)
+        run: |
+          cargo clean
+          stellar contract build --locked
+
+      - name: Verify reproducible build
+        run: |
+          shopt -s nullglob
+          files=(target/wasm32v1-none/release/*.wasm)
+          sha256sum "${files[@]}" | sort -k2 > "$RUNNER_TEMP/second-build.sha256"
+          cat "$RUNNER_TEMP/second-build.sha256"
+          if ! diff -u "$RUNNER_TEMP/first-build.sha256" "$RUNNER_TEMP/second-build.sha256"; then
+            echo "::error::Wasm build is not reproducible: hashes differ between two builds"
+            exit 1
+          fi
+          echo "Reproducible build verified: both builds produced identical hashes."
+
+      - name: Generate SHA256SUMS
+        run: |
+          shopt -s nullglob
+          files=(target/wasm32v1-none/release/*.wasm)
+          ( cd target/wasm32v1-none/release && sha256sum *.wasm | sort -k2 ) > target/wasm32v1-none/release/SHA256SUMS
+          cat target/wasm32v1-none/release/SHA256SUMS
 
       - name: Upload wasm artifacts
         uses: actions/upload-artifact@v4
         with:
           name: contracts-wasm
-          path: contracts/target/wasm32v1-none/release/*.wasm
+          path: |
+            contracts/target/wasm32v1-none/release/*.wasm
+            contracts/target/wasm32v1-none/release/SHA256SUMS
           if-no-files-found: error
+
+  release:
+    name: release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download wasm artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contracts-wasm
+          path: dist
+
+      - name: Attach wasm and SHA256SUMS to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.wasm
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true
 
   wasm-size:
     name: wasm-size
@@ -268,4 +336,4 @@ jobs:
             echo "::error::Contracts CI failed (fmt=$FMT, clippy=$CLIPPY, build=$BUILD, wasm-size=$WASM_SIZE, test=$TEST, coverage=$COVERAGE)"
             exit 1
           fi
-          echo "All Contracts CI jobs passed."
+          echo "All Contracts CI checks passed."
