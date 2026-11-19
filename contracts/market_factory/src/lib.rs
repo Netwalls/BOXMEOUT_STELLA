@@ -188,6 +188,61 @@ impl MarketFactory {
         lock_time: u64,
         end_time: u64,
     ) -> Result<Bytes, ContractError> {
+        Self::create_market_inner(
+            env, caller, fighter_a, fighter_b, oracle, lock_time, end_time, None,
+        )
+    }
+
+    /// Creates a market that resolves only when `threshold` of `oracles` agree
+    /// on the same outcome (M-of-N quorum, #1609).
+    ///
+    /// Every oracle must be whitelisted. `threshold` must be between 1 and the
+    /// number of distinct oracles; the market enforces this at creation.
+    ///
+    /// # Errors
+    ///
+    /// Returns:
+    /// - `ContractError::InvalidQuorumConfig` if `oracles` is empty.
+    /// - `ContractError::OracleNotWhitelisted` if any oracle is not whitelisted.
+    /// - `ContractError::InvalidQuorumConfig` if the market rejects the quorum shape.
+    /// - Any error from `create_market`.
+    pub fn create_market_with_quorum(
+        env: Env,
+        caller: Address,
+        fighter_a: String,
+        fighter_b: String,
+        oracles: Vec<Address>,
+        threshold: u32,
+        lock_time: u64,
+        end_time: u64,
+    ) -> Result<Bytes, ContractError> {
+        let oracle = oracles.get(0).ok_or(ContractError::InvalidQuorumConfig)?;
+        Self::create_market_inner(
+            env,
+            caller,
+            fighter_a,
+            fighter_b,
+            oracle,
+            lock_time,
+            end_time,
+            Some((oracles, threshold)),
+        )
+    }
+
+    /// Shared creation path for `create_market` and `create_market_with_quorum`.
+    /// `oracle` is the market's primary oracle; `quorum` carries the full oracle
+    /// set and threshold when one is requested.
+    #[allow(clippy::too_many_arguments)]
+    fn create_market_inner(
+        env: Env,
+        caller: Address,
+        fighter_a: String,
+        fighter_b: String,
+        oracle: Address,
+        lock_time: u64,
+        end_time: u64,
+        quorum: Option<(Vec<Address>, u32)>,
+    ) -> Result<Bytes, ContractError> {
         caller.require_auth();
 
         let paused: bool = env.storage().persistent().get(&PAUSED).unwrap_or(false);
@@ -202,8 +257,14 @@ impl MarketFactory {
 
         // Prevent creators from naming themselves (or any arbitrary address)
         // as the resolving oracle.
-        if !Self::is_oracle_whitelisted(env.clone(), oracle.clone()) {
-            return Err(ContractError::OracleNotWhitelisted);
+        let members = match &quorum {
+            Some((oracles, _)) => oracles.clone(),
+            None => soroban_sdk::vec![&env, oracle.clone()],
+        };
+        for member in members.iter() {
+            if !Self::is_oracle_whitelisted(env.clone(), member) {
+                return Err(ContractError::OracleNotWhitelisted);
+            }
         }
 
         let count: u64 = env
@@ -274,6 +335,20 @@ impl MarketFactory {
                 config.bet_token.into_val(&env),
             ],
         )?;
+
+        // #1609: attach the M-of-N quorum while the market is still Open.
+        if let Some((oracles, threshold)) = quorum {
+            env.invoke_contract::<Result<(), ContractError>>(
+                &market_address,
+                &Symbol::new(&env, "configure_quorum"),
+                soroban_sdk::vec![
+                    &env,
+                    env.current_contract_address().into_val(&env),
+                    oracles.into_val(&env),
+                    threshold.into_val(&env),
+                ],
+            )?;
+        }
 
         let info = MarketInfo {
             market_id: market_id.clone(),

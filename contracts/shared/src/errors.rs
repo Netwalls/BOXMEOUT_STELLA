@@ -58,6 +58,10 @@ pub enum ContractError {
     ResolutionWindowExpired = 31,
     /// A conflicting oracle report already exists
     ConflictingOracleReport = 32,
+    /// This oracle has already reported an outcome for the market
+    AlreadyVoted = 33,
+    /// Quorum config is empty, has duplicate oracles, or threshold is out of range
+    InvalidQuorumConfig = 34,
 
     // ── Treasury ───────────────────────────────────────────
     /// Caller is not an approved market contract

@@ -12,7 +12,10 @@ use shared::{errors::ContractError, events, market_id_to_u64};
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, Bytes, Env, IntoVal, String, Symbol, Vec,
 };
-use types::{Bet, BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig, SettledOutcome};
+use types::{
+    Bet, BetSide, Fighter, Market, MarketStatus, OracleQuorum, Outcome, ProtocolConfig,
+    SettledOutcome,
+};
 
 // ─── STORAGE KEYS ─────────────────────────────────────────────────────────────
 // DataKey::MarketInfo     -> Market
@@ -53,7 +56,14 @@ pub enum DataKey {
     /// Guard flag: set to `true` once `sweep_dust` has been called on this
     /// market. Prevents re-running the dust sweep (C-69 / C-83).
     DustSwept,
+    /// Optional M-of-N oracle quorum (#1609). Absent means single-oracle mode.
+    Quorum,
+    /// One `(oracle, outcome)` entry per oracle that has reported (#1609).
+    Votes,
 }
+
+/// Maximum number of oracles in a quorum. Bounds the cost of tallying votes.
+pub const MAX_QUORUM_ORACLES: u32 = 10;
 
 #[contract]
 pub struct MarketContract;
@@ -503,7 +513,7 @@ impl MarketContract {
         if now < market.betting_ends_at {
             // Early lock: only the market's oracle may lock before lock_time passes.
             oracle.require_auth();
-            if oracle != market.oracle_address {
+            if !Self::is_authorized_oracle(&env, &oracle, &market) {
                 return Err(ContractError::OracleNotWhitelisted);
             }
         }
@@ -542,6 +552,11 @@ impl MarketContract {
         oracle: Address,
         outcome: Outcome,
     ) -> Result<(), ContractError> {
+        // Markets with a quorum (#1609) settle only through `report_outcome`.
+        if env.storage().persistent().has(&DataKey::Quorum) {
+            return Self::report_outcome(env, oracle, outcome);
+        }
+
         oracle.require_auth();
 
         // `Undetermined` is the shared "not yet resolved" sentinel, not a result.
@@ -549,7 +564,7 @@ impl MarketContract {
             return Err(ContractError::InvalidOracleSignature);
         }
 
-        let mut market: Market = env
+        let market: Market = env
             .storage()
             .persistent()
             .get(&DataKey::MarketInfo)
@@ -563,6 +578,178 @@ impl MarketContract {
             return Err(ContractError::OracleNotWhitelisted);
         }
 
+        Self::settle_market(&env, market, outcome)
+    }
+
+    /// Records one oracle's outcome vote for a market with an M-of-N quorum (#1609).
+    ///
+    /// Each oracle may vote once. When `threshold` oracles agree on the same
+    /// outcome the market settles exactly as `resolve_market` would. When the
+    /// votes split so that no outcome can still reach `threshold`, the market
+    /// moves to `Disputed`, emits `conflicting_oracle_report`, and the admin
+    /// settles it through `resolve_dispute`.
+    ///
+    /// A market created without a quorum behaves as a single oracle with
+    /// threshold 1, so its first valid vote settles it.
+    ///
+    /// # Errors
+    ///
+    /// Returns:
+    /// - `ContractError::InvalidOracleSignature` if the outcome is `Undetermined`.
+    /// - `ContractError::NotInitialized` if the market has not been initialized.
+    /// - `ContractError::InvalidMarketStatus` if the market is not `Locked`.
+    /// - `ContractError::OracleNotWhitelisted` if `oracle` is not a quorum member.
+    /// - `ContractError::AlreadyVoted` if `oracle` has already voted on this market.
+    pub fn report_outcome(
+        env: Env,
+        oracle: Address,
+        outcome: Outcome,
+    ) -> Result<(), ContractError> {
+        oracle.require_auth();
+
+        if outcome == Outcome::Undetermined {
+            return Err(ContractError::InvalidOracleSignature);
+        }
+
+        let market: Market = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MarketInfo)
+            .ok_or(ContractError::NotInitialized)?;
+
+        if market.status != MarketStatus::Locked {
+            return Err(ContractError::InvalidMarketStatus);
+        }
+
+        let quorum = Self::quorum_of(&env, &market);
+        if !quorum.oracles.contains(&oracle) {
+            return Err(ContractError::OracleNotWhitelisted);
+        }
+
+        let mut votes: Vec<(Address, Outcome)> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Votes)
+            .unwrap_or(Vec::new(&env));
+        for (voter, _) in votes.iter() {
+            if voter == oracle {
+                return Err(ContractError::AlreadyVoted);
+            }
+        }
+        votes.push_back((oracle.clone(), outcome.clone()));
+        env.storage().persistent().set(&DataKey::Votes, &votes);
+
+        let market_id_u64 = market_id_to_u64(&market.market_id);
+
+        let agreeing = votes.iter().filter(|(_, o)| *o == outcome).count() as u32;
+        if agreeing >= quorum.threshold {
+            return Self::settle_market(&env, market, outcome);
+        }
+
+        // A conflict is unrecoverable once the best-supported outcome, even with
+        // every remaining oracle voting for it, still falls short of the threshold.
+        let mut best: u32 = 0;
+        for (_, candidate) in votes.iter() {
+            let count = votes.iter().filter(|(_, o)| *o == candidate).count() as u32;
+            if count > best {
+                best = count;
+            }
+        }
+        let remaining = quorum.oracles.len() - votes.len();
+        if best + remaining < quorum.threshold {
+            let mut market = market;
+            market.status = MarketStatus::Disputed;
+            Self::write_market(&env, &market);
+
+            events::emit_conflicting_oracle_report(&env, market_id_u64, oracle);
+            events::emit_market_disputed(
+                &env,
+                market_id_u64,
+                String::from_str(&env, "oracle_conflict"),
+            );
+        }
+        Ok(())
+    }
+
+    /// Returns the quorum in force for `market`. Markets without a configured
+    /// quorum are a single oracle with threshold 1 (#1609).
+    fn quorum_of(env: &Env, market: &Market) -> OracleQuorum {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Quorum)
+            .unwrap_or_else(|| OracleQuorum {
+                oracles: soroban_sdk::vec![env, market.oracle_address.clone()],
+                threshold: 1,
+            })
+    }
+
+    /// Whether `oracle` may act as an oracle for this market (lock and resolve) (#1609).
+    fn is_authorized_oracle(env: &Env, oracle: &Address, market: &Market) -> bool {
+        Self::quorum_of(env, market).oracles.contains(oracle)
+    }
+
+    /// Configures an M-of-N oracle quorum on a market that has not opened yet (#1609).
+    ///
+    /// Called by the MarketFactory during `create_market_with_quorum`, before any
+    /// bet is placed. `threshold` must be between 1 and the number of distinct
+    /// `oracles`, which may not exceed `MAX_QUORUM_ORACLES`.
+    ///
+    /// # Errors
+    ///
+    /// Returns:
+    /// - `ContractError::NotFactory` if `factory` is not the registered MarketFactory.
+    /// - `ContractError::InvalidMarketStatus` if the market is no longer `Open`.
+    /// - `ContractError::AlreadyInitialized` if a quorum is already configured.
+    /// - `ContractError::InvalidQuorumConfig` if the oracle set or threshold is invalid.
+    pub fn configure_quorum(
+        env: Env,
+        factory: Address,
+        oracles: Vec<Address>,
+        threshold: u32,
+    ) -> Result<(), ContractError> {
+        factory.require_auth();
+
+        let registered: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Factory)
+            .ok_or(ContractError::NotInitialized)?;
+        if factory != registered {
+            return Err(ContractError::NotFactory);
+        }
+
+        let market = Self::read_market(&env);
+        if market.status != MarketStatus::Open {
+            return Err(ContractError::InvalidMarketStatus);
+        }
+        if env.storage().persistent().has(&DataKey::Quorum) {
+            return Err(ContractError::AlreadyInitialized);
+        }
+
+        if oracles.is_empty()
+            || oracles.len() > MAX_QUORUM_ORACLES
+            || threshold == 0
+            || threshold > oracles.len()
+        {
+            return Err(ContractError::InvalidQuorumConfig);
+        }
+        for i in 0..oracles.len() {
+            for j in (i + 1)..oracles.len() {
+                if oracles.get(i) == oracles.get(j) {
+                    return Err(ContractError::InvalidQuorumConfig);
+                }
+            }
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Quorum, &OracleQuorum { oracles, threshold });
+        Ok(())
+    }
+
+    /// Writes the settled outcome and emits `market_resolved`. Shared by the
+    /// single-oracle and quorum resolution paths (#1609).
+    fn settle_market(env: &Env, mut market: Market, outcome: Outcome) -> Result<(), ContractError> {
         // Set resolved_at timestamp for dispute window enforcement
         market.resolved_at = env.ledger().timestamp();
 
@@ -583,11 +770,11 @@ impl MarketContract {
 
         let market_id_u64 = market_id_to_u64(&market.market_id);
         if winning_pool_empty {
-            events::emit_auto_refund(&env, market_id_u64, outcome.clone());
+            events::emit_auto_refund(env, market_id_u64, outcome.clone());
         }
 
         // Emit market_resolved event with market_id, outcome, and resolution_time
-        events::emit_market_resolved(&env, market_id_u64, outcome, resolution_time);
+        events::emit_market_resolved(env, market_id_u64, outcome, resolution_time);
         Ok(())
     }
 
@@ -1825,5 +2012,257 @@ mod tests {
         set_time(&ctx.env, 10_000_000);
         ctx.client.sweep_dust(&ctx.market_id);
         ctx.client.sweep_dust(&ctx.market_id);
+    }
+
+    // ─── M-of-N oracle quorum (#1609) ─────────────────────────────────────────
+
+    /// Builds a market with `n` oracles and the given `threshold`. The market is
+    /// locked-ready: a bet is placed so the winning side has a non-empty pool.
+    fn setup_quorum(n: u32, threshold: u32) -> (Ctx, Vec<Address>, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let factory = env.register(MockFactory, (admin.clone(),));
+        let treasury = env.register(MockTreasury, ());
+        let contract_id = env.register(MarketContract, ());
+        let client = MarketContractClient::new(&env, &contract_id);
+        let market_id = factory_market_id(&env, NONCE);
+
+        let mut oracles_vec = Vec::new(&env);
+        let mut oracles = std::vec::Vec::new();
+        for _ in 0..n {
+            let oracle = Address::generate(&env);
+            oracles_vec.push_back(oracle.clone());
+            oracles.push(oracle);
+        }
+
+        client.initialize(
+            &market_id,
+            &fighter(&env, "Alpha"),
+            &fighter(&env, "Beta"),
+            &2_000u64,
+            &BETTING_ENDS_AT,
+            &oracles[0],
+            &factory,
+            &200u32,
+            &Address::generate(&env),
+            &86_400u64,
+            &treasury,
+            &Address::generate(&env),
+        );
+        client.configure_quorum(&factory, &oracles_vec, &threshold);
+
+        let bettor = Address::generate(&env);
+        client.place_bet(&bettor, &BetSide::FighterA, &500);
+        set_time(&env, BETTING_ENDS_AT);
+        client.lock_market(&oracles[0]);
+
+        let ctx = Ctx {
+            env,
+            client,
+            admin: admin.clone(),
+            oracle: oracles[0].clone(),
+            market_id,
+        };
+        (ctx, oracles_vec, factory)
+    }
+
+    fn quorum_oracle(oracles: &Vec<Address>, idx: u32) -> Address {
+        oracles.get(idx).unwrap()
+    }
+
+    #[test]
+    fn quorum_met_resolves_market() {
+        let (ctx, oracles, _) = setup_quorum(3, 2);
+        let o0 = quorum_oracle(&oracles, 0);
+        let o1 = quorum_oracle(&oracles, 1);
+
+        ctx.client.report_outcome(&o0, &Outcome::FighterA);
+        assert!(matches!(
+            ctx.client.get_market_info().status,
+            MarketStatus::Locked
+        ));
+
+        ctx.client.report_outcome(&o1, &Outcome::FighterA);
+        assert_last_event_name(&ctx.env, "market_resolved");
+        let m = ctx.client.get_market_info();
+        assert!(matches!(m.status, MarketStatus::Resolved));
+        assert_eq!(m.outcome, SettledOutcome::FighterA);
+    }
+
+    #[test]
+    fn split_vote_disputes_when_threshold_unreachable() {
+        // 2-of-2: after A and B no outcome can reach 2, so the market disputes.
+        let (ctx, oracles, _) = setup_quorum(2, 2);
+        let o0 = quorum_oracle(&oracles, 0);
+        let o1 = quorum_oracle(&oracles, 1);
+
+        ctx.client.report_outcome(&o0, &Outcome::FighterA);
+        ctx.client.report_outcome(&o1, &Outcome::FighterB);
+        // Two events fire on conflict: conflicting_oracle_report, then market_disputed.
+        assert_eq!(
+            last_event_name(&ctx.env),
+            Symbol::new(&ctx.env, "market_disputed")
+        );
+
+        let m = ctx.client.get_market_info();
+        assert!(matches!(m.status, MarketStatus::Disputed));
+
+        // The admin settles through the existing dispute path.
+        ctx.client.resolve_dispute(&ctx.admin, &Outcome::FighterB);
+        let m = ctx.client.get_market_info();
+        assert!(matches!(m.status, MarketStatus::Resolved));
+        assert_eq!(m.outcome, SettledOutcome::FighterB);
+    }
+
+    #[test]
+    fn split_vote_stays_open_while_threshold_still_reachable() {
+        // 2-of-3: A then B leaves one vote that can still give either side 2.
+        let (ctx, oracles, _) = setup_quorum(3, 2);
+        ctx.client
+            .report_outcome(&quorum_oracle(&oracles, 0), &Outcome::FighterA);
+        ctx.client
+            .report_outcome(&quorum_oracle(&oracles, 1), &Outcome::FighterB);
+        assert!(matches!(
+            ctx.client.get_market_info().status,
+            MarketStatus::Locked
+        ));
+
+        ctx.client
+            .report_outcome(&quorum_oracle(&oracles, 2), &Outcome::FighterA);
+        let m = ctx.client.get_market_info();
+        assert!(matches!(m.status, MarketStatus::Resolved));
+        assert_eq!(m.outcome, SettledOutcome::FighterA);
+    }
+
+    #[test]
+    fn duplicate_vote_is_rejected() {
+        let (ctx, oracles, _) = setup_quorum(3, 2);
+        let o0 = quorum_oracle(&oracles, 0);
+        ctx.client.report_outcome(&o0, &Outcome::FighterA);
+
+        let again = ctx.client.try_report_outcome(&o0, &Outcome::FighterA);
+        assert!(matches!(again, Err(Ok(ContractError::AlreadyVoted))));
+        assert!(matches!(
+            ctx.client.get_market_info().status,
+            MarketStatus::Locked
+        ));
+    }
+
+    #[test]
+    fn non_member_oracle_is_rejected() {
+        let (ctx, _, _) = setup_quorum(3, 2);
+        let outsider = Address::generate(&ctx.env);
+
+        let res = ctx.client.try_report_outcome(&outsider, &Outcome::FighterA);
+        assert!(matches!(res, Err(Ok(ContractError::OracleNotWhitelisted))));
+    }
+
+    #[test]
+    fn non_member_cannot_lock_quorum_market_early() {
+        // Before betting closes only a quorum member may lock the market.
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let factory = env.register(MockFactory, (admin.clone(),));
+        let treasury = env.register(MockTreasury, ());
+        let contract_id = env.register(MarketContract, ());
+        let client = MarketContractClient::new(&env, &contract_id);
+        let member = Address::generate(&env);
+        client.initialize(
+            &factory_market_id(&env, NONCE),
+            &fighter(&env, "Alpha"),
+            &fighter(&env, "Beta"),
+            &2_000u64,
+            &BETTING_ENDS_AT,
+            &member,
+            &factory,
+            &200u32,
+            &Address::generate(&env),
+            &86_400u64,
+            &treasury,
+            &Address::generate(&env),
+        );
+        client.configure_quorum(&factory, &soroban_sdk::vec![&env, member.clone()], &1);
+
+        let outsider = Address::generate(&env);
+        let res = client.try_lock_market(&outsider);
+        assert!(matches!(res, Err(Ok(ContractError::OracleNotWhitelisted))));
+    }
+
+    #[test]
+    fn configure_quorum_rejects_invalid_shapes() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let factory = env.register(MockFactory, (admin.clone(),));
+        let treasury = env.register(MockTreasury, ());
+        let contract_id = env.register(MarketContract, ());
+        let client = MarketContractClient::new(&env, &contract_id);
+        let a = Address::generate(&env);
+        let b = Address::generate(&env);
+        client.initialize(
+            &factory_market_id(&env, NONCE),
+            &fighter(&env, "Alpha"),
+            &fighter(&env, "Beta"),
+            &2_000u64,
+            &BETTING_ENDS_AT,
+            &a,
+            &factory,
+            &200u32,
+            &Address::generate(&env),
+            &86_400u64,
+            &treasury,
+            &Address::generate(&env),
+        );
+
+        let two = soroban_sdk::vec![&env, a.clone(), b.clone()];
+        let dup = soroban_sdk::vec![&env, a.clone(), a.clone()];
+        let empty: Vec<Address> = Vec::new(&env);
+
+        assert!(matches!(
+            client.try_configure_quorum(&factory, &two, &0),
+            Err(Ok(ContractError::InvalidQuorumConfig))
+        ));
+        assert!(matches!(
+            client.try_configure_quorum(&factory, &two, &3),
+            Err(Ok(ContractError::InvalidQuorumConfig))
+        ));
+        assert!(matches!(
+            client.try_configure_quorum(&factory, &dup, &1),
+            Err(Ok(ContractError::InvalidQuorumConfig))
+        ));
+        assert!(matches!(
+            client.try_configure_quorum(&factory, &empty, &1),
+            Err(Ok(ContractError::InvalidQuorumConfig))
+        ));
+        // Only the registered factory may configure a quorum.
+        assert!(matches!(
+            client.try_configure_quorum(&admin, &two, &1),
+            Err(Ok(ContractError::NotFactory))
+        ));
+
+        // A valid config succeeds once, and cannot be replaced.
+        client.configure_quorum(&factory, &two, &2);
+        assert!(matches!(
+            client.try_configure_quorum(&factory, &two, &1),
+            Err(Ok(ContractError::AlreadyInitialized))
+        ));
+    }
+
+    #[test]
+    fn single_oracle_report_outcome_resolves_like_resolve_market() {
+        // Without a quorum, report_outcome is a single oracle with threshold 1.
+        let ctx = setup();
+        let bettor = Address::generate(&ctx.env);
+        ctx.client.place_bet(&bettor, &BetSide::FighterA, &500);
+        set_time(&ctx.env, BETTING_ENDS_AT);
+        ctx.client.lock_market(&ctx.oracle);
+        ctx.client.report_outcome(&ctx.oracle, &Outcome::FighterA);
+
+        let m = ctx.client.get_market_info();
+        assert!(matches!(m.status, MarketStatus::Resolved));
+        assert_eq!(m.outcome, SettledOutcome::FighterA);
     }
 }
