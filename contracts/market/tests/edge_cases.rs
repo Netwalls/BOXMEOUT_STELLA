@@ -51,6 +51,8 @@ impl MockFactory {
             max_bet_amount: i128::MAX / 2,
             dispute_window_sec: 86_400,
             paused: false,
+            bet_token: env.current_contract_address(),
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }
@@ -85,7 +87,7 @@ fn make_fighter(env: &Env, name: &str) -> Fighter {
     }
 }
 
-fn setup_market(env: &Env) -> (MarketContractClient, Address, Address, u64) {
+fn setup_market(env: &Env) -> (MarketContractClient<'_>, Address, Address, u64) {
     let admin = Address::generate(env);
     let factory_id = env.register(MockFactory, (admin.clone(),));
     let oracle = Address::generate(env);
@@ -290,7 +292,7 @@ fn edge_minimum_bet_amount_succeeds() {
     let bettor = Address::generate(&env);
 
     let bet_id = client.place_bet(&bettor, &BetSide::FighterA, &100i128);
-    assert!(!bet_id.to_array().is_empty());
+    assert!(!bet_id.is_empty());
 }
 
 #[test]
@@ -302,7 +304,7 @@ fn edge_maximum_bet_amount_succeeds() {
     let bettor = Address::generate(&env);
 
     let bet_id = client.place_bet(&bettor, &BetSide::FighterA, &(i128::MAX / 2));
-    assert!(!bet_id.to_array().is_empty());
+    assert!(!bet_id.is_empty());
 }
 
 // ─── Test 6: Multiple claims on same bet must panic ───────────────────────────

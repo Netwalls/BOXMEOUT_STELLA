@@ -30,6 +30,8 @@ pub enum ContractError {
     InvalidTimestamp = 14,
     /// Contract storage has not been initialized yet
     NotInitialized = 15,
+    /// Protocol is paused; new bets are rejected (claims and refunds stay open)
+    ProtocolPaused = 16,
 
     // ── Bet Validation ─────────────────────────────────────
     /// Bet amount is below config.min_bet

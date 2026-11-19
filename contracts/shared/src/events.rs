@@ -3,7 +3,13 @@
 //! All emitted events are defined here for consistency.
 //! ============================================================
 
-use soroban_sdk::{Address, Bytes, Env, String, Symbol};
+// `Env::events().publish` is deprecated in soroban-sdk 27 in favour of the
+// `#[contractevent]` macro. Migrating changes every event's on-chain topic and
+// data layout, which indexers depend on, so the migration is tracked separately
+// and the deprecation is allowed for this module only.
+#![allow(deprecated)]
+
+use soroban_sdk::{Address, Bytes, Env, String, Symbol, Vec};
 
 use crate::types::{BetRecord, ClaimReceipt, Outcome};
 
@@ -269,15 +275,6 @@ pub fn emit_dust_swept(env: &Env, market_id: u64, dust_amount: i128, swept_at: u
     env.events().publish(topics, (dust_amount, swept_at));
 }
 
-/// Emits a `resolution_finalized` event after the dispute window closes and fees are deposited.
-///
-/// Topics: `(Symbol("resolution_finalized"), market_id)`
-/// Data:   `finalized_at: u64`
-pub fn emit_resolution_finalized(env: &Env, market_id: u64, finalized_at: u64) {
-    let topics = (Symbol::new(env, "resolution_finalized"), market_id);
-    env.events().publish(topics, finalized_at);
-}
-
 #[cfg(test)]
 mod tests {
     use soroban_sdk::{
@@ -298,7 +295,7 @@ mod tests {
 
     fn env() -> (Env, Address) {
         let env = Env::default();
-        let id = env.register_contract(None, Dummy);
+        let id = env.register(Dummy, ());
         (env, id)
     }
 

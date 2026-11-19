@@ -306,7 +306,7 @@ mod tests {
 
     fn setup() -> (Env, Address) {
         let env = Env::default();
-        let id = env.register_contract(None, Dummy);
+        let id = env.register(Dummy, ());
         (env, id)
     }
 

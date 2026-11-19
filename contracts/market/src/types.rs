@@ -32,6 +32,20 @@ pub enum SettledOutcome {
     NoContest,
 }
 
+impl SettledOutcome {
+    /// Returns the resolved outcome. Panics if the market has not been resolved,
+    /// so callers that need a winner must run after resolution.
+    pub fn require_resolved(&self) -> Outcome {
+        match self {
+            SettledOutcome::FighterA => Outcome::FighterA,
+            SettledOutcome::FighterB => Outcome::FighterB,
+            SettledOutcome::Draw => Outcome::Draw,
+            SettledOutcome::NoContest => Outcome::NoContest,
+            SettledOutcome::Pending => panic!("market outcome not resolved"),
+        }
+    }
+}
+
 /// Full market state held by a deployed Market contract instance (market-only).
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -106,7 +120,10 @@ mod tests {
             (shared::types::Outcome::FighterB, SettledOutcome::FighterB),
             (shared::types::Outcome::Draw, SettledOutcome::Draw),
             (shared::types::Outcome::NoContest, SettledOutcome::NoContest),
-            (shared::types::Outcome::Undetermined, SettledOutcome::Pending),
+            (
+                shared::types::Outcome::Undetermined,
+                SettledOutcome::Pending,
+            ),
         ] {
             assert_eq!(SettledOutcome::from(shared), settled);
         }

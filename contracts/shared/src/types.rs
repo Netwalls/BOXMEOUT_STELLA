@@ -162,9 +162,15 @@ pub struct MarketConfig {
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
+/// Basis-point denominator: 1 bp = 0.01%, so `BPS_DENOMINATOR` bp = 100%.
+///
+/// Every fee and implied-odds calculation scales by this value. Use it instead
+/// of a bare `10_000` literal so the basis-point convention lives in one place.
+pub const BPS_DENOMINATOR: u32 = 10_000;
+
 /// Compute protocol fee from a total amount and fee in basis points.
 ///
-/// Formula: `(amount * fee_bp) / 10_000`
+/// Formula: `(amount * fee_bp) / BPS_DENOMINATOR`
 ///
 /// Uses `i128::checked_mul` and `i128::checked_div` so overflow or division
 /// by zero panics immediately rather than silently wrapping.
@@ -181,7 +187,7 @@ pub fn calculate_fee(amount: i128, fee_bp: u32) -> i128 {
     amount
         .checked_mul(fee_bp as i128)
         .expect("fee calculation overflow")
-        .checked_div(10_000)
+        .checked_div(BPS_DENOMINATOR as i128)
         .expect("fee calculation division error")
 }
 

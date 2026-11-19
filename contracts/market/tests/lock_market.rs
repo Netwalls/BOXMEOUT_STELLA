@@ -41,6 +41,8 @@ impl MockFactory {
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
+            bet_token: env.current_contract_address(),
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }

@@ -44,6 +44,8 @@ struct World {
     admin: Address,
     oracle: Address,
     fee_collector: Address,
+    // Kept on the harness for tests that need the token address; not every test reads it.
+    #[allow(dead_code)]
     token_id: Address,
     treasury_id: Address,
     token: token::Client<'static>,
@@ -98,6 +100,7 @@ fn setup() -> World {
         &MIN_BET,
         &MAX_BET,
         &DISPUTE_WINDOW_SEC,
+        &token_id,
     );
     treasury.initialize(
         &admin,
