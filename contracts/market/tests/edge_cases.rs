@@ -159,6 +159,7 @@ fn edge_zero_losing_pool_all_on_winner() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let p1 = client.claim_winnings(&b1, &bet1);
@@ -190,6 +191,7 @@ fn edge_single_bettor_wins() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let payout = client.claim_winnings(&bettor, &bet_id);
@@ -249,6 +251,7 @@ fn edge_max_i128_pool_totals() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let payout = client.claim_winnings(&b1, &bet1);
@@ -321,6 +324,7 @@ fn edge_double_claim_panics() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let _ = client.claim_winnings(&bettor, &bet_id);
@@ -448,6 +452,7 @@ fn edge_zero_fee_full_payout() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     // With 0 fee, winner gets 100% of total pool
@@ -475,7 +480,9 @@ fn resolve_with_bettor(
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at);
     client.lock_market(oracle);
 
-    let resolved_at = betting_ends_at + 10;
+    // Resolution is rejected before scheduled_at, so resolve just after it.
+    let scheduled_at = client.get_market_info().scheduled_at;
+    let resolved_at = scheduled_at + 10;
     env.ledger().with_mut(|l| l.timestamp = resolved_at);
     client.resolve_market(oracle, &Outcome::FighterA);
 

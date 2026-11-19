@@ -219,6 +219,7 @@ proptest::proptest! {
         assert_eq!(client.get_market_info().status, MarketStatus::Locked);
 
         // Resolve with FighterA winning
+        env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
         client.resolve_market(&oracle, &Outcome::FighterA);
 
         // Claim all winning bets
@@ -317,6 +318,7 @@ proptest::proptest! {
         env.ledger().with_mut(|l| l.timestamp = betting_ends_at);
         client.lock_market(&oracle);
         let outcome = if a_wins { Outcome::FighterA } else { Outcome::FighterB };
+        env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
         client.resolve_market(&oracle, &outcome);
 
         let mut total_payouts = 0i128;

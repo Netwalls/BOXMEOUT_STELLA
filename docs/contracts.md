@@ -161,6 +161,30 @@ Optional variables: `BET_TOKEN_ID`, `DAILY_LIMIT` (stroops).
 
 ---
 
+## Version and Metadata (C-122)
+
+Every contract (`market`, `market_factory`, `treasury`) exposes a read-only
+`version()` entrypoint that returns its crate version (`CARGO_PKG_VERSION`).
+It is set at build time, so it changes only when the crate version is bumped.
+
+Each contract also embeds three `contractmeta!` entries, which
+`stellar contract inspect` prints:
+
+| Key | Value |
+|---|---|
+| `name` | `BOXMEOUT Market`, `BOXMEOUT Factory` or `BOXMEOUT Treasury` |
+| `version` | Crate version, same as `version()` |
+| `source` | `https://github.com/Netwalls/BOXMEOUT_STELLA` |
+
+```bash
+# Check the deployed build of a market before trusting its state
+stellar contract invoke --id "$MARKET_ADDRESS" --network testnet -- version
+stellar contract inspect --id "$MARKET_ADDRESS" --network testnet
+```
+
+After `upgrade_market_wasm`, call `version()` on the factory's new market instances
+to confirm they run the expected build.
+
 ## CLI Invocation Examples
 
 Below are `soroban contract invoke` examples for every contract function against Testnet.
@@ -298,6 +322,9 @@ soroban contract invoke \
   -- resolve_market \
   --oracle "$(stellar keys address oracle)" \
   --outcome FighterA
+# Rejected with ResolutionTooEarly (33) while the ledger timestamp is before
+# scheduled_at. lock_market may run earlier, but a result cannot be recorded
+# before the fight is scheduled to start. Exactly at scheduled_at is allowed.
 
 # ── claim_winnings ─────────────────────────────────────────────────────────
 soroban contract invoke \
@@ -515,7 +542,7 @@ paused             bool
 | `initialize` | factory only | Called once by factory after deployment. |
 | `place_bet` | bettor signs | Accepts XLM, records bet, updates pools. Returns `bet_id`. |
 | `lock_market` | oracle | Transitions Open → Locked. Blocks new bets. |
-| `resolve_market` | oracle | Sets outcome, transitions to Resolved. |
+| `resolve_market` | oracle | Sets outcome, transitions to Resolved. Fails with `ResolutionTooEarly` (33) if the ledger time is before `scheduled_at`. |
 | `claim_winnings` | bettor signs | Proportional payout for winning side. Returns amount. |
 | `claim_refund` | bettor signs | Full refund when market is Cancelled / NoContest. |
 | `raise_dispute` | bettor signs | Flags result within dispute window. Freezes claims. |
