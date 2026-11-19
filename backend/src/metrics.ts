@@ -117,6 +117,27 @@ export const sorobanRpcRequestSeconds = new client.Histogram({
 });
 
 /**
+ * B-157: Failed Soroban RPC attempts, labelled by method and reason
+ * (timeout | transient | permanent).
+ */
+export const sorobanRpcErrors = new client.Counter({
+  name: "soroban_rpc_errors_total",
+  help: "Failed Soroban RPC attempts, by method and reason",
+  labelNames: ["method", "reason"],
+  registers: [metricsRegistry],
+});
+
+/**
+ * B-157: Soroban RPC calls retried after a transient failure, by method.
+ */
+export const sorobanRpcRetries = new client.Counter({
+  name: "soroban_rpc_retries_total",
+  help: "Soroban RPC calls retried after a transient failure, by method",
+  labelNames: ["method"],
+  registers: [metricsRegistry],
+});
+
+/**
  * Runs a Soroban RPC call and records its duration, whether it succeeds or throws.
  */
 export async function observeSorobanRpc<T>(

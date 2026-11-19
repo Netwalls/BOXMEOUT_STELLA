@@ -11,6 +11,7 @@ import {
 import { db } from "../db";
 import { logger } from "../logger";
 import { redis } from "../redis";
+import { getRpcServer, withRpcRetry } from "../lib/soroban";
 
 export interface MarketFilters {
   status?: MarketStatus;
@@ -388,12 +389,7 @@ export async function reconcileMarketFromChain(
     });
   }
 
-  const rpcUrl = process.env.STELLAR_RPC_URL;
-  if (!rpcUrl) {
-    throw new Error("STELLAR_RPC_URL environment variable is not set");
-  }
-
-  const server = new SorobanRpc.Server(rpcUrl);
+  const server = getRpcServer();
   const contract = new Contract(market.contractAddress);
 
   // Use a throwaway keypair as the source account for read-only simulation.
@@ -406,7 +402,11 @@ export async function reconcileMarketFromChain(
       : Networks.TESTNET;
 
   // Build a minimal transaction for simulating the get_market_info() call
-  const account = await server.getAccount(throwawayKeypair.publicKey());
+  // Read-only: both calls are idempotent, so transient RPC errors are retried.
+  const account = await withRpcRetry(
+    () => server.getAccount(throwawayKeypair.publicKey()),
+    { method: "getAccount", idempotent: true },
+  );
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase,
@@ -415,7 +415,10 @@ export async function reconcileMarketFromChain(
     .setTimeout(30)
     .build();
 
-  const simResult = await server.simulateTransaction(tx);
+  const simResult = await withRpcRetry(
+    () => server.simulateTransaction(tx),
+    { method: "simulateTransaction", idempotent: true },
+  );
 
   if (SorobanRpc.Api.isSimulationError(simResult)) {
     throw new Error(

@@ -19,8 +19,8 @@
 
 import type { Request, Response } from "express";
 import Redis from "ioredis";
-import { SorobanRpc } from "@stellar/stellar-sdk";
 import { db } from "../../db";
+import { getRpcServer } from "../../lib/soroban";
 import { ok } from "../response";
 
 const CHECK_TIMEOUT_MS = 5_000;
@@ -91,9 +91,7 @@ async function checkRedis(): Promise<DependencyResult> {
 
 async function checkRpc(): Promise<DependencyResult> {
   try {
-    const rpcUrl = process.env.STELLAR_RPC_URL ?? "";
-    if (!rpcUrl) throw new Error("STELLAR_RPC_URL not configured");
-    const server = new SorobanRpc.Server(rpcUrl);
+    const server = getRpcServer();
     await withTimeout(server.getHealth(), CHECK_TIMEOUT_MS, "rpc");
     return { status: "ok" };
   } catch (err) {
@@ -103,9 +101,7 @@ async function checkRpc(): Promise<DependencyResult> {
 
 async function checkIndexer(): Promise<DependencyResult> {
   try {
-    const rpcUrl = process.env.STELLAR_RPC_URL ?? "";
-    if (!rpcUrl) throw new Error("STELLAR_RPC_URL not configured");
-    const server = new SorobanRpc.Server(rpcUrl);
+    const server = getRpcServer();
     const [state, latest] = await withTimeout(
       Promise.all([
         db.indexerState.findUnique({ where: { id: 1 } }),

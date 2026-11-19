@@ -43,10 +43,11 @@ import {
   finalizeJobSuccess,
   finalizeJobFailure,
 } from "../metrics";
+import { getRpcServer } from "../lib/soroban";
+import { withTimeout } from "../lib/timeout";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const RPC_URL = process.env.STELLAR_RPC_URL!;
 const NETWORK =
   process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
@@ -118,7 +119,7 @@ export const oracleSubmissionWorker = new Worker(
       throw new Error(`oracle result missing for market ${marketId}`);
     }
 
-    const server = new SorobanRpc.Server(RPC_URL);
+    const server = getRpcServer();
     const keypair = Keypair.fromSecret(ADMIN_SECRET);
     await finalizeMarketOnChain(server, keypair, market);
 
@@ -290,7 +291,7 @@ async function enforceMarketLocks(): Promise<void> {
 
   logger.info({ count: markets.length }, "enforceMarketLocks: locking markets");
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
 
   // Process all due markets in this batch run
