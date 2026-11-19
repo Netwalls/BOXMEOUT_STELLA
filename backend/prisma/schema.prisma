@@ -92,6 +92,7 @@ model Bet {
 
   @@index([marketId, bettor])
   @@index([bettor, placedAt])
+  @@index([bettor, claimedAt])
 }
 
 model Dispute {
@@ -103,6 +104,8 @@ model Dispute {
   raisedAt   DateTime  @default(now())
   resolvedAt DateTime?
   resolution String?
+
+  @@index([raisedBy, raisedAt])
 }
 
 model OracleResult {
