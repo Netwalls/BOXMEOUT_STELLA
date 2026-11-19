@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
 import { fail } from "../response";
+import { guardRedis } from "../../lib/redis-guard";
 
 let redis: Redis | null = null;
 
@@ -50,18 +51,33 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
     try {
       const member = `${now}-${randomBytes(4).toString("hex")}`;
 
-      const results = await client
-        .multi()
-        .zremrangebyscore(key, 0, windowStart)
-        .zadd(key, now, member)
-        .zcard(key)
-        .pexpire(key, windowMs)
-        .exec();
+      const results = await guardRedis(
+        "rate_limit",
+        () =>
+          client
+            .multi()
+            .zremrangebyscore(key, 0, windowStart)
+            .zadd(key, now, member)
+            .zcard(key)
+            .pexpire(key, windowMs)
+            .exec(),
+        null
+      );
+
+      // Redis unavailable or timed out: fail open (#1590 policy table).
+      if (results === null) {
+        next();
+        return;
+      }
 
       const count = (results?.[2]?.[1] as number) ?? 0;
 
       if (count > max) {
-        const oldest = await client.zrange(key, 0, 0, "WITHSCORES");
+        const oldest = await guardRedis<string[]>(
+          "rate_limit",
+          () => client.zrange(key, 0, 0, "WITHSCORES"),
+          []
+        );
         const oldestTimestamp = oldest.length > 1 ? Number(oldest[1]) : now;
         const retryAfterSeconds = Math.max(1, Math.ceil((oldestTimestamp + windowMs - now) / 1000));
 

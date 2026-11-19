@@ -1,3 +1,4 @@
+import { guardRedis } from "../lib/redis-guard";
 import { EventEmitter } from "events";
 
 export type MarketEventType =
@@ -72,7 +73,10 @@ export function publishMarketEventDistributed(
   publishMarketEvent(marketId, type, data);
   if (redisClients) {
     const payload: MarketEventPayload = { marketId, type, data };
-    void redisClients.publisher.publish(redisChannel(marketId), JSON.stringify(payload));
+    const { publisher } = redisClients;
+    // Best-effort: local listeners already received the event. An unhandled rejection
+    // here would crash the process, so the publish goes through the guard (#1590).
+    void guardRedis("sse", () => publisher.publish(redisChannel(marketId), JSON.stringify(payload)), 0);
   }
 }
 

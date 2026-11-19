@@ -37,6 +37,7 @@ import { db } from "../db";
 import { config } from "../config";
 import { logger } from "../logger";
 import { redis } from "../lib/redis";
+import { guardRedis } from "../lib/redis-guard";
 import {
   lockJobSuccess,
   lockJobFailure,
@@ -438,13 +439,17 @@ export async function runSingleFlight(
   const key = `lifecycle-lock:${name}`;
   const token = randomUUID();
 
-  const acquired = await redis.set(key, token, "PX", SINGLE_FLIGHT_TTL_MS, "NX");
+  // Fail closed: if Redis is unavailable the run is skipped rather than risking
+  // two instances running the same lifecycle step (#1590).
+  const acquired = await guardRedis("lifecycle_lock", () =>
+    redis.set(key, token, "PX", SINGLE_FLIGHT_TTL_MS, "NX"),
+  null);
   if (acquired !== "OK") return false;
 
   try {
     await fn();
   } finally {
-    await redis.eval(RELEASE_LOCK_SCRIPT, 1, key, token);
+    await guardRedis("lifecycle_lock", () => redis.eval(RELEASE_LOCK_SCRIPT, 1, key, token), null);
   }
   return true;
 }
