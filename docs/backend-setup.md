@@ -319,3 +319,49 @@ The contract has not been deployed yet. Follow Step 3 above.
 
 **Friendbot rate-limited**
 Friendbot is a public Testnet faucet and may rate-limit requests. Wait a minute and retry.
+
+---
+
+## Load tests (B-149, #1585)
+
+The k6 scenarios in `backend/loadtest/` measure the REST read paths and SSE fan-out.
+They run nightly in `.github/workflows/loadtest-nightly.yml` and fail the job when a threshold is exceeded.
+
+**1. Start the API and database** (see Section 6 for the full setup, or use the compose stack):
+
+```bash
+docker compose up -d --wait postgres redis migrate api
+```
+
+**2. Seed deterministic data** (20 markets, 50 bettors, 200 bets per market by default):
+
+```bash
+cd backend
+npm ci && npx prisma generate
+DATABASE_URL=postgresql://boxmeout:boxmeout@localhost:5432/boxmeout \
+  npx ts-node --transpile-only scripts/seed-loadtest.ts
+```
+
+Override the size with `SEED_MARKETS`, `SEED_BETTORS` and `SEED_BETS_PER_MARKET`. The k6 scripts read the same variables, so set them for both.
+
+**3. Run the scenarios** with [k6](https://k6.io/docs/get-started/installation/), or with Docker (no install):
+
+```bash
+# REST: market list, detail, bets by address, search
+docker run --rm --network host -v "$PWD/backend/loadtest:/scripts" \
+  grafana/k6:1.2.0 run -e BASE_URL=http://localhost:3001 /scripts/api.js
+
+# SSE: N concurrent connections to market streams (Node 20, no extra install)
+BASE_URL=http://localhost:3001 SSE_CONNECTIONS=200 node backend/loadtest/sse.mjs
+```
+
+| Variable | Scenario | Default | Meaning |
+|----------|----------|---------|---------|
+| `VUS`, `DURATION` | api | 20, 5m | Concurrent virtual users and run length |
+| `P95_MS` | api | 500 | p95 latency ceiling per endpoint (ms) |
+| `ERROR_RATE` | api | 0.01 | Maximum failed-request ratio |
+| `SSE_CONNECTIONS`, `HOLD_MS`, `MIN_SUCCESS` | sse | 100, 60000, 0.99 | Concurrent streams, time each is held (ms), and the minimum share that must connect with HTTP 200 |
+
+Search returns `429` when the per-client rate limiter trips. The api scenario counts these in `search_rate_limited` instead of failing the run.
+
+Results are written to `backend/loadtest/results/` by the nightly job. That directory is git-ignored.
