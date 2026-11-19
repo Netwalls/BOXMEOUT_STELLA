@@ -55,6 +55,11 @@ correct.
 
 MIT
 
+## Operations
+
+- [Backend setup guide](docs/backend-setup.md): install, configure and run the API and indexer.
+- [Operations runbook](docs/runbook.md): what to do when the indexer, the oracle submission queue or the database misbehave.
+
 ## Handsoff notes
 
 <!-- handsoff-issue-1262 -->
