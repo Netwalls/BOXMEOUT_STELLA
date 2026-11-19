@@ -65,3 +65,6 @@ MIT
 
 <!-- handsoff-issue-1633 -->
 - #1633: C-155: Add a permissionless extend_ttl entrypoint for dormant markets
+
+<!-- handsoff-issue-1634 -->
+- #1634: C-156: Add a table-driven authorisation test for every privileged entrypoint
