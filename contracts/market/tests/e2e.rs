@@ -12,7 +12,9 @@
 //!   5. Winners claim their proportional payouts
 //!   6. Assert final balances match expected payouts *exactly*
 
-use market::types::{BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig};
+use market::types::{
+    BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig, SettledOutcome,
+};
 use market::{DataKey, MarketContract, MarketContractClient};
 use soroban_sdk::{
     contract, contractimpl,
@@ -41,12 +43,14 @@ impl MockFactory {
             .unwrap();
         ProtocolConfig {
             admin: admin.clone(),
-            fee_collector: admin,
+            fee_collector: admin.clone(),
             default_fee_bp: 200,
             min_bet_amount: 100,
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
+            bet_token: admin,
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }
@@ -111,6 +115,9 @@ fn e2e_create_bet_lock_resolve_claim() {
         &factory_id,
         &200u32, // 2% protocol fee
         &fee_collector,
+        &86_400u64,
+        &Address::generate(&env),
+        &Address::generate(&env),
     );
 
     // Verify market is initialized and Open
@@ -180,7 +187,7 @@ fn e2e_create_bet_lock_resolve_claim() {
 
     let m = client.get_market_info();
     assert!(matches!(m.status, MarketStatus::Resolved));
-    assert_eq!(m.outcome, Some(Outcome::FighterA));
+    assert_eq!(m.outcome, SettledOutcome::FighterA);
 
     // ── 5. Claim winnings ─────────────────────────────────────────────────
     let payout_1 = client.claim_winnings(&bettor_1, &bet1_id);
@@ -246,6 +253,9 @@ fn e2e_draw_both_sides_refunded() {
         &factory_id,
         &200u32,
         &fee_collector,
+        &86_400u64,
+        &Address::generate(&env),
+        &Address::generate(&env),
     );
 
     let bettor_a = Address::generate(&env);
@@ -314,6 +324,9 @@ fn e2e_cancelled_market_full_refund() {
         &factory_id,
         &200u32,
         &fee_collector,
+        &86_400u64,
+        &Address::generate(&env),
+        &Address::generate(&env),
     );
 
     let bettor = Address::generate(&env);

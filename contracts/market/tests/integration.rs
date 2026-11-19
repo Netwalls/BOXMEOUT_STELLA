@@ -98,6 +98,7 @@ fn setup() -> World {
         &MIN_BET,
         &MAX_BET,
         &DISPUTE_WINDOW_SEC,
+        &token_id,
     );
     treasury.initialize(
         &admin,

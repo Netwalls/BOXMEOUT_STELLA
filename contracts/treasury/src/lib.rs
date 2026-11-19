@@ -1,6 +1,8 @@
 #![no_std]
-use shared::{events, types::ProtocolConfig};
-use soroban_sdk::{contract, contractimpl, token, Address, Bytes, Env, String, Symbol, Vec};
+use shared::{errors::ContractError, events, types::ProtocolConfig};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, token, Address, Bytes, Env, String, Symbol, Vec,
+};
 
 /// Maximum number of entries kept in `WITHDRAWAL_LOG`. Older entries are
 /// evicted first; the `fee_withdrawn` / `EmrgDrain` events remain the
@@ -148,7 +150,7 @@ impl Treasury {
         factory: Address,
         token: Address,
         daily_limit: i128,
-    ) {
+    ) -> Result<(), ContractError> {
         if env.storage().persistent().has(&key_admin(&env)) {
             return Err(ContractError::AlreadyInitialized);
         }
@@ -184,6 +186,7 @@ impl Treasury {
         env.storage()
             .persistent()
             .set(&key_window_spent(&env), &0i128);
+        Ok(())
     }
 
     /// Updates the daily withdrawal limit enforced by `withdraw_fees`.
@@ -279,6 +282,7 @@ impl Treasury {
             .set(&key_balance(&env), &(balance + amount));
 
         events::emit_bet_deposited(&env, from_market, bettor, market_id, amount);
+        Ok(())
     }
 
     /// Receives protocol fees from a registered `Market` contract.
@@ -338,6 +342,7 @@ impl Treasury {
             .get(&key_token(&env))
             .expect("token not set");
         events::emit_fee_deposited(&env, caller, token_addr, amount);
+        Ok(())
     }
 
     /// Reclassifies a market's pro-rata rounding residue as protocol fees (C-69).
@@ -358,7 +363,12 @@ impl Treasury {
     /// - `from_market` has not authorized the call.
     /// - `from_market` does not match the address registered for `market_id` in the factory.
     /// - `amount` is not positive.
-    pub fn sweep_dust(env: Env, from_market: Address, market_id: Bytes, amount: i128) {
+    pub fn sweep_dust(
+        env: Env,
+        from_market: Address,
+        market_id: Bytes,
+        amount: i128,
+    ) -> Result<(), ContractError> {
         from_market.require_auth();
 
         if amount <= 0 {
@@ -421,7 +431,12 @@ impl Treasury {
     /// - `amount` exceeds the current `BALANCE`.
     /// - `amount` would take the current window's total above `DAILY_LIMIT`
     ///   (`ContractError::DailyWithdrawalLimitExceeded`).
-    pub fn withdraw_fees(env: Env, admin: Address, recipient: Address, amount: i128) {
+    pub fn withdraw_fees(
+        env: Env,
+        admin: Address,
+        recipient: Address,
+        amount: i128,
+    ) -> Result<(), ContractError> {
         admin.require_auth();
 
         if read_admin(&env) != admin {
@@ -476,6 +491,7 @@ impl Treasury {
         append_withdrawal_log(&env, &recipient, amount, ts);
 
         events::emit_fee_withdrawn(&env, token_addr, amount, recipient);
+        Ok(())
     }
 
     /// Release escrowed winnings or refunds from a market to a bettor (issue #1181).
@@ -486,7 +502,7 @@ impl Treasury {
         market_id: Bytes,
         recipient: Address,
         amount: i128,
-    ) {
+    ) -> Result<(), ContractError> {
         from_market.require_auth();
 
         let balance: i128 = env

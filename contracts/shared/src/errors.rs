@@ -78,4 +78,8 @@ pub enum ContractError {
     // ── Reentrancy ─────────────────────────────────────────
     /// A claim or refund transfer is already in progress
     ReentrancyGuard = 60,
+
+    // ── Protocol ───────────────────────────────────────────
+    /// Protocol is paused; new bets are rejected (claims and refunds remain open)
+    ProtocolPaused = 61,
 }
