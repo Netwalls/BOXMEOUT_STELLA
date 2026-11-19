@@ -68,3 +68,6 @@ MIT
 
 <!-- handsoff-issue-1634 -->
 - #1634: C-156: Add a table-driven authorisation test for every privileged entrypoint
+
+<!-- handsoff-issue-1636 -->
+- #1636: C-158: Verify the received amount in Treasury::deposit (defence against non-standard tokens)
