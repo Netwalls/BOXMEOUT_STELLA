@@ -10,7 +10,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { db } from "../db";
 import { logger } from "../logger";
-import { redis } from "../redis";
+import { redis } from "../lib/redis";
 import { getRpcServer, withRpcRetry } from "../lib/soroban";
 
 export interface MarketFilters {
