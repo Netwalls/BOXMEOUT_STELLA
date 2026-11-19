@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { searchMarketsHandler } from "../controllers/marketSearch.controller";
+import { searchMarketsHandler, suggestMarketsHandler } from "../controllers/marketSearch.controller";
 import {
   getMarketsHandler,
   getMarketByIdHandler,
@@ -10,6 +10,8 @@ import {
 } from "../controllers/market.controller";
 import { createMarketSchema } from "../schemas/market.schema";
 import { walletAuthMiddleware } from "../middleware/walletAuth.middleware";
+import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
+import { enforceCreatorBinding } from "../middleware/creatorBinding.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { validate } from "../middleware/validate";
 import { subscribeToMarket, type MarketEventPayload } from "../../events/marketEvents";
@@ -28,6 +30,15 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 
 // GET /api/markets/search?q=...  — must come before /:id (#1405 B-107)
 router.get("/search", searchRateLimiter, searchMarketsHandler);
+
+// B-158 (#1594): autocomplete suggestions. Cheap, but still rate limited.
+// Must stay above "/:id" so "suggest" is not read as a market id.
+const suggestRateLimiter = rateLimitMiddleware({
+  windowMs: 60 * 1000,
+  max: 120,
+  keyPrefix: "markets:suggest",
+});
+router.get("/suggest", suggestRateLimiter, suggestMarketsHandler);
 
 // GET  /api/markets
 router.get("/", getMarketsHandler);
@@ -67,7 +78,7 @@ router.get("/:id/stream", (req: Request, res: Response) => {
     else if (payload.type === "status_changed") send("status", payload.data);
   };
 
-  const unsubscribe = subscribeToMarket(id, onMarketEvent);
+  const unsubscribe = subscribeToMarket(req.params.id, onMarketEvent);
 
   const heartbeat = setInterval(() => {
     res.write(": heartbeat\n\n");
