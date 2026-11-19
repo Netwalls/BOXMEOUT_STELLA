@@ -44,6 +44,7 @@ struct World {
     admin: Address,
     oracle: Address,
     fee_collector: Address,
+    #[allow(dead_code)]
     token_id: Address,
     treasury_id: Address,
     token: token::Client<'static>,

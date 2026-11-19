@@ -1,4 +1,8 @@
 #![no_std]
+// Event publishing uses `env.events().publish(..)`, which the SDK deprecates in
+// favour of `#[contractevent]`. Migrating would change the emitted topic/data
+// encoding that the backend indexer parses, so the lint is allowed on purpose.
+#![allow(deprecated)]
 //! ============================================================
 //! BOXMEOUT — Shared Types and Errors
 //! All contracts import from this crate.

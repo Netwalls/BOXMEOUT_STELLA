@@ -87,7 +87,7 @@ fn make_fighter(env: &Env, name: &str) -> Fighter {
     }
 }
 
-fn setup_market(env: &Env) -> (MarketContractClient, Address, Address, u64) {
+fn setup_market(env: &Env) -> (MarketContractClient<'_>, Address, Address, u64) {
     let admin = Address::generate(env);
     let factory_id = env.register(MockFactory, (admin.clone(),));
     let oracle = Address::generate(env);

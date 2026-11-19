@@ -1,4 +1,8 @@
 #![no_std]
+// Event publishing uses `env.events().publish(..)`, which the SDK deprecates in
+// favour of `#[contractevent]`. Migrating would change the emitted topic/data
+// encoding that the backend indexer parses, so the lint is allowed on purpose.
+#![allow(deprecated)]
 use shared::{errors::ContractError, events, types::ProtocolConfig};
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, token, Address, Bytes, Env, String, Symbol, Vec,
@@ -268,7 +272,7 @@ impl Treasury {
             .expect("token not set");
         token::Client::new(&env, &token_addr).transfer(
             &bettor,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &amount,
         );
 
@@ -875,7 +879,6 @@ impl Treasury {
 mod tests {
     use super::*;
     use shared::test_utils::{create_test_address, create_test_env};
-    use soroban_sdk::IntoVal;
 
     #[test]
     fn test_initialize_success() {
@@ -983,7 +986,10 @@ mod tests {
     /// Helper: registers treasury, initialises with a funded token, and seeds
     /// BALANCE by directly setting storage so we can test withdraw_fees without
     /// needing a real market factory cross-contract call.
-    fn setup_treasury_with_balance(env: &Env, balance: i128) -> (TreasuryClient, Address, Address) {
+    fn setup_treasury_with_balance(
+        env: &Env,
+        balance: i128,
+    ) -> (TreasuryClient<'_>, Address, Address) {
         use soroban_sdk::testutils::Ledger;
 
         env.ledger().with_mut(|li| li.timestamp = 1_000_000);
@@ -1264,7 +1270,7 @@ mod tests {
 
     #[test]
     fn test_accept_admin_emits_admin_transferred_via_shared_helper() {
-        use shared::test_utils::{event_count, last_event_name};
+        use shared::test_utils::last_event_name;
         let env = create_test_env();
         env.mock_all_auths();
 
@@ -1292,7 +1298,7 @@ mod tests {
 
     #[test]
     fn test_set_fee_bps_emits_config_updated_via_shared_helper() {
-        use shared::test_utils::{event_count, last_event_name};
+        use shared::test_utils::last_event_name;
         let env = create_test_env();
         env.mock_all_auths();
 

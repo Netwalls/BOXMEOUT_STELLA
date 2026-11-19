@@ -1,4 +1,10 @@
 #![no_std]
+// Event publishing uses `env.events().publish(..)`, which the SDK deprecates in
+// favour of `#[contractevent]`. Migrating would change the emitted topic/data
+// encoding that the backend indexer parses, so the lint is allowed on purpose.
+#![allow(deprecated)]
+// Entry-point signatures are part of the contract ABI, so their arity is fixed.
+#![allow(clippy::too_many_arguments)]
 
 pub mod types;
 
@@ -67,11 +73,10 @@ impl MarketContract {
 
     /// Check if a bet side wins against a resolved outcome.
     fn bet_wins(side: &BetSide, outcome: &Outcome) -> bool {
-        match (side, outcome) {
-            (BetSide::FighterA, Outcome::FighterA) => true,
-            (BetSide::FighterB, Outcome::FighterB) => true,
-            _ => false,
-        }
+        matches!(
+            (side, outcome),
+            (BetSide::FighterA, Outcome::FighterA) | (BetSide::FighterB, Outcome::FighterB)
+        )
     }
 
     /// Get the total pool for the winning side, or None if no winners.
@@ -430,6 +435,8 @@ impl MarketContract {
     /// scheduled fight time, anyone can call this to cancel the market and enable refunds.
     /// This prevents markets from staying locked indefinitely.
     pub fn cancel_unresolved(env: Env, market_id: Bytes) -> Result<(), ContractError> {
+        // `market_id` is part of the public ABI; this instance is the market, so it is not re-checked here.
+        let _ = &market_id;
         let mut market = Self::read_market(&env);
 
         // Only Locked markets can be cancelled via this escape hatch
