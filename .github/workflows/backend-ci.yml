@@ -13,6 +13,10 @@ on:
       - "backend/**"
       - "contracts/shared/test_snapshots/**"
       - ".github/workflows/backend-ci.yml"
+  # #1586 B-150: nightly run executes only the dependency audit job (the
+  # build job is gated off for schedule events below).
+  schedule:
+    - cron: "41 3 * * *"
 
 defaults:
   run:
@@ -22,6 +26,7 @@ jobs:
   build:
     name: Backend CI
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
 
     services:
       postgres:
@@ -107,3 +112,39 @@ jobs:
           name: backend-coverage
           path: backend/coverage/lcov.info
           if-no-files-found: warn
+
+  # #1586 B-150: fail on high or critical advisories in production dependencies
+  # that are not on backend/audit-allowlist.json, then publish a CycloneDX SBOM.
+  dependency-audit:
+    name: Dependency audit and SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Advisory gate (high and critical, production dependencies)
+        run: npx ts-node --transpile-only scripts/audit-gate.ts
+
+      - name: Generate CycloneDX SBOM
+        run: >-
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.1 --omit dev
+          --output-format JSON --output-file sbom.cdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: backend/sbom.cdx.json
+          if-no-files-found: error

@@ -365,3 +365,34 @@ BASE_URL=http://localhost:3001 SSE_CONNECTIONS=200 node backend/loadtest/sse.mjs
 Search returns `429` when the per-client rate limiter trips. The api scenario counts these in `search_rate_limited` instead of failing the run.
 
 Results are written to `backend/loadtest/results/` by the nightly job. That directory is git-ignored.
+
+---
+
+## Dependency audit and allowlist (B-150, #1586)
+
+The `dependency-audit` job in `.github/workflows/backend-ci.yml` runs on pull requests, on pushes to `main`, and nightly. It:
+
+1. Runs `npm audit --omit=dev` and fails on any **high or critical** advisory that is not on the allowlist.
+2. Fails when an allowlist entry has passed its `expires` date.
+3. Publishes a CycloneDX SBOM (`backend-sbom` artifact).
+
+Run the gate locally from `backend/`:
+
+```bash
+npx ts-node --transpile-only scripts/audit-gate.ts
+```
+
+### Accepting an advisory
+
+Add an entry to `backend/audit-allowlist.json`. Every entry needs a GHSA id, the package, a reason, and an `expires` date (`YYYY-MM-DD`, inclusive):
+
+```json
+{
+  "id": "GHSA-xxxx-xxxx-xxxx",
+  "package": "some-package",
+  "reason": "Transitive via X. We never call Y. Fix requires a major upgrade of X, tracked in #NNNN.",
+  "expires": "2026-12-19"
+}
+```
+
+Keep expiries short (30 days is the default). When an entry expires, the gate fails until you fix the dependency or renew the entry with a fresh reason. Remove entries whose advisory no longer appears; the gate reports them as stale.

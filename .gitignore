@@ -128,3 +128,6 @@ schema-engine-*
 
 # Load test output (#1585)
 backend/loadtest/results/
+
+# Dependency audit output (#1586)
+backend/sbom.cdx.json
