@@ -67,7 +67,9 @@ const BUDGET_THRESHOLDS: &str = include_str!("../../budget_thresholds.txt");
 /// CPU instructions and memory bytes consumed by one measured call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cost {
+    /// CPU instructions consumed by the call.
     pub cpu_instructions: u64,
+    /// Memory bytes consumed by the call.
     pub memory_bytes: u64,
 }
 

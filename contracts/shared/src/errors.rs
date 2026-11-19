@@ -6,6 +6,7 @@
 
 use soroban_sdk::contracterror;
 
+/// Typed errors returned by contract entry points.
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ContractError {
