@@ -1,5 +1,6 @@
 import { Bet, BetSide } from "@prisma/client";
 import { db } from "../db";
+import { computePayout } from "../lib/payout";
 
 export interface BetFilters {
   status?: "pending" | "won" | "lost" | "claimed";
@@ -270,15 +271,17 @@ export async function calculatePotentialPayout(
   const market = await db.market.findUnique({ where: { id: market_id } });
   if (!market) throw new Error(`Market not found: ${market_id}`);
 
+  // #1584: quote the settlement the contract will compute if this bet is placed
+  // now. The stake joins both the total pool and the winning side, as it does on
+  // chain. Uses the same arithmetic as the contract (see lib/payout.ts).
   const poolSide = side === "FighterA" ? market.poolA : market.poolB;
-  if (poolSide === 0n) return 0n;
-
-  const totalPool = market.totalPool;
-  const FEE_BP = 200n; // 2% = 200 basis points
-  const fee = (totalPool * FEE_BP) / 10000n;
-  const netPool = totalPool - fee;
-
-  const payout = (amount * netPool) / (poolSide + amount);
+  const FEE_BP = 200n; // 2% = 200 basis points (markets do not store a per-market fee yet)
+  const { payout } = computePayout({
+    stake: amount,
+    totalPool: market.totalPool + amount,
+    winningPool: poolSide + amount,
+    feeBp: FEE_BP,
+  });
   return payout;
 }
 

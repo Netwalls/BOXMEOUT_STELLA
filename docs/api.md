@@ -315,6 +315,8 @@ Oracle record management (list, create, update, delete) is admin-only and lives 
 
 ### Outbound webhooks (#1581)
 
+Endpoints: `GET /api/admin/webhooks`, `POST /api/admin/webhooks`, `PATCH /api/admin/webhooks/:id`, `DELETE /api/admin/webhooks/:id` and `GET /api/admin/webhooks/:id/deliveries`.
+
 Event types: `market.created` and `market.resolved`. Each delivery is a `POST` with a JSON body `{ id, type, createdAt, data }` and these headers:
 
 - `X-Boxmeout-Signature: t=<unix seconds>,v1=<hex>` where `v1` is HMAC-SHA256 of `<t>.<raw body>` using the endpoint secret.

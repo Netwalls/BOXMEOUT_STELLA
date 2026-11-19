@@ -10,6 +10,7 @@ pub mod event_parser;
 pub mod events;
 pub mod ids;
 pub mod math;
+pub mod payout;
 pub mod types;
 
 pub use amm::*;
