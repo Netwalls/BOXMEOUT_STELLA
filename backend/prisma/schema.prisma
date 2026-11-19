@@ -92,6 +92,7 @@ model Bet {
 
   @@index([marketId, bettor])
   @@index([bettor, placedAt])
+  @@index([claimed, placedAt])
 }
 
 model Dispute {
