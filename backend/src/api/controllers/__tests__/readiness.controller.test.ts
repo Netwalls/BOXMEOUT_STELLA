@@ -27,6 +27,17 @@ jest.mock("../../../db", () => ({
   },
 }));
 
+// B-160: readiness reports maintenance state. Stub the service so no config is loaded.
+jest.mock("../../../services/maintenance.service", () => ({
+  getMaintenanceState: jest.fn().mockResolvedValue({
+    enabled: false,
+    source: null,
+    reason: null,
+    since: null,
+    actor: null,
+  }),
+}));
+
 // Mock ioredis
 const mockPing = jest.fn();
 const mockConnect = jest.fn();

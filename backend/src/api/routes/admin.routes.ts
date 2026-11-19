@@ -4,16 +4,13 @@ import {
   resolveDisputeHandler,
 } from "../controllers/market.controller";
 import {
-  resolveMarketByIdHandler,
-  resolveMarketHandler,
-} from "../controllers/marketResolution.controller";
-import {
   getAllOraclesHandler,
   createOracleHandler,
   updateOracleHandler,
   deleteOracleHandler,
 } from "../controllers/oracle.controller";
 import { getAuditLogsHandler } from "../controllers/audit.controller";
+import { getMaintenanceHandler, setMaintenanceHandler } from "../controllers/maintenance.controller";
 import { reconcileMarketHandler } from "../controllers/market-reconciliation.controller";
 import {
   getFailedSubmissionsHandler,
@@ -77,5 +74,15 @@ router.post(
 // Audit logging (Issue #456, #1258)
 // Supports ?actor=<id>&action=<action> filtering.
 router.get("/audit-logs", getAuditLogsHandler);
+
+// B-160: maintenance (read-only) mode. POST is exempt from the write block so
+// an admin can always turn it off. Every change is written to the audit log.
+const maintenanceWriteLimiter = rateLimitMiddleware({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyPrefix: "admin:maintenance:write",
+});
+router.get("/maintenance", getMaintenanceHandler);
+router.post("/maintenance", maintenanceWriteLimiter, setMaintenanceHandler);
 
 export default router;

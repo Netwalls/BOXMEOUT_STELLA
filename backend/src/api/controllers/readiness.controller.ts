@@ -12,6 +12,9 @@
  * Each check runs with an individual timeout (5 s by default) so a hung
  * dependency does not stall the entire probe indefinitely.
  *
+ * B-160: the response also includes `maintenance`, the current read-only mode
+ * state. Maintenance does not make the service "not ready", since reads still work.
+ *
  * Returns 200 with { status: "ok", checks: { ... } } when all pass.
  * Returns 503 with { status: "not_ready", checks: { ... } } if any fail,
  * including per-dependency status and (in non-production) the error message.
@@ -21,6 +24,7 @@ import type { Request, Response } from "express";
 import Redis from "ioredis";
 import { db } from "../../db";
 import { getRpcServer } from "../../lib/soroban";
+import { getMaintenanceState } from "../../services/maintenance.service";
 import { ok } from "../response";
 
 const CHECK_TIMEOUT_MS = 5_000;
@@ -152,10 +156,11 @@ export async function readinessHandler(req: Request, res: Response): Promise<voi
   };
 
   const allOk = Object.values(checks).every((c) => c.status === "ok");
+  const maintenance = await getMaintenanceState().catch(() => null);
 
   if (allOk) {
-    ok(res, { status: "ok", checks });
+    ok(res, { status: "ok", checks, maintenance });
   } else {
-    ok(res, { status: "not_ready", checks }, { status: 503 });
+    ok(res, { status: "not_ready", checks, maintenance }, { status: 503 });
   }
 }
