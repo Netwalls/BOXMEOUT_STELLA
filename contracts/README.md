@@ -73,10 +73,16 @@ Network settings live in one table, `load_network` in `contracts/scripts/deploy.
 
 The scripts use **stellar-cli 28.x**, run as `stellar` (CI pins `28.1.0`). A legacy
 `soroban` binary is used only as a fallback, with a warning. Install the version CI
-uses:
+uses. This is the same download and checksum check as `.github/workflows/contracts-ci.yml`:
 
 ```bash
-cargo install stellar-cli --version 28.1.0 --locked
+STELLAR_CLI_VERSION=28.1.0
+STELLAR_CLI_SHA256=c1680deee94301d33ada7a17f98411e642a4248c727afbd2e43050d345746462
+archive="stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+curl -sSfL -o "$archive" "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/$archive"
+echo "${STELLAR_CLI_SHA256}  $archive" | sha256sum -c -
+tar -xzf "$archive" stellar && sudo mv stellar /usr/local/bin/
+stellar --version   # stellar 28.1.0
 ```
 
 ### Deployer identity (one-time setup)
