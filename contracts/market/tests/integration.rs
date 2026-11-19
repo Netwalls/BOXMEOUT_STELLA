@@ -44,7 +44,6 @@ struct World {
     admin: Address,
     oracle: Address,
     fee_collector: Address,
-    token_id: Address,
     treasury_id: Address,
     token: token::Client<'static>,
     token_admin: token::StellarAssetClient<'static>,
@@ -98,6 +97,7 @@ fn setup() -> World {
         &MIN_BET,
         &MAX_BET,
         &DISPUTE_WINDOW_SEC,
+        &token_id,
     );
     treasury.initialize(
         &admin,
@@ -114,7 +114,6 @@ fn setup() -> World {
         admin,
         oracle,
         fee_collector,
-        token_id,
         treasury_id,
         token,
         token_admin,

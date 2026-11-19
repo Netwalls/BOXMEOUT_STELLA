@@ -70,6 +70,8 @@ pub enum ContractError {
     // ── Factory ────────────────────────────────────────────
     /// Factory is paused; market creation is disabled
     FactoryPaused = 50,
+    /// Protocol is paused; new bets are rejected (claims and refunds stay open)
+    ProtocolPaused = 53,
     /// Oracle address already in whitelist
     OracleAlreadyWhitelisted = 51,
     /// Vec of market IDs exceeds the maximum allowed (20)

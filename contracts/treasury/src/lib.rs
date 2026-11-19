@@ -1,6 +1,12 @@
 #![no_std]
-use shared::{events, types::ProtocolConfig};
-use soroban_sdk::{contract, contractimpl, token, Address, Bytes, Env, String, Symbol, Vec};
+// Event payloads/topics are emitted with `env.events().publish`, which soroban-sdk
+// marks deprecated in favour of `#[contractevent]`. Migrating would change the
+// encoded event shapes that indexers and tests rely on, so the lint is allowed.
+#![allow(deprecated)]
+use shared::{errors::ContractError, events, types::ProtocolConfig};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, token, Address, Bytes, Env, String, Symbol, Vec,
+};
 
 /// Maximum number of entries kept in `WITHDRAWAL_LOG`. Older entries are
 /// evicted first; the `fee_withdrawn` / `EmrgDrain` events remain the
@@ -140,6 +146,7 @@ impl Treasury {
     /// - The treasury has already been initialized.
     /// - `fee_bps` exceeds 1000 (10%).
     /// - `daily_limit` is not positive.
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -150,12 +157,12 @@ impl Treasury {
         daily_limit: i128,
     ) {
         if env.storage().persistent().has(&key_admin(&env)) {
-            return Err(ContractError::AlreadyInitialized);
+            panic!("already initialized");
         }
 
         // Validate fee_bps does not exceed 10% (1000 basis points)
         if fee_bps > 1000 {
-            return Err(ContractError::Unauthorized);
+            panic!("fee_bps exceeds maximum of 1000 (10%)");
         }
         if daily_limit <= 0 {
             panic!("daily_limit must be positive");
@@ -240,7 +247,7 @@ impl Treasury {
         market_id: Bytes,
         bettor: Address,
         amount: i128,
-    ) -> Result<(), ContractError> {
+    ) {
         from_market.require_auth();
 
         let factory: Address = env
@@ -255,7 +262,7 @@ impl Treasury {
             soroban_sdk::vec![&env, market_id.to_val()],
         );
         if registered != Some(from_market.clone()) {
-            return Err(ContractError::MarketNotApproved);
+            panic!("unauthorized: caller is not a registered market");
         }
 
         let token_addr: Address = env
@@ -265,7 +272,7 @@ impl Treasury {
             .expect("token not set");
         token::Client::new(&env, &token_addr).transfer(
             &bettor,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &amount,
         );
 
@@ -297,7 +304,7 @@ impl Treasury {
     ///
     /// Panics if:
     /// - The invoking contract address does not match the address registered for `market_id` in the factory.
-    pub fn deposit_fees(env: Env, market_id: Bytes, amount: i128) -> Result<(), ContractError> {
+    pub fn deposit_fees(env: Env, market_id: Bytes, amount: i128) {
         let factory: Address = env
             .storage()
             .persistent()
@@ -312,7 +319,7 @@ impl Treasury {
             soroban_sdk::vec![&env, market_id.to_val()],
         );
         if registered != Some(caller.clone()) {
-            return Err(ContractError::MarketNotApproved);
+            panic!("unauthorized: caller is not a registered market");
         }
 
         let balance: i128 = env
@@ -393,7 +400,6 @@ impl Treasury {
             (Symbol::new(&env, "DustSwept"),),
             (from_market, market_id, amount, env.ledger().timestamp()),
         );
-        Ok(())
     }
 
     /// Transfers collected fees from the treasury to a recipient address.
@@ -455,7 +461,7 @@ impl Treasury {
             .get(&key_balance(&env))
             .unwrap_or(0);
         if amount > balance {
-            return Err(ContractError::InsufficientBalance);
+            panic!("amount exceeds balance");
         }
         env.storage()
             .persistent()
@@ -517,7 +523,6 @@ impl Treasury {
             (Symbol::new(&env, "WinningsReleased"),),
             (from_market, market_id, recipient, amount),
         );
-        Ok(())
     }
 
     /// Drains all treasury funds to `recipient` in an emergency.
@@ -859,7 +864,6 @@ impl Treasury {
 mod tests {
     use super::*;
     use shared::test_utils::{create_test_address, create_test_env};
-    use soroban_sdk::IntoVal;
 
     #[test]
     fn test_initialize_success() {
@@ -869,7 +873,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -897,7 +901,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -927,7 +931,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -948,7 +952,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -967,7 +971,10 @@ mod tests {
     /// Helper: registers treasury, initialises with a funded token, and seeds
     /// BALANCE by directly setting storage so we can test withdraw_fees without
     /// needing a real market factory cross-contract call.
-    fn setup_treasury_with_balance(env: &Env, balance: i128) -> (TreasuryClient, Address, Address) {
+    fn setup_treasury_with_balance(
+        env: &Env,
+        balance: i128,
+    ) -> (TreasuryClient<'_>, Address, Address) {
         use soroban_sdk::testutils::Ledger;
 
         env.ledger().with_mut(|li| li.timestamp = 1_000_000);
@@ -977,7 +984,7 @@ mod tests {
         let fee_recipient = create_test_address(env);
 
         // Mint `balance` tokens to the treasury contract so the token transfer succeeds.
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let token_addr = shared::test_utils::fund_address(env, &contract_id, balance);
 
         let client = TreasuryClient::new(env, &contract_id);
@@ -1248,7 +1255,7 @@ mod tests {
 
     #[test]
     fn test_accept_admin_emits_admin_transferred_via_shared_helper() {
-        use shared::test_utils::{event_count, last_event_name};
+        use shared::test_utils::last_event_name;
         let env = create_test_env();
         env.mock_all_auths();
 
@@ -1276,7 +1283,7 @@ mod tests {
 
     #[test]
     fn test_set_fee_bps_emits_config_updated_via_shared_helper() {
-        use shared::test_utils::{event_count, last_event_name};
+        use shared::test_utils::last_event_name;
         let env = create_test_env();
         env.mock_all_auths();
 

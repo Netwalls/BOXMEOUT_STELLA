@@ -47,12 +47,14 @@ impl MockFactory {
             .unwrap();
         ProtocolConfig {
             admin: admin.clone(),
-            fee_collector: admin,
+            fee_collector: admin.clone(),
             default_fee_bp: 200,
             min_bet_amount: 100,
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: DISPUTE_WINDOW_SEC,
             paused: false,
+            bet_token: admin.clone(),
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }

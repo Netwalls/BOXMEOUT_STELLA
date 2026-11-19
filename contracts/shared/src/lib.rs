@@ -1,4 +1,8 @@
 #![no_std]
+// Event payloads/topics are emitted with `env.events().publish`, which soroban-sdk
+// marks deprecated in favour of `#[contractevent]`. Migrating would change the
+// encoded event shapes that indexers and tests rely on, so the lint is allowed.
+#![allow(deprecated)]
 //! ============================================================
 //! BOXMEOUT — Shared Types and Errors
 //! All contracts import from this crate.

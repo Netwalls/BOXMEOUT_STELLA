@@ -1,11 +1,22 @@
 #![no_std]
+// Event payloads/topics are emitted with `env.events().publish`, which soroban-sdk
+// marks deprecated in favour of `#[contractevent]`. Migrating would change the
+// encoded event shapes that indexers and tests rely on, so the lint is allowed.
+#![allow(deprecated)]
 //! ============================================================
 //! BOXMEOUT — MarketFactory Contract
 //! Deploys and tracks Market contract instances.
 //! ============================================================
-use soroban_sdk::{contract, contractimpl, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, String, Symbol,
+    Vec,
+};
 
-use shared::{errors::ContractError, events, types::{MarketInfo, ProtocolConfig}};
+use shared::{
+    errors::ContractError,
+    events,
+    types::{MarketInfo, ProtocolConfig},
+};
 
 // Storage keys for persistent state
 const ADMIN: &str = "ADMIN";
@@ -33,6 +44,10 @@ fn market_by_index_key(index: u64) -> (&'static str, u64) {
 /// `list_active_markets` page, regardless of the caller-requested `limit`.
 const MAX_PAGE_SIZE: u32 = 50;
 
+/// Default time after a market's scheduled fight time that the oracle has to
+/// resolve it before anyone may cancel it via `cancel_unresolved` (7 days).
+const DEFAULT_RESOLUTION_TIMEOUT_SEC: u64 = 7 * 24 * 60 * 60;
+
 #[contract]
 pub struct MarketFactory;
 
@@ -43,6 +58,7 @@ impl MarketFactory {
     ///
     /// # Errors
     /// Returns `ContractError::AlreadyInitialized` if called more than once.
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -68,10 +84,13 @@ impl MarketFactory {
             dispute_window_sec,
             paused: false,
             bet_token,
+            resolution_timeout_sec: DEFAULT_RESOLUTION_TIMEOUT_SEC,
         };
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&MARKET_WASM_HASH, &market_wasm_hash);
+        env.storage()
+            .persistent()
+            .set(&MARKET_WASM_HASH, &market_wasm_hash);
         env.storage().persistent().set(&TREASURY, &treasury);
         env.storage().persistent().set(&PAUSED, &false);
         env.storage().persistent().set(&CONFIG_KEY, &config);
@@ -108,7 +127,10 @@ impl MarketFactory {
 
     /// Returns the current admin address.
     pub fn get_admin(env: Env) -> Address {
-        env.storage().persistent().get(&ADMIN).expect("not initialized")
+        env.storage()
+            .persistent()
+            .get(&ADMIN)
+            .expect("not initialized")
     }
 
     /// Returns the admin address awaiting acceptance, if any.
@@ -126,7 +148,10 @@ impl MarketFactory {
 
     /// Returns the stored treasury address.
     fn get_treasury_internal(env: &Env) -> Address {
-        env.storage().persistent().get(&TREASURY).expect("not initialized")
+        env.storage()
+            .persistent()
+            .get(&TREASURY)
+            .expect("not initialized")
     }
 
     pub fn get_treasury(env: Env) -> Address {
@@ -180,7 +205,11 @@ impl MarketFactory {
             return Err(ContractError::OracleNotWhitelisted);
         }
 
-        let count: u64 = env.storage().persistent().get(&MARKET_COUNT_KEY).unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&MARKET_COUNT_KEY)
+            .unwrap_or(0);
 
         // #1194: Generate collision-resistant market_id using sha256
         // Hash: nonce || fighter_a || fighter_b || end_time || creator
@@ -189,14 +218,15 @@ impl MarketFactory {
         preimage.append(&fighter_a.to_bytes());
         preimage.append(&fighter_b.to_bytes());
         preimage.append(&Bytes::from_array(&env, &end_time.to_le_bytes()));
-        preimage.append(&caller.to_xdr(&env));
+        preimage.append(&caller.clone().to_xdr(&env));
 
         let market_id_hash = env.crypto().sha256(&preimage);
-        let market_id = Bytes::from_array(&env, &market_id_hash);
+        let market_id = Bytes::from(market_id_hash.clone());
         let salt = market_id_hash;
 
         // Load wasm hash from storage
-        let wasm_hash: BytesN<32> = env.storage()
+        let wasm_hash: BytesN<32> = env
+            .storage()
             .persistent()
             .get(&MARKET_WASM_HASH)
             .ok_or(ContractError::NotInitialized)?;
@@ -213,15 +243,15 @@ impl MarketFactory {
         use shared::types::Fighter;
         let fighter_a_struct = Fighter {
             name: fighter_a.clone(),
-            record: String::new(&env),
-            nationality: String::new(&env),
-            weight_class: String::new(&env),
+            record: String::from_str(&env, ""),
+            nationality: String::from_str(&env, ""),
+            weight_class: String::from_str(&env, ""),
         };
         let fighter_b_struct = Fighter {
             name: fighter_b.clone(),
-            record: String::new(&env),
-            nationality: String::new(&env),
-            weight_class: String::new(&env),
+            record: String::from_str(&env, ""),
+            nationality: String::from_str(&env, ""),
+            weight_class: String::from_str(&env, ""),
         };
 
         env.invoke_contract::<Result<(), ContractError>>(
@@ -281,9 +311,7 @@ impl MarketFactory {
     /// #1191: Reads from per-market key storage
     pub fn get_market(env: Env, market_id: Bytes) -> Option<MarketInfo> {
         let (key_prefix, key_suffix) = market_key(&market_id);
-        env.storage()
-            .persistent()
-            .get(&(key_prefix, key_suffix))
+        env.storage().persistent().get(&(key_prefix, key_suffix))
     }
 
     /// Returns a bounded, stably-ordered (creation order) page of all markets
@@ -292,7 +320,11 @@ impl MarketFactory {
     /// #1191: Reads from per-market key storage
     /// #1192: Fixed u32 overflow using saturating_add
     pub fn list_markets(env: Env, offset: u32, limit: u32) -> Vec<MarketInfo> {
-        let total: u64 = env.storage().persistent().get(&MARKET_COUNT_KEY).unwrap_or(0);
+        let total: u64 = env
+            .storage()
+            .persistent()
+            .get(&MARKET_COUNT_KEY)
+            .unwrap_or(0);
         let offset_u64 = offset as u64;
 
         // Return empty if offset >= total
@@ -300,7 +332,11 @@ impl MarketFactory {
             return Vec::new(&env);
         }
 
-        let capped_limit = if limit > MAX_PAGE_SIZE { MAX_PAGE_SIZE } else { limit };
+        let capped_limit = if limit > MAX_PAGE_SIZE {
+            MAX_PAGE_SIZE
+        } else {
+            limit
+        };
         // #1192: Use saturating_add to prevent u32 overflow
         let end_u64 = (offset_u64.saturating_add(capped_limit as u64)).min(total);
 
@@ -329,10 +365,18 @@ impl MarketFactory {
     /// #1191: Reads from per-market key storage
     /// #1193: Added pagination support with offset and limit
     pub fn list_active_markets(env: Env, offset: u32, limit: u32) -> Vec<MarketInfo> {
-        let total: u64 = env.storage().persistent().get(&MARKET_COUNT_KEY).unwrap_or(0);
+        let total: u64 = env
+            .storage()
+            .persistent()
+            .get(&MARKET_COUNT_KEY)
+            .unwrap_or(0);
         let offset_u64 = offset as u64;
 
-        let capped_limit = if limit > MAX_PAGE_SIZE { MAX_PAGE_SIZE } else { limit };
+        let capped_limit = if limit > MAX_PAGE_SIZE {
+            MAX_PAGE_SIZE
+        } else {
+            limit
+        };
         let now = env.ledger().timestamp();
         let mut result: Vec<MarketInfo> = Vec::new(&env);
         let mut count = 0u32;
@@ -373,7 +417,11 @@ impl MarketFactory {
     /// # Errors
     /// Returns `ContractError::Unauthorized` if `current_admin` does not match
     /// the stored admin.
-    pub fn propose_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), ContractError> {
+    pub fn propose_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), ContractError> {
         Self::require_admin(&env, &current_admin)?;
         env.storage().persistent().set(&PENDING_ADMIN, &new_admin);
         Ok(())
@@ -397,7 +445,11 @@ impl MarketFactory {
             return Err(ContractError::Unauthorized);
         }
 
-        let old_admin: Address = env.storage().persistent().get(&ADMIN).expect("not initialized");
+        let old_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&ADMIN)
+            .expect("not initialized");
         env.storage().persistent().set(&ADMIN, &new_admin);
         env.storage().persistent().remove(&PENDING_ADMIN);
 
@@ -419,7 +471,9 @@ impl MarketFactory {
             return Err(ContractError::OracleAlreadyWhitelisted);
         }
         whitelist.set(oracle.clone(), true);
-        env.storage().persistent().set(&ORACLE_WHITELIST, &whitelist);
+        env.storage()
+            .persistent()
+            .set(&ORACLE_WHITELIST, &whitelist);
 
         events::emit_oracle_added(&env, oracle);
         Ok(())
@@ -439,7 +493,9 @@ impl MarketFactory {
             return Err(ContractError::OracleNotWhitelisted);
         }
         whitelist.remove(oracle.clone());
-        env.storage().persistent().set(&ORACLE_WHITELIST, &whitelist);
+        env.storage()
+            .persistent()
+            .set(&ORACLE_WHITELIST, &whitelist);
 
         events::emit_oracle_removed(&env, oracle);
         Ok(())
@@ -490,7 +546,11 @@ impl MarketFactory {
 
     fn require_admin(env: &Env, admin: &Address) -> Result<(), ContractError> {
         admin.require_auth();
-        let stored: Address = env.storage().persistent().get(&ADMIN).expect("not initialized");
+        let stored: Address = env
+            .storage()
+            .persistent()
+            .get(&ADMIN)
+            .expect("not initialized");
         if stored != *admin {
             return Err(ContractError::Unauthorized);
         }
@@ -501,7 +561,10 @@ impl MarketFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Ledger as _}, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger as _},
+        Env,
+    };
 
     // A minimal, dependency-free contract wasm used only to exercise the real
     // `env.deployer()...deploy_v2()` path in tests. It is not the production
@@ -529,10 +592,10 @@ mod tests {
             &wasm_hash,
             treasury,
             &fee_collector,
-            &100u32,  // default_fee_bp
-            &1_000i128,  // min_bet_amount
-            &1_000_000_000i128,  // max_bet_amount
-            &(7 * 24 * 60 * 60u64),  // dispute_window_sec
+            &100u32,                // default_fee_bp
+            &1_000i128,             // min_bet_amount
+            &1_000_000_000i128,     // max_bet_amount
+            &(7 * 24 * 60 * 60u64), // dispute_window_sec
             &bet_token,
         );
     }
@@ -744,13 +807,13 @@ mod tests {
             &(now + 2000),
         );
 
-        let active_before = client.list_active_markets();
+        let active_before = client.list_active_markets(&0, &50);
         assert_eq!(active_before.len(), 2);
 
         // Advance the ledger past the first market's end_time.
         env.ledger().with_mut(|l| l.timestamp = now + 500);
 
-        let active_after = client.list_active_markets();
+        let active_after = client.list_active_markets(&0, &50);
         assert_eq!(active_after.len(), 1);
         assert_eq!(active_after.get(0).unwrap().market_id, later_ending);
         assert_ne!(active_after.get(0).unwrap().market_id, soon_ending);
@@ -931,7 +994,8 @@ mod tests {
         let first_topic = body.topics.first().expect("no topics");
         let sym = Symbol::try_from_val(&env, first_topic).expect("topic 0 not a Symbol");
         assert_eq!(sym, Symbol::new(&env, "oracle_added"));
-        let ev_oracle: Address = TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
+        let ev_oracle: Address =
+            TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
         assert_eq!(ev_oracle, oracle);
     }
 
@@ -952,7 +1016,8 @@ mod tests {
         let sym = Symbol::try_from_val(&env, body.topics.first().expect("no topics"))
             .expect("topic 0 not a Symbol");
         assert_eq!(sym, Symbol::new(&env, "oracle_removed"));
-        let ev_oracle: Address = TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
+        let ev_oracle: Address =
+            TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
         assert_eq!(ev_oracle, oracle);
     }
 
@@ -976,8 +1041,13 @@ mod tests {
         let sym = Symbol::try_from_val(&env, body.topics.first().expect("no topics"))
             .expect("topic 0 not a Symbol");
         assert_eq!(sym, Symbol::new(&env, "admin_transferred"));
-        let (ev_old, ev_new): (Address, Address) =
-            TryFromVal::try_from_val(&env, &body.data).expect("data shape mismatch");
+        // Tuple payloads arrive as an ScVal::Vec; decode each element.
+        use soroban_sdk::xdr::ScVal;
+        let ScVal::Vec(Some(items)) = &body.data else {
+            panic!("admin_transferred data is not a vec");
+        };
+        let ev_old: Address = TryFromVal::try_from_val(&env, &items[0]).expect("old admin shape");
+        let ev_new: Address = TryFromVal::try_from_val(&env, &items[1]).expect("new admin shape");
         assert_eq!(ev_old, admin);
         assert_eq!(ev_new, new_admin);
     }
