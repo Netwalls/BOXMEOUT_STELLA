@@ -10,6 +10,18 @@
 //! `PROPTEST_CASES` env var). Betting-only tests default to 256 cases; the
 //! heavier full-lifecycle tests (lock → resolve → claim) default to 64.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, MarketStatus, Outcome, ProtocolConfig};
 use market::{MarketContract, MarketContractClient};
 use proptest::prelude::ProptestConfig;

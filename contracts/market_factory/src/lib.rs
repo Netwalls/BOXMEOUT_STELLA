@@ -1,4 +1,17 @@
 #![no_std]
+// Unit and integration tests may panic on bad fixtures; shipped code may not (see the
+// workspace clippy lints in Cargo.toml).
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
 // `deny` rather than `forbid`: soroban's `#[contractimpl]` expands to an
 // `allow(unsafe_code)` (via the `ctor` crate) when dev-dependency features are
 // unified, and `forbid` cannot be overridden. `deny` still rejects any unsafe
@@ -19,8 +32,8 @@
 //! Deploys and tracks Market contract instances.
 //! ============================================================
 use soroban_sdk::{
-    contract, contractimpl, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, String, Symbol,
-    Vec,
+    contract, contractimpl, panic_with_error, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal,
+    Map, String, Symbol, Vec,
 };
 
 use shared::{

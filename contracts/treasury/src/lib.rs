@@ -2,6 +2,19 @@
 //! daily withdrawal limits.
 
 #![no_std]
+// Unit and integration tests may panic on bad fixtures; shipped code may not (see the
+// workspace clippy lints in Cargo.toml).
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
 // `deny` rather than `forbid`: soroban's `#[contractimpl]` expands to an
 // `allow(unsafe_code)` (via the `ctor` crate) when dev-dependency features are
 // unified, and `forbid` cannot be overridden. `deny` still rejects any unsafe
@@ -107,7 +120,7 @@ fn read_admin(env: &Env) -> Address {
     env.storage()
         .persistent()
         .get(&key_admin(env))
-        .expect("not initialized")
+        .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
 }
 
 /// Returns `(window_start, spent)` for the window containing `now`.

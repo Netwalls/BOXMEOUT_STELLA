@@ -33,6 +33,12 @@ pub enum ContractError {
     NotInitialized = 15,
     /// Protocol is paused; new bets are rejected (claims and refunds stay open)
     ProtocolPaused = 16,
+    /// Arithmetic overflow or division error while computing a value
+    ArithmeticOverflow = 17,
+    /// Amount must be strictly positive
+    InvalidAmount = 18,
+    /// Configuration value is outside its allowed range
+    InvalidConfig = 19,
 
     // ── Bet Validation ─────────────────────────────────────
     /// Bet amount is below config.min_bet

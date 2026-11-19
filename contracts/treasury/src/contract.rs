@@ -47,7 +47,7 @@ impl Treasury {
             return Err(ContractError::Unauthorized);
         }
         if daily_limit <= 0 {
-            panic!("daily_limit must be positive");
+            panic_with_error!(&env, ContractError::InvalidAmount);
         }
 
         env.storage().persistent().set(&key_admin(&env), &admin);
@@ -89,16 +89,16 @@ impl Treasury {
     pub fn set_daily_limit(env: Env, admin: Address, new_limit: i128) {
         admin.require_auth();
         if read_admin(&env) != admin {
-            panic!("not admin");
+            panic_with_error!(&env, ContractError::Unauthorized);
         }
         if new_limit <= 0 {
-            panic!("daily_limit must be positive");
+            panic_with_error!(&env, ContractError::InvalidAmount);
         }
         let old_limit: i128 = env
             .storage()
             .persistent()
             .get(&key_daily_limit(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         env.storage()
             .persistent()
             .set(&key_daily_limit(&env), &new_limit);
@@ -137,7 +137,7 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_factory(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
 
         let registered: Option<Address> = env.invoke_contract(
             &factory,
@@ -152,7 +152,7 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_token(&env))
-            .expect("token not set");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         token::Client::new(&env, &token_addr).transfer(
             &bettor,
             env.current_contract_address(),
@@ -164,9 +164,12 @@ impl Treasury {
             .persistent()
             .get(&key_balance(&env))
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&key_balance(&env), &(balance + amount));
+        env.storage().persistent().set(
+            &key_balance(&env),
+            &balance
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow)),
+        );
 
         events::emit_bet_deposited(&env, from_market, bettor, market_id, amount);
         Ok(())
@@ -193,7 +196,7 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_factory(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
 
         let caller = env.current_contract_address();
 
@@ -216,18 +219,24 @@ impl Treasury {
             .persistent()
             .get(&key_total_fees(&env))
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&key_balance(&env), &(balance + amount));
-        env.storage()
-            .persistent()
-            .set(&key_total_fees(&env), &(total + amount));
+        env.storage().persistent().set(
+            &key_balance(&env),
+            &balance
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow)),
+        );
+        env.storage().persistent().set(
+            &key_total_fees(&env),
+            &total
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow)),
+        );
 
         let token_addr: Address = env
             .storage()
             .persistent()
             .get(&key_token(&env))
-            .expect("token not set");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         events::emit_fee_deposited(&env, caller, token_addr, amount);
         Ok(())
     }
@@ -259,14 +268,14 @@ impl Treasury {
         from_market.require_auth();
 
         if amount <= 0 {
-            panic!("amount must be positive");
+            panic_with_error!(&env, ContractError::InvalidAmount);
         }
 
         let factory: Address = env
             .storage()
             .persistent()
             .get(&key_factory(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
 
         let registered: Option<Address> = env.invoke_contract(
             &factory,
@@ -274,7 +283,7 @@ impl Treasury {
             soroban_sdk::vec![&env, market_id.to_val()],
         );
         if registered != Some(from_market.clone()) {
-            panic!("unauthorized: caller is not a registered market");
+            panic_with_error!(&env, ContractError::MarketNotApproved);
         }
 
         let total: i128 = env
@@ -282,9 +291,12 @@ impl Treasury {
             .persistent()
             .get(&key_total_fees(&env))
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&key_total_fees(&env), &(total + amount));
+        env.storage().persistent().set(
+            &key_total_fees(&env),
+            &total
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow)),
+        );
 
         env.events().publish(
             (Symbol::new(&env, "DustSwept"),),
@@ -327,10 +339,10 @@ impl Treasury {
         admin.require_auth();
 
         if read_admin(&env) != admin {
-            panic!("not admin");
+            panic_with_error!(&env, ContractError::Unauthorized);
         }
         if amount <= 0 {
-            panic!("amount must be positive");
+            panic_with_error!(&env, ContractError::InvalidAmount);
         }
 
         let now = env.ledger().timestamp();
@@ -338,9 +350,11 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_daily_limit(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         let (window_start, spent) = current_window(&env, now);
-        let new_spent = spent.checked_add(amount).expect("window total overflow");
+        let new_spent = spent
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
         if new_spent > daily_limit {
             panic_with_error!(&env, ContractError::DailyWithdrawalLimitExceeded);
         }
@@ -359,15 +373,18 @@ impl Treasury {
         if amount > balance {
             return Err(ContractError::InsufficientBalance);
         }
-        env.storage()
-            .persistent()
-            .set(&key_balance(&env), &(balance - amount));
+        env.storage().persistent().set(
+            &key_balance(&env),
+            &balance
+                .checked_sub(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::InsufficientBalance)),
+        );
 
         let token_addr: Address = env
             .storage()
             .persistent()
             .get(&key_token(&env))
-            .expect("token not set");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         token::Client::new(&env, &token_addr).transfer(
             &env.current_contract_address(),
             &recipient,
@@ -398,18 +415,21 @@ impl Treasury {
             .get(&key_balance(&env))
             .unwrap_or(0);
         if amount > balance {
-            panic!("insufficient escrow for payout");
+            panic_with_error!(&env, ContractError::InsufficientBalance);
         }
 
-        env.storage()
-            .persistent()
-            .set(&key_balance(&env), &(balance - amount));
+        env.storage().persistent().set(
+            &key_balance(&env),
+            &balance
+                .checked_sub(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::InsufficientBalance)),
+        );
 
         let token_addr: Address = env
             .storage()
             .persistent()
             .get(&key_token(&env))
-            .expect("token not set");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         token::Client::new(&env, &token_addr).transfer(
             &env.current_contract_address(),
             &recipient,
@@ -455,7 +475,7 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_admin(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         if stored_admin != admin {
             return Err(ContractError::Unauthorized);
         }
@@ -464,7 +484,7 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_factory(&env))
-            .expect("factory not set");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         let config: ProtocolConfig = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_config"),
@@ -484,7 +504,7 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_token(&env))
-            .expect("token not set");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         token::Client::new(&env, &token_addr).transfer(
             &env.current_contract_address(),
             &recipient,
@@ -520,7 +540,7 @@ impl Treasury {
         env.storage()
             .persistent()
             .get(&key_daily_limit(&env))
-            .expect("not initialized")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
     }
 
     /// Returns how much more `withdraw_fees` can move before the current
@@ -529,7 +549,7 @@ impl Treasury {
     pub fn get_remaining_daily_limit(env: Env) -> i128 {
         let limit = Self::get_daily_limit(env.clone());
         let (_, spent) = current_window(&env, env.ledger().timestamp());
-        (limit - spent).max(0)
+        limit.saturating_sub(spent).max(0)
     }
 
     /// Returns lifetime cumulative fees collected.
@@ -590,7 +610,7 @@ impl Treasury {
         env.storage()
             .persistent()
             .get(&key_fee_recipient(&env))
-            .expect("not initialized")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
     }
 
     // ─── C-65: Two-step admin rotation ────────────────────────────────────────
@@ -618,9 +638,9 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_admin(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         if stored_admin != admin {
-            panic!("not admin");
+            panic_with_error!(&env, ContractError::Unauthorized);
         }
 
         env.storage()
@@ -655,16 +675,16 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_pending_admin(&env))
-            .expect("no pending admin");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         if stored_pending != pending_admin {
-            panic!("not pending admin");
+            panic_with_error!(&env, ContractError::Unauthorized);
         }
 
         let old_admin: Address = env
             .storage()
             .persistent()
             .get(&key_admin(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
 
         env.storage()
             .persistent()
@@ -694,16 +714,16 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_admin(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         if stored_admin != admin {
-            panic!("not admin");
+            panic_with_error!(&env, ContractError::Unauthorized);
         }
 
         let old_recipient: Address = env
             .storage()
             .persistent()
             .get(&key_fee_recipient(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
 
         env.storage()
             .persistent()
@@ -741,13 +761,13 @@ impl Treasury {
             .storage()
             .persistent()
             .get(&key_admin(&env))
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         if stored_admin != admin {
-            panic!("not admin");
+            panic_with_error!(&env, ContractError::Unauthorized);
         }
 
         if bps > 1000 {
-            panic!("fee_bps exceeds maximum of 1000 (10%)");
+            panic_with_error!(&env, ContractError::InvalidConfig);
         }
 
         env.storage().persistent().set(&key_fee_bps(&env), &bps);

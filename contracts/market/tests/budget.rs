@@ -11,6 +11,18 @@
 //! measure the Market contract's own cost, not the cross-contract round trips
 //! through the real treasury. `integration.rs` covers the real contracts.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, Outcome, ProtocolConfig};
 use market::{MarketContract, MarketContractClient, CLAIM_WINDOW_SEC, MAX_BETS_PER_ADDRESS};
 use shared::test_utils::{assert_within_budget, measure};

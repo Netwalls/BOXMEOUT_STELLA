@@ -2,6 +2,19 @@
 //! claims, refunds and dust sweeps.
 
 #![no_std]
+// Unit and integration tests may panic on bad fixtures; shipped code may not (see the
+// workspace clippy lints in Cargo.toml).
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
 // `deny` rather than `forbid`: soroban's `#[contractimpl]` expands to an
 // `allow(unsafe_code)` (via the `ctor` crate) when dev-dependency features are
 // unified, and `forbid` cannot be overridden. `deny` still rejects any unsafe
@@ -26,7 +39,8 @@ pub mod types;
 
 use shared::{errors::ContractError, events, market_id_to_u64, BPS_DENOMINATOR};
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Bytes, Env, IntoVal, String, Symbol, Vec,
+    contract, contractimpl, contracttype, panic_with_error, Address, Bytes, Env, IntoVal, String,
+    Symbol, Vec,
 };
 use types::{Bet, BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig, SettledOutcome};
 
@@ -84,23 +98,23 @@ fn winning_pool_for(market: &Market, outcome: &Outcome) -> Option<i128> {
 }
 
 /// Calculate net_pool after deducting protocol fees.
-fn net_pool(market: &Market) -> i128 {
+fn net_pool(env: &Env, market: &Market) -> i128 {
     market
         .total_pool
         .checked_sub(shared::calculate_fee(
             market.total_pool,
             market.protocol_fee_bp,
         ))
-        .expect("net_pool underflow")
+        .unwrap_or_else(|| panic_with_error!(env, ContractError::ArithmeticOverflow))
 }
 
 /// Calculate pro-rata payout: (bettor_stake / winning_pool) * net_pool.
-fn pro_rata_payout(bettor_stake: i128, net: i128, winning_pool: i128) -> i128 {
+fn pro_rata_payout(env: &Env, bettor_stake: i128, net: i128, winning_pool: i128) -> i128 {
     bettor_stake
         .checked_mul(net)
-        .expect("payout overflow (mult)")
+        .unwrap_or_else(|| panic_with_error!(env, ContractError::ArithmeticOverflow))
         .checked_div(winning_pool)
-        .expect("payout division error")
+        .unwrap_or_else(|| panic_with_error!(env, ContractError::ArithmeticOverflow))
 }
 
 // Soroban's `#[contract]` / `#[contractimpl]` macros emit undocumented client items

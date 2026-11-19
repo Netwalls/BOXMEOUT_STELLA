@@ -275,6 +275,9 @@ pub const BPS_DENOMINATOR: u32 = 10_000;
 /// | 200    | 2%        |
 /// | 500    | 5%        |
 /// | 10_000 | 100%      |
+// Overflow and division errors panic on purpose; the docs above say so, and silently
+// wrapping a fee would be worse than aborting the invocation.
+#[allow(clippy::expect_used)]
 pub fn calculate_fee(amount: i128, fee_bp: u32) -> i128 {
     amount
         .checked_mul(fee_bp as i128)

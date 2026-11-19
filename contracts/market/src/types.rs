@@ -39,13 +39,15 @@ pub enum SettledOutcome {
 impl SettledOutcome {
     /// Returns the resolved outcome. Panics if the market has not been resolved,
     /// so callers that need a winner must run after resolution.
-    pub fn require_resolved(&self) -> Outcome {
+    pub fn require_resolved(&self, env: &soroban_sdk::Env) -> Outcome {
         match self {
             SettledOutcome::FighterA => Outcome::FighterA,
             SettledOutcome::FighterB => Outcome::FighterB,
             SettledOutcome::Draw => Outcome::Draw,
             SettledOutcome::NoContest => Outcome::NoContest,
-            SettledOutcome::Pending => panic!("market outcome not resolved"),
+            SettledOutcome::Pending => {
+                soroban_sdk::panic_with_error!(env, shared::ContractError::InvalidMarketState)
+            }
         }
     }
 }

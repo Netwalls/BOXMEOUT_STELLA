@@ -1,4 +1,17 @@
 #![no_std]
+// Unit and integration tests may panic on bad fixtures; shipped code may not (see the
+// workspace clippy lints in Cargo.toml).
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
 // `forbid` for shipped code. Under `cfg(test)` only `deny`, because the
 // `#[contractimpl]` test stubs expand to an `allow(unsafe_code)` that
 // `forbid` cannot be overridden by.

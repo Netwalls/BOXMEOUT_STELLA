@@ -16,6 +16,18 @@
 //!
 //! ≥10 distinct test cases, all must pass without panic/overflow.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig};
 use market::{DataKey, MarketContract, MarketContractClient, MAX_DISPUTE_REASON_LEN};
 use soroban_sdk::{

@@ -16,6 +16,18 @@
 //! Every balance is checked against the token contract after each step, and
 //! the lifecycle ends with the invariant `payouts + fees + dust == stakes`.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Outcome};
 use market::MarketContractClient;
 use market_factory::{MarketFactory, MarketFactoryClient};

@@ -83,7 +83,7 @@ impl MarketFactory {
         env.storage()
             .persistent()
             .get(&ADMIN)
-            .expect("not initialized")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
     }
 
     /// Returns the admin address awaiting acceptance, if any.
@@ -96,7 +96,7 @@ impl MarketFactory {
         env.storage()
             .persistent()
             .get(&MARKET_WASM_HASH)
-            .expect("not initialized")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
     }
 
     /// Returns the stored treasury address.
@@ -104,7 +104,7 @@ impl MarketFactory {
         env.storage()
             .persistent()
             .get(&TREASURY)
-            .expect("not initialized")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
     }
 
     pub fn get_treasury(env: Env) -> Address {
@@ -251,9 +251,12 @@ impl MarketFactory {
             .persistent()
             .set(&(idx_prefix, idx_suffix), &market_id);
 
-        env.storage()
-            .persistent()
-            .set(&MARKET_COUNT_KEY, &(count + 1));
+        env.storage().persistent().set(
+            &MARKET_COUNT_KEY,
+            &count
+                .checked_add(1)
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow)),
+        );
 
         env.events().publish(("market_created",), info);
 
@@ -354,7 +357,9 @@ impl MarketFactory {
                 {
                     if info.end_time > now {
                         result.push_back(info);
-                        count += 1;
+                        count = count.checked_add(1).unwrap_or_else(|| {
+                            panic_with_error!(&env, ContractError::ArithmeticOverflow)
+                        });
                     }
                 }
             }
@@ -402,7 +407,7 @@ impl MarketFactory {
             .storage()
             .persistent()
             .get(&ADMIN)
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         env.storage().persistent().set(&ADMIN, &new_admin);
         env.storage().persistent().remove(&PENDING_ADMIN);
 
@@ -503,7 +508,7 @@ impl MarketFactory {
             .storage()
             .persistent()
             .get(&ADMIN)
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         if stored != *admin {
             return Err(ContractError::Unauthorized);
         }

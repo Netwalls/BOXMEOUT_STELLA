@@ -28,7 +28,7 @@ impl MarketContract {
         env.storage()
             .persistent()
             .get(&DataKey::MarketInfo)
-            .expect("market not initialized")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
     }
 
     fn write_market(env: &Env, market: &Market) {
@@ -248,7 +248,9 @@ impl MarketContract {
             .persistent()
             .get(&Symbol::new(&env, "BET_COUNT"))
             .unwrap_or(0u64);
-        let new_count = bet_count + 1;
+        let new_count = bet_count
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
         env.storage()
             .persistent()
             .set(&Symbol::new(&env, "BET_COUNT"), &new_count);
@@ -365,7 +367,7 @@ impl MarketContract {
             .storage()
             .persistent()
             .get(&DataKey::Factory)
-            .expect("factory not set");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         let config: ProtocolConfig = env.invoke_contract(
             &factory,
             &Symbol::new(&env, "get_config"),
@@ -373,7 +375,10 @@ impl MarketContract {
         );
 
         let now = env.ledger().timestamp();
-        let timeout_deadline = market.scheduled_at + config.resolution_timeout_sec;
+        let timeout_deadline = market
+            .scheduled_at
+            .checked_add(config.resolution_timeout_sec)
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
 
         if now <= timeout_deadline {
             return Err(ContractError::InvalidTimestamp);
@@ -556,7 +561,10 @@ impl MarketContract {
         }
 
         // Block claims during dispute window
-        let dispute_window_end = market.resolved_at + market.dispute_window_sec;
+        let dispute_window_end = market
+            .resolved_at
+            .checked_add(market.dispute_window_sec)
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
         let now = env.ledger().timestamp();
         let dispute_active: bool = env
             .storage()
@@ -565,10 +573,10 @@ impl MarketContract {
             .unwrap_or(false);
 
         if now < dispute_window_end || dispute_active {
-            panic!("claims not yet available");
+            panic_with_error!(&env, ContractError::InvalidMarketState);
         }
 
-        let outcome = market.outcome.require_resolved();
+        let outcome = market.outcome.require_resolved(&env);
         if !bet_wins(&bet.side, &outcome) {
             return Err(ContractError::NotWinner);
         }
@@ -584,7 +592,7 @@ impl MarketContract {
 
         let winning_pool =
             winning_pool_for(&market, &outcome).ok_or(ContractError::InvalidMarketStatus)?;
-        let payout = pro_rata_payout(bet.amount, net_pool(&market), winning_pool);
+        let payout = pro_rata_payout(&env, bet.amount, net_pool(&env, &market), winning_pool);
 
         // Mark claimed BEFORE any transfer (re-entrancy guard).
         env.storage()
@@ -645,7 +653,10 @@ impl MarketContract {
         }
 
         // Block claims during dispute window
-        let dispute_window_end = market.resolved_at + market.dispute_window_sec;
+        let dispute_window_end = market
+            .resolved_at
+            .checked_add(market.dispute_window_sec)
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
         let now = env.ledger().timestamp();
         let dispute_active: bool = env
             .storage()
@@ -654,13 +665,13 @@ impl MarketContract {
             .unwrap_or(false);
 
         if now < dispute_window_end || dispute_active {
-            panic!("claims not yet available");
+            panic_with_error!(&env, ContractError::InvalidMarketState);
         }
 
-        let outcome = market.outcome.require_resolved();
+        let outcome = market.outcome.require_resolved(&env);
         let winning_pool =
             winning_pool_for(&market, &outcome).ok_or(ContractError::InvalidMarketStatus)?;
-        let net = net_pool(&market);
+        let net = net_pool(&env, &market);
 
         let bet_ids: Vec<Bytes> = env
             .storage()
@@ -696,7 +707,7 @@ impl MarketContract {
                 .persistent()
                 .set(&DataKey::Claimed(bet_id.clone()), &true);
             total = total
-                .checked_add(pro_rata_payout(bet.amount, net, winning_pool))
+                .checked_add(pro_rata_payout(&env, bet.amount, net, winning_pool))
                 .ok_or(ContractError::InvalidMarketStatus)?;
             claimed_ids.push_back(bet_id);
         }
@@ -761,10 +772,10 @@ impl MarketContract {
             return Err(ContractError::InvalidMarketState);
         }
 
-        let outcome = market.outcome.require_resolved();
+        let outcome = market.outcome.require_resolved(&env);
         let winning_pool =
             winning_pool_for(&market, &outcome).ok_or(ContractError::InvalidMarketStatus)?;
-        let net = net_pool(&market);
+        let net = net_pool(&env, &market);
 
         // Use pre-calculated winning_stake_sum for O(1) calculation
         let winning_stake_sum = match outcome {
@@ -773,7 +784,7 @@ impl MarketContract {
             _ => 0,
         };
 
-        let owed = pro_rata_payout(winning_stake_sum, net, winning_pool);
+        let owed = pro_rata_payout(&env, winning_stake_sum, net, winning_pool);
         let dust = net
             .checked_sub(owed)
             .ok_or(ContractError::InvalidMarketState)?;
@@ -949,7 +960,10 @@ impl MarketContract {
         // finalize_resolution becomes callable, so there is no second where both
         // (or neither) are allowed.
         let current_time = env.ledger().timestamp();
-        let dispute_deadline = market.resolved_at + market.dispute_window_sec;
+        let dispute_deadline = market
+            .resolved_at
+            .checked_add(market.dispute_window_sec)
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
         if current_time >= dispute_deadline {
             return Err(ContractError::InvalidMarketState);
         }
@@ -1062,7 +1076,10 @@ impl MarketContract {
         match market.status {
             MarketStatus::Resolved => {
                 let current_time = env.ledger().timestamp();
-                let dispute_deadline = market.resolved_at + market.dispute_window_sec;
+                let dispute_deadline = market
+                    .resolved_at
+                    .checked_add(market.dispute_window_sec)
+                    .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
                 // Mirrors dispute_resolution: the window closes at exactly
                 // resolved_at + dispute_window_sec.
                 if current_time < dispute_deadline {
@@ -1179,7 +1196,7 @@ impl MarketContract {
         env.storage()
             .persistent()
             .get(&DataKey::Bet(bet_id))
-            .expect("bet not found")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NoBetsFound))
     }
 
     /// Returns all bets placed by `bettor` in this market.
@@ -1236,13 +1253,13 @@ impl MarketContract {
             .storage()
             .persistent()
             .get(&DataKey::Bet(bet_id))
-            .expect("bet not found");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NoBetsFound));
 
         let market: Market = env
             .storage()
             .persistent()
             .get(&DataKey::MarketInfo)
-            .expect("market not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
 
         let outcome = match market.outcome {
             SettledOutcome::Pending => return 0,
@@ -1257,7 +1274,9 @@ impl MarketContract {
         }
 
         match winning_pool_for(&market, &outcome) {
-            Some(winning_pool) => pro_rata_payout(bet.amount, net_pool(&market), winning_pool),
+            Some(winning_pool) => {
+                pro_rata_payout(&env, bet.amount, net_pool(&env, &market), winning_pool)
+            }
             None => 0,
         }
     }
@@ -1282,18 +1301,26 @@ impl MarketContract {
             .storage()
             .persistent()
             .get(&DataKey::MarketInfo)
-            .expect("market not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         let total = market.pool_a.checked_add(market.pool_b).unwrap_or(0);
         let (odds_a, odds_b) = if total == 0 {
             (5_000u32, 5_000u32)
         } else {
-            let a = market
+            let ratio = market
                 .pool_a
                 .checked_mul(BPS_DENOMINATOR as i128)
-                .expect("odds multiplication overflow")
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow))
                 .checked_div(total)
-                .expect("odds division error") as u32;
-            (a, BPS_DENOMINATOR.checked_sub(a).expect("odds underflow"))
+                .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow));
+            // `ratio <= BPS_DENOMINATOR` because pool_a <= total, so this always fits in u32.
+            let a = u32::try_from(ratio)
+                .unwrap_or_else(|_| panic_with_error!(&env, ContractError::ArithmeticOverflow));
+            (
+                a,
+                BPS_DENOMINATOR
+                    .checked_sub(a)
+                    .unwrap_or_else(|| panic_with_error!(&env, ContractError::ArithmeticOverflow)),
+            )
         };
         (market.pool_a, market.pool_b, odds_a, odds_b)
     }
@@ -1318,7 +1345,7 @@ impl MarketContract {
         env.storage()
             .persistent()
             .get(&DataKey::MarketInfo)
-            .expect("market not initialized")
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
     }
 
     /// Returns a specific bet placed by an address, or None if not found.
@@ -1368,7 +1395,7 @@ impl MarketContract {
             .storage()
             .persistent()
             .get(&DataKey::MarketInfo)
-            .expect("market not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized));
         (market.pool_a, market.pool_b, market.total_pool)
     }
 }

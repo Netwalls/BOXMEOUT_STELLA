@@ -12,6 +12,18 @@
 //!   5. Winners claim their proportional payouts
 //!   6. Assert final balances match expected payouts *exactly*
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{
     BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig, SettledOutcome,
 };

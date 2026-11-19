@@ -1,3 +1,14 @@
+// Test helpers panic on misuse by design, and this module is only compiled for tests
+// or with the `testutils` feature, never into shipped wasm.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::cast_possible_truncation
+)]
+
 use soroban_sdk::{
     testutils::Address as _, token, xdr::ContractEventBody, Address, Env, Symbol, TryFromVal, Val,
     Vec,
