@@ -28,6 +28,8 @@ frontend/.next/
 .env.*.local
 .env.testnet
 contracts/scripts/.env.testnet
+# Generated deploy output (contract IDs are in deployments/<network>.json, which IS tracked)
+contracts/deployments/*.env
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log

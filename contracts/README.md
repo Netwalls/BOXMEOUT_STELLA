@@ -39,6 +39,75 @@ cargo llvm-cov --workspace --html --open                   # browsable HTML repo
 CI fails if any optimised `.wasm` exceeds `MAX_WASM_SIZE_BYTES` (65,536 bytes, the
 Soroban contract code size limit), configured in `.github/workflows/contracts-ci.yml`.
 
+## Deployment
+
+`contracts/scripts/deploy.sh` builds, uploads, deploys and initialises Market,
+Treasury and MarketFactory on one network, then writes the result to
+`contracts/deployments/<network>.json`.
+
+```bash
+# Dry run: checks tools, CLI, network settings and the deployer identity. Deploys nothing.
+contracts/scripts/deploy.sh --network testnet --validate-only
+
+contracts/scripts/deploy.sh --network testnet
+contracts/scripts/deploy.sh --network futurenet
+contracts/scripts/deploy.sh --network local
+contracts/scripts/deploy.sh --network mainnet --confirm-mainnet   # refused without the flag
+```
+
+`deploy_testnet.sh` is a thin wrapper around `deploy.sh --network testnet`.
+
+### Networks
+
+Network settings live in one table, `load_network` in `contracts/scripts/deploy.sh`.
+`RPC_URL` in the environment overrides the RPC URL for any network.
+
+| Network | Passphrase | Default RPC |
+|---|---|---|
+| `testnet` | `Test SDF Network ; September 2015` | `https://soroban-testnet.stellar.org` |
+| `futurenet` | `Test SDF Future Network ; October 2022` | `https://rpc-futurenet.stellar.org` |
+| `mainnet` | `Public Global Stellar Network ; September 2015` | `https://mainnet.sorobanrpc.com` |
+| `local` | `Standalone Network ; February 2017` | `http://localhost:8000/soroban/rpc` |
+
+### Stellar CLI
+
+The scripts use **stellar-cli 28.x**, run as `stellar` (CI pins `28.1.0`). A legacy
+`soroban` binary is used only as a fallback, with a warning. Install the version CI
+uses:
+
+```bash
+cargo install stellar-cli --version 28.1.0 --locked
+```
+
+### Deployer identity (one-time setup)
+
+Deployments sign with a named Stellar CLI identity. The secret key is never passed to
+the scripts, never placed in an argument, and never written to a file the scripts create.
+Create the identity once per machine:
+
+```bash
+# Existing key: the CLI prompts for the S... secret on the terminal.
+stellar keys add boxmeout-admin --secret-key
+
+# Or a new key, funded on testnet:
+stellar keys generate boxmeout-admin --fund --network testnet
+```
+
+Select a different identity with `--identity NAME` or `BOXMEOUT_ADMIN_IDENTITY`.
+`ADMIN_SECRET` is no longer read; if it is set, the script warns and ignores it.
+
+### Outputs
+
+| File | Contents |
+|---|---|
+| `contracts/deployments/<network>.json` | Contract IDs, WASM hashes, bet token, deployer public key and identity name, timestamp |
+| `contracts/deployments/<network>.env` | Backend and frontend variables generated from the manifest |
+
+The script also prints the `backend/.env` and `frontend/.env.local` lines to paste.
+
+Migration: the old `contracts/deployed.testnet.json` and `contracts/.env.testnet` are
+replaced by the files above. Delete the old ones after your first `deploy.sh` run.
+
 ## Contracts
 
 ### Treasury
