@@ -19,6 +19,13 @@ import {
   getFailedSubmissionsHandler,
   retryFailedSubmissionHandler,
 } from "../controllers/oracleSubmission.controller";
+import {
+  createWebhookHandler,
+  deleteWebhookHandler,
+  listWebhookDeliveriesHandler,
+  listWebhooksHandler,
+  updateWebhookHandler,
+} from "../controllers/webhook.controller";
 import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 import { adminAuth } from "../middleware/adminAuth";
 import { auditLogMiddleware } from "../middleware/audit-log.middleware";
@@ -73,6 +80,13 @@ router.post(
   oracleSubmissionLimiter,
   retryFailedSubmissionHandler,
 );
+
+// Outbound webhook endpoints (#1581). Secrets are shown once, on create.
+router.get("/webhooks", listWebhooksHandler);
+router.post("/webhooks", oracleWriteLimiter, createWebhookHandler);
+router.patch("/webhooks/:id", oracleWriteLimiter, updateWebhookHandler);
+router.delete("/webhooks/:id", oracleWriteLimiter, deleteWebhookHandler);
+router.get("/webhooks/:id/deliveries", listWebhookDeliveriesHandler);
 
 // Audit logging (Issue #456, #1258)
 // Supports ?actor=<id>&action=<action> filtering.

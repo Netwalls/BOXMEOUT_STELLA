@@ -37,6 +37,7 @@ import { db } from "../db";
 import { config } from "../config";
 import { logger } from "../logger";
 import { redis } from "../lib/redis";
+import { dispatchWebhookEvent } from "./webhook.service";
 import {
   lockJobSuccess,
   lockJobFailure,
@@ -376,6 +377,12 @@ async function autoFinalizeExpiredWindows(): Promise<void> {
             resolvedAt: now,
           },
         });
+
+        await dispatchWebhookEvent(
+          "market.resolved",
+          { marketId: market.id, outcome: market.oracleResult.outcome },
+          `market.resolved:${market.id}`,
+        );
 
         logger.info(
           { marketId: market.id, outcome: market.oracleResult.outcome },

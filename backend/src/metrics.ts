@@ -170,6 +170,16 @@ export const retentionRowsPruned = new client.Counter({
   registers: [metricsRegistry],
 });
 
+// ─── Outbound webhook deliveries (#1581) ──────────────────────────────────────
+
+/** Terminal webhook outcomes: status is "delivered" or "failed". */
+export const webhookDeliveriesTotal = new client.Counter({
+  name: "webhook_deliveries_total",
+  help: "Outbound webhook deliveries that reached a terminal state",
+  labelNames: ["status"],
+  registers: [metricsRegistry],
+});
+
 // ─── /metrics router ──────────────────────────────────────────────────────────
 
 export const metricsRouter = Router();
