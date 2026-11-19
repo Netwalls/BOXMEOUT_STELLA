@@ -44,6 +44,8 @@ const marketResolutionLimiter = rateLimitMiddleware({
   windowMs: 60 * 1000,
   max: 10,
   keyPrefix: "admin:markets:write",
+  // #1583: admin writes must not lose their limit during a Redis outage.
+  failMode: "closed",
 });
 
 // Oracle CRUD is lower-stakes admin bookkeeping — looser limit.
@@ -51,6 +53,8 @@ const oracleWriteLimiter = rateLimitMiddleware({
   windowMs: 60 * 1000,
   max: 30,
   keyPrefix: "admin:oracles:write",
+  // #1583: admin writes must not lose their limit during a Redis outage.
+  failMode: "closed",
 });
 
 // #1257: Oracle result submission retry/idempotency admin surface.
@@ -58,6 +62,8 @@ const oracleSubmissionLimiter = rateLimitMiddleware({
   windowMs: 60 * 1000,
   max: 30,
   keyPrefix: "admin:oracle-submissions:write",
+  // #1583: admin writes must not lose their limit during a Redis outage.
+  failMode: "closed",
 });
 
 // Market management

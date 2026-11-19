@@ -170,6 +170,16 @@ export const retentionRowsPruned = new client.Counter({
   registers: [metricsRegistry],
 });
 
+// ─── Rate limiter (#1583) ─────────────────────────────────────────────────────
+
+/** Redis failures seen by the rate limiter, labelled by the fail mode applied. */
+export const rateLimitRedisErrorsTotal = new client.Counter({
+  name: "rate_limit_redis_errors_total",
+  help: "Rate limiter Redis failures, by the fail mode that was applied",
+  labelNames: ["fail_mode"],
+  registers: [metricsRegistry],
+});
+
 // ─── Scheduled job single-flight lock (#1582) ─────────────────────────────────
 
 /** A replica did not get the cross-replica lock, so it skipped this tick. */
