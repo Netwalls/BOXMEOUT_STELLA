@@ -63,6 +63,35 @@ jobs:
       - name: Clippy (deny warnings)
         run: cargo clippy --all-targets -- -D warnings
 
+  doc:
+    name: doc
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+          shared-key: contracts
+
+      - name: Build rustdoc (deny warnings)
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --no-deps --workspace
+
+      - name: Upload rustdoc artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-rustdoc
+          path: contracts/target/doc
+          if-no-files-found: error
+
   build:
     name: build
     runs-on: ubuntu-latest
@@ -232,13 +261,14 @@ jobs:
   contracts-ci:
     name: Contracts CI
     runs-on: ubuntu-latest
-    needs: [fmt, clippy, build, wasm-size, test, coverage]
+    needs: [fmt, clippy, doc, build, wasm-size, test, coverage]
     if: always()
     steps:
       - name: Summarise job results
         env:
           FMT: ${{ needs.fmt.result }}
           CLIPPY: ${{ needs.clippy.result }}
+          DOC: ${{ needs.doc.result }}
           BUILD: ${{ needs.build.result }}
           WASM_SIZE: ${{ needs.wasm-size.result }}
           TEST: ${{ needs.test.result }}
@@ -251,6 +281,7 @@ jobs:
             echo "|---|---|"
             echo "| fmt | $FMT |"
             echo "| clippy | $CLIPPY |"
+            echo "| doc | $DOC |"
             echo "| build | $BUILD |"
             echo "| wasm-size | $WASM_SIZE |"
             echo "| test | $TEST |"
@@ -258,14 +289,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           failed=0
-          for result in "$FMT" "$CLIPPY" "$BUILD" "$WASM_SIZE" "$TEST" "$COVERAGE"; do
+          for result in "$FMT" "$CLIPPY" "$DOC" "$BUILD" "$WASM_SIZE" "$TEST" "$COVERAGE"; do
             if [ "$result" != "success" ]; then
               failed=1
             fi
           done
 
           if [ "$failed" -ne 0 ]; then
-            echo "::error::Contracts CI failed (fmt=$FMT, clippy=$CLIPPY, build=$BUILD, wasm-size=$WASM_SIZE, test=$TEST, coverage=$COVERAGE)"
+            echo "::error::Contracts CI failed (fmt=$FMT, clippy=$CLIPPY, doc=$DOC, build=$BUILD, wasm-size=$WASM_SIZE, test=$TEST, coverage=$COVERAGE)"
             exit 1
           fi
           echo "All Contracts CI jobs passed."
