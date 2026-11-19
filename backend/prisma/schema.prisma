@@ -2,7 +2,7 @@
 // Run: npx prisma migrate dev
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
 }
 
 datasource db {
@@ -44,34 +44,35 @@ model Category {
 }
 
 model Market {
-  id              String                   @id
-  contractAddress String                   @unique
+  id              String       @id
+  contractAddress String       @unique
   fighterA        Json
   fighterB        Json
-  question        String                   @default("")
-  description     String                   @default("")
+  question        String       @default("")
+  description     String       @default("")
   scheduledAt     DateTime
   bettingEndsAt   DateTime
   createdAt       DateTime
   createdBy       String
-  status          MarketStatus             @default(Open)
+  status          MarketStatus @default(Open)
+
+  @@index([createdBy])
+  @@index([status, scheduledAt])
   outcome         Outcome?
   resolvedAt      DateTime?
-  poolA           BigInt                   @default(0)
-  poolB           BigInt                   @default(0)
-  totalPool       BigInt                   @default(0)
+  poolA           BigInt       @default(0)
+  poolB           BigInt       @default(0)
+  totalPool       BigInt       @default(0)
   oracleAddress   String
   txHash          String?
   categoryId      String?
-  category        Category?                @relation(fields: [categoryId], references: [id])
+  category        Category?    @relation(fields: [categoryId], references: [id])
   bets            Bet[]
   disputes        Dispute[]
   oracleResult    OracleResult?
   /// @db.Unsupported("tsvector")
   tsVector        Unsupported("tsvector")?
 
-  @@index([createdBy])
-  @@index([status, scheduledAt])
   @@index([categoryId])
   @@index([tsVector(ops: raw("tsvector_ops"))], type: Gin)
 }
@@ -105,20 +106,20 @@ model Dispute {
 }
 
 model OracleResult {
-  id         String   @id @default(uuid())
-  marketId   String   @unique
-  market     Market   @relation(fields: [marketId], references: [id])
-  reportedBy String
-  outcome    Outcome
-  source     String
-  reportedAt DateTime @default(now())
-  confirmed  Boolean  @default(false)
+  id          String   @id @default(uuid())
+  marketId    String   @unique
+  market      Market   @relation(fields: [marketId], references: [id])
+  reportedBy  String
+  outcome     Outcome
+  source      String
+  reportedAt  DateTime @default(now())
+  confirmed   Boolean  @default(false)
 }
 
 model IndexerState {
-  id         Int      @id @default(1)
-  lastLedger Int      @default(0)
-  updatedAt  DateTime @updatedAt
+  id          Int      @id @default(1)
+  lastLedger  Int      @default(0)
+  updatedAt   DateTime @updatedAt
 }
 
 model AdminLog {
@@ -139,14 +140,14 @@ model Oracle {
 }
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  userId      String
-  ipAddress   String
-  method      String
-  path        String
-  requestBody Json?
-  statusCode  Int
-  timestamp   DateTime @default(now())
+  id            String   @id @default(uuid())
+  userId        String
+  ipAddress     String
+  method        String
+  path          String
+  requestBody   Json?
+  statusCode    Int
+  timestamp     DateTime @default(now())
 
   @@index([timestamp])
 }
@@ -158,15 +159,15 @@ model User {
 }
 
 model EventLog {
-  id             Int       @id @default(autoincrement())
-  txHash         String
-  eventType      String
-  contractId     String
-  ledger         Int
+  id            Int       @id @default(autoincrement())
+  txHash        String
+  eventType     String
+  contractId    String
+  ledger        Int
   ledgerClosedAt DateTime
-  body           Json
-  processedAt    DateTime?
-  createdAt      DateTime  @default(now())
+  body          Json
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
 
   @@unique([txHash, eventType])
   @@index([processedAt])
