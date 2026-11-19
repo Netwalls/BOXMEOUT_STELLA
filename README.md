@@ -62,3 +62,6 @@ MIT
 
 <!-- handsoff-issue-1333 -->
 - #1333: Frontend CI broken on main: package-lock.json out of sync with package.json
+
+<!-- handsoff-issue-1639 -->
+- #1639: C-161: Add get_admin and get_pending_admin views to Treasury
