@@ -1,4 +1,6 @@
+import type { Prisma } from "@prisma/client";
 import { db as prisma } from "../db";
+import { getBetsByAddressPaginated, type PaginatedBets } from "./bet.service";
 
 export interface UserProfile {
   address: string;
@@ -57,7 +59,7 @@ export async function updateUser(
       action: "UPDATE_USER",
       actor: address,
       target: address,
-      metadata: data as Record<string, unknown>,
+      metadata: data as Prisma.InputJsonObject,
     },
   });
 

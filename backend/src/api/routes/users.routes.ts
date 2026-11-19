@@ -1,10 +1,10 @@
 import { Router } from "express";
+import { getUserPositionsHandler } from "../controllers/bet.controller";
 import {
   getUserHandler,
   updateUserHandler,
   getUserBetsHandler,
-  getUserPositionsHandler,
-} from "../controllers/bet.controller";
+} from "../controllers/user.controller";
 import { requireOwnAddress, walletAuthMiddleware } from "../middleware/walletAuth.middleware";
 
 const router = Router();
