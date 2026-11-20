@@ -211,7 +211,7 @@ function toScVal(sdk: StellarSdk, arg: unknown): xdr.ScVal {
   if (typeof arg === "string" && (sdk.StrKey.isValidEd25519PublicKey(arg) || sdk.StrKey.isValidContract(arg))) {
     return sdk.Address.fromString(arg).toScVal();
   }
-  return sdk.nativeToScVal(arg as any);
+  return sdk.nativeToScVal(arg as Parameters<StellarSdk["nativeToScVal"]>[0]);
 }
 
 /**
