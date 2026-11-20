@@ -17,7 +17,8 @@ jest.mock("@stellar/stellar-sdk", () => {
     nativeToScVal: jest.fn(),
     addressToScVal: jest.fn(),
     TransactionBuilder: jest.fn(txBuilder),
-    SorobanRpc: {
+    Contract: jest.fn(() => ({ call: jest.fn(() => ({})) })),
+    rpc: {
       Server: jest.fn(() => ({
         getAccount: jest.fn(async () => ({})),
         simulateTransaction: jest.fn(async () => ({ minResourceFee: "100" })),
@@ -35,7 +36,7 @@ describe("buildSorobanInvocation", () => {
 
   it("returns the built transaction without adding a placeholder signature", async () => {
     const xdr = await buildSorobanInvocation({
-      contractId: "CONTRACT",
+      contractId: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
       method: "place_bet",
       args: [],
       signerAddress: "GSIGNER",

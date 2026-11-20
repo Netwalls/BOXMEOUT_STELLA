@@ -1,5 +1,6 @@
 import type { Transaction, xdr } from "@stellar/stellar-sdk";
 import { ContractErrorException, parseContractErrorCode } from "./errors";
+import { isValidContractAddress, isValidStellarPublicKey } from "./strkey";
 import {
   NETWORK_PASSPHRASE,
   SOROBAN_RPC_URL,
@@ -86,7 +87,7 @@ export function allowHttpForRpc(
   throw new Error(`Insecure Soroban RPC URL rejected (HTTPS required): ${url}`);
 }
 
-/** Options for `new SorobanRpc.Server`, validated against the configured RPC URL. */
+/** Options for `new rpc.Server`, validated against the configured RPC URL. */
 function rpcServerOptions(): { allowHttp: boolean } {
   return { allowHttp: allowHttpForRpc(SOROBAN_RPC_URL) };
 }
@@ -208,7 +209,7 @@ type StellarSdk = typeof import("@stellar/stellar-sdk");
  */
 function toScVal(sdk: StellarSdk, arg: unknown): xdr.ScVal {
   if (arg instanceof sdk.xdr.ScVal) return arg;
-  if (typeof arg === "string" && (sdk.StrKey.isValidEd25519PublicKey(arg) || sdk.StrKey.isValidContract(arg))) {
+  if (typeof arg === "string" && (isValidStellarPublicKey(arg) || isValidContractAddress(arg))) {
     return sdk.Address.fromString(arg).toScVal();
   }
   return sdk.nativeToScVal(arg as any);
@@ -234,13 +235,13 @@ export async function buildSorobanInvocation(
   params: SorobanInvokeParams
 ): Promise<string> {
   const sdk = await loadSdk();
-  const { Contract, SorobanRpc, StrKey, TransactionBuilder } = sdk;
+  const { Contract, rpc, TransactionBuilder } = sdk;
 
-  if (!StrKey.isValidContract(params.contractId)) {
+  if (!isValidContractAddress(params.contractId)) {
     throw new Error(`Invalid contract address: ${params.contractId}`);
   }
 
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
+  const server = new rpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const contract = new Contract(params.contractId);
   const operation = contract.call(params.method, ...params.args.map((arg) => toScVal(sdk, arg)));
@@ -259,9 +260,9 @@ export async function buildSorobanInvocation(
 
   const simResult = await server.simulateTransaction(tx);
 
-  if (SorobanRpc.Api.isSimulationSuccess(simResult)) {
+  if (rpc.Api.isSimulationSuccess(simResult)) {
     const fee = simResult.minResourceFee;
-    const preparedTx = SorobanRpc.assembleTransaction(tx, simResult);
+    const preparedTx = rpc.assembleTransaction(tx, simResult);
 
     const withFee = new TransactionBuilder(account, {
       networkPassphrase: NETWORK_PASSPHRASE,
@@ -312,8 +313,8 @@ export async function submitTransaction(
   signedXdr: string,
   onStatus?: (update: TransactionStatusUpdate) => void
 ): Promise<TransactionResult> {
-  const { SorobanRpc, TransactionBuilder } = await loadSdk();
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
+  const { rpc, TransactionBuilder } = await loadSdk();
+  const server = new rpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const transaction = TransactionBuilder.fromXDR(
     signedXdr,
