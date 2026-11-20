@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { db as prisma } from "../../db";
 import { processLedger, SorobanEvent, LedgerData } from "../indexer.service";
-
-const prisma = new PrismaClient();
 
 describe("Indexer Service - Integration Tests", () => {
   beforeAll(async () => {
