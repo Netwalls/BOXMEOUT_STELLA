@@ -9,6 +9,7 @@ import { MotionConfigProvider } from '@/components/MotionConfigProvider';
 import { WalletProvider } from '@/hooks/useWallet';
 import { SkipToContent } from '@/components/SkipToContent';
 import { RouteAnnouncer } from '@/components/RouteAnnouncer';
+import { DEFAULT_LOCALE } from '@/lib/i18n';
 import '@/app/globals.css';
 
 export const metadata: Metadata = {
@@ -49,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang={DEFAULT_LOCALE}>
       <head>
         <ThemeScript />
       </head>

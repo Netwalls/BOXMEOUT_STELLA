@@ -4,12 +4,15 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { useTheme } from "@/hooks/useTheme";
+import { DEFAULT_LOCALE, translate } from "@/lib/i18n";
+
+const t = (key: string) => translate(DEFAULT_LOCALE, key);
 
 const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/create", label: "Create" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/", label: t("nav.home") },
+  { href: "/create", label: t("nav.create") },
+  { href: "/portfolio", label: t("nav.portfolio") },
+  { href: "/leaderboard", label: t("nav.leaderboard") },
 ];
 
 export function Navbar() {
@@ -47,7 +50,7 @@ export function Navbar() {
           <li>
             <button
               onClick={toggleTheme}
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={theme === "dark" ? t("nav.switchToLight") : t("nav.switchToDark")}
               className="w-9 h-9 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
             >
               {theme === "dark" ? "☀️" : "🌙"}
@@ -64,7 +67,7 @@ export function Navbar() {
         <button
           className="md:hidden flex items-center justify-center w-11 h-11 text-gray-300 hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
           onClick={() => setOpen((o) => !o)}
-          aria-label={open ? "Close menu" : "Open menu"}
+          aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
           aria-expanded={open}
           aria-controls="mobile-menu"
         >
