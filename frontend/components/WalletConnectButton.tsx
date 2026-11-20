@@ -15,8 +15,7 @@ export function WalletConnectButton({ onConnected }: WalletConnectButtonProps): 
     address,
     isConnected,
     walletNotInstalled,
-    isWrongNetwork,
-    networkName,
+    isNetworkMismatched: isWrongNetwork,
     connect,
     disconnect,
   } = useWallet();
@@ -47,8 +46,19 @@ export function WalletConnectButton({ onConnected }: WalletConnectButtonProps): 
         rel="noopener noreferrer"
         className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M13 10V3L4 14h7v7l9-11h-7z"
+          />
         </svg>
         Install Freighter
       </a>
@@ -64,10 +74,19 @@ export function WalletConnectButton({ onConnected }: WalletConnectButtonProps): 
           role="alert"
           className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-red-900/80 border border-red-600 text-red-300 text-xs font-medium"
         >
-          <svg className="w-3.5 h-3.5 shrink-0 text-red-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          <svg
+            className="w-3.5 h-3.5 shrink-0 text-red-400"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+              clipRule="evenodd"
+            />
           </svg>
-          Wrong network{networkName ? ` (${networkName})` : ""}. Switch to {NETWORK}.
+          Wrong network. Switch to {NETWORK}.
         </div>
         {/* Still show truncated address + disconnect option */}
         <div className="relative">
@@ -81,7 +100,10 @@ export function WalletConnectButton({ onConnected }: WalletConnectButtonProps): 
           {showDropdown && (
             <div className="absolute right-0 mt-1 w-40 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-10">
               <button
-                onClick={() => { disconnect(); setShowDropdown(false); }}
+                onClick={() => {
+                  disconnect();
+                  setShowDropdown(false);
+                }}
                 className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-800"
               >
                 Disconnect
@@ -108,7 +130,10 @@ export function WalletConnectButton({ onConnected }: WalletConnectButtonProps): 
         {showDropdown && (
           <div className="absolute right-0 mt-1 w-36 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-10">
             <button
-              onClick={() => { disconnect(); setShowDropdown(false); }}
+              onClick={() => {
+                disconnect();
+                setShowDropdown(false);
+              }}
               className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-800"
             >
               Disconnect
@@ -127,8 +152,19 @@ export function WalletConnectButton({ onConnected }: WalletConnectButtonProps): 
         className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium opacity-75 cursor-not-allowed"
       >
         <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          />
         </svg>
         Connecting...
       </button>
