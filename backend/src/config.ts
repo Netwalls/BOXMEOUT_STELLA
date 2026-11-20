@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { configSchema, type Config } from "./config.schema";
+import { resolveFileSecrets, SecretFileError } from "./config.secrets";
 
 export type { Config } from "./config.schema";
 
@@ -18,7 +19,17 @@ function formatZodErrors(errors: z.ZodIssue[]): string {
  * Throws a descriptive error if any required variable is missing or invalid.
  */
 function loadConfig(): Config {
-  const result = configSchema.safeParse(process.env);
+  let env: Record<string, string | undefined>;
+  try {
+    env = resolveFileSecrets(process.env);
+  } catch (err) {
+    if (err instanceof SecretFileError) {
+      throw new Error(`❌ Configuration error — ${err.message}`);
+    }
+    throw err;
+  }
+
+  const result = configSchema.safeParse(env);
 
   if (!result.success) {
     const formatted = formatZodErrors(result.error.issues);

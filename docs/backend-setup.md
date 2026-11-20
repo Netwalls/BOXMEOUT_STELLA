@@ -103,6 +103,31 @@ Open `.env` and fill in the values:
 | `PORT` | Leave as `3001` |
 | `NODE_ENV` | Leave as `development` |
 
+### Secrets from files (Docker / Kubernetes)
+
+`DATABASE_URL`, `ADMIN_SECRET_KEY`, `ADMIN_API_KEY` and `ORACLE_API_KEY` can
+instead be read from a file by setting `<NAME>_FILE` to the file path. The file
+contents are trimmed. Setting both `<NAME>` and `<NAME>_FILE` is an error, and
+values are never printed in validation errors (B-127).
+
+```yaml
+# docker-compose.yml (excerpt)
+services:
+  backend:
+    environment:
+      ADMIN_API_KEY_FILE: /run/secrets/admin_api_key
+      ORACLE_API_KEY_FILE: /run/secrets/oracle_api_key
+    secrets:
+      - admin_api_key
+      - oracle_api_key
+
+secrets:
+  admin_api_key:
+    file: ./secrets/admin_api_key.txt
+  oracle_api_key:
+    file: ./secrets/oracle_api_key.txt
+```
+
 ---
 
 ## 5 — Run database migrations
