@@ -89,38 +89,10 @@ export async function submitResolution(
   source: string = "admin",
   reporter: string = "admin"
 ): Promise<OracleResult> {
-  const market = await prisma.market.findUnique({ where: { id: marketId } });
-  if (!market) {
-    throw new Error(`Market not found: ${marketId}`);
-  }
-
-  const oracleResult = await prisma.oracleResult.upsert({
-    where: { marketId },
-    create: {
-      marketId,
-      reportedBy: reporter,
-      outcome,
-      source,
-      confirmed: true,
-    },
-    update: {
-      reportedBy: reporter,
-      outcome,
-      source,
-      confirmed: true,
-    },
-  });
-
-  await prisma.market.update({
-    where: { id: marketId },
-    data: {
-      status: "Resolved",
-      outcome,
-      resolvedAt: new Date(),
-    },
-  });
-
-  return oracleResult;
+  // B-128 / #1564: a report is only ever an unconfirmed OracleResult. It must
+  // not mark the market Resolved or set its outcome: the market moves to
+  // Resolved only when the on-chain MarketResolved event is indexed.
+  return submitFightResult(marketId, outcome, source, reporter);
 }
 
 export async function submitFightResult(
