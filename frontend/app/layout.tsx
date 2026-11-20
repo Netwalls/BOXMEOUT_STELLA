@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/ToastProvider';
 import { NetworkMismatchBanner } from '@/components/NetworkMismatchBanner';
 import { MarketStatusNotifier } from '@/components/MarketStatusNotifier';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorReporter } from '@/components/ErrorReporter';
 import { ThemeScript } from '@/components/ThemeScript';
 import { MotionConfigProvider } from '@/components/MotionConfigProvider';
 import { WalletProvider } from '@/hooks/useWallet';
@@ -62,6 +63,7 @@ export default function RootLayout({
           (reducedMotion="user" delegates to the media query).
         */}
         <MotionConfigProvider>
+          <ErrorReporter />
           <ErrorBoundary>
             <WalletProvider>
               <ToastProvider>

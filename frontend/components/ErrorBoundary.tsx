@@ -1,6 +1,7 @@
 "use client";
 
-import { Component, ReactNode } from "react";
+import { Component, ErrorInfo, ReactNode } from "react";
+import { reportError } from "@/lib/telemetry";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -17,8 +18,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return { hasError: true };
   }
 
-  componentDidCatch(error: unknown): void {
+  componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error("Uncaught render error:", error);
+    reportError(error, { source: "ErrorBoundary", componentStack: info.componentStack });
   }
 
   render(): ReactNode {
