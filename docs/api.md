@@ -157,6 +157,32 @@ Marks notifications read. Owner-only, same auth as above. Body: `{ "ids": ["..."
 
 ---
 
+### `GET /api/users/:address/watchlist` (#1570)
+
+Markets on the wallet's watchlist. Owner-only (`x-wallet-address` and `x-wallet-signature` for the same address). Newest first.
+
+**Response `200`** — `data` is an array of `{ marketId, createdAt }`.
+
+---
+
+### `PUT /api/users/:address/watchlist/:marketId` (#1570)
+
+Adds a market to the watchlist. Owner-only and idempotent: `data.created` is `false` when the market was already watched.
+
+**Response `200`** — `{ "data": { "marketId", "watched": true, "created": true|false } }`
+
+**Errors:** `404 NOT_FOUND` for an unknown market; `422 WATCHLIST_LIMIT_REACHED` when the wallet already has 200 watched markets.
+
+---
+
+### `DELETE /api/users/:address/watchlist/:marketId` (#1570)
+
+Removes a market from the watchlist. Owner-only and idempotent.
+
+**Response `200`** — `{ "data": { "marketId", "removed": true|false } }`
+
+---
+
 ## Markets
 
 ### `GET /api/markets`

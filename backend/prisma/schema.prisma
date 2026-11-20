@@ -76,6 +76,7 @@ model Market {
   category        Category?    @relation(fields: [categoryId], references: [id])
   bets            Bet[]
   disputes        Dispute[]
+  watchedBy       WatchedMarket[]
   oracleResult    OracleResult?
   /// @db.Unsupported("tsvector")
   tsVector        Unsupported("tsvector")?
@@ -178,6 +179,17 @@ model Notification {
   createdAt DateTime         @default(now())
 
   @@index([address, createdAt])
+}
+
+/// B-134 (#1570): a wallet's watchlist. Deleting a market removes its watch rows.
+model WatchedMarket {
+  address   String
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([address, marketId])
+  @@index([marketId])
 }
 
 model EventLog {

@@ -7,6 +7,11 @@ import {
 import { getUserPositionsHandler } from "../controllers/bet.controller";
 import { requireOwnAddress, walletAuthMiddleware } from "../middleware/walletAuth.middleware";
 import {
+  getWatchlistHandler,
+  putWatchlistHandler,
+  deleteWatchlistHandler,
+} from "../controllers/watchlist.controller";
+import {
   getNotificationsHandler,
   markNotificationsReadHandler,
 } from "../controllers/notification.controller";
@@ -45,6 +50,30 @@ router.post(
   walletAuthMiddleware({ whitelist: [] }),
   requireOwnAddress,
   markNotificationsReadHandler
+);
+
+// GET /api/users/:address/watchlist — owner-only (#1570 B-134)
+router.get(
+  "/:address/watchlist",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  getWatchlistHandler
+);
+
+// PUT /api/users/:address/watchlist/:marketId — owner-only, idempotent, capped (#1570 B-134)
+router.put(
+  "/:address/watchlist/:marketId",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  putWatchlistHandler
+);
+
+// DELETE /api/users/:address/watchlist/:marketId — owner-only, idempotent (#1570 B-134)
+router.delete(
+  "/:address/watchlist/:marketId",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  deleteWatchlistHandler
 );
 
 export default router;
