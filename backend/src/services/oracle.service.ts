@@ -6,6 +6,7 @@ import {
   Contract,
   Keypair,
   BASE_FEE,
+  Address,
   nativeToScVal,
   xdr,
 } from "@stellar/stellar-sdk";
@@ -276,14 +277,81 @@ export async function processResolutionJob(
   });
 }
 
+/** Statuses from which an admin may cancel a market (B-137). */
+export const CANCELLABLE_MARKET_STATUSES: readonly string[] = ["Open", "Locked"];
+
+export function cancelJobId(marketId: string): string {
+  return `cancel_market:${marketId}`;
+}
+
+/**
+ * B-137: Enqueues an on-chain cancel_market() submission. The job id is the
+ * idempotency key, so a repeated admin request never submits twice while a
+ * job is pending, active or completed. A failed job is replaced on retry.
+ */
+export async function enqueueCancellation(marketId: string, reason: string): Promise<void> {
+  const jobId = cancelJobId(marketId);
+  const existing = await resolutionQueue.getJob(jobId);
+  if (existing) {
+    const state = await existing.getState();
+    if (state === "completed" || state === "active" || state === "waiting" || state === "delayed") {
+      logger.info({ marketId, jobId, state }, "enqueueCancellation: already enqueued, skipping duplicate");
+      return;
+    }
+    await existing.remove();
+  }
+
+  await resolutionQueue.add("cancel_market", { marketId, reason, kind: "cancel" }, { jobId });
+  logger.info({ marketId, jobId }, "enqueueCancellation: cancel_market submission enqueued");
+}
+
+/**
+ * B-137: Performs the on-chain cancel_market(admin) call. The database status is
+ * deliberately not written here; the indexer updates it when the event is seen.
+ */
+export async function processCancellationJob(marketId: string): Promise<void> {
+  const market = await prisma.market.findUnique({ where: { id: marketId } });
+  if (!market) throw new Error(`Market not found: ${marketId}`);
+
+  const server = new SorobanRpc.Server(RPC_URL);
+  const keypair = Keypair.fromSecret(ADMIN_SECRET);
+  const account = await server.getAccount(keypair.publicKey());
+
+  const contract = new Contract(market.contractAddress);
+  const adminArg = new Address(keypair.publicKey()).toScVal();
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK,
+  })
+    .addOperation(contract.call("cancel_market", adminArg))
+    .setTimeout(30)
+    .build();
+
+  const prepared = await server.prepareTransaction(tx);
+  prepared.sign(keypair);
+  const sendResult = await server.sendTransaction(prepared);
+
+  if (sendResult.status === "ERROR") {
+    throw new ContractError(
+      `Stellar tx failed: ${JSON.stringify(sendResult.errorResult)}`,
+      sendResult.errorResult,
+    );
+  }
+}
+
 /**
  * BullMQ worker that drains the oracle-resolution queue.
  * Retries are handled by the queue's defaultJobOptions (attempts + backoff).
  */
 export const resolutionWorker = new Worker(
   "oracle-resolution",
-  async (job: Job<{ marketId: string; outcome: Outcome }>) => {
-    await processResolutionJob(job.data.marketId, job.data.outcome);
+  async (job: Job<{ marketId: string; outcome?: Outcome; kind?: string }>) => {
+    if (job.name === "cancel_market") {
+      await processCancellationJob(job.data.marketId);
+      return;
+    }
+    await processResolutionJob(job.data.marketId, job.data.outcome as Outcome);
   },
   { connection: { url: REDIS_URL } },
 );

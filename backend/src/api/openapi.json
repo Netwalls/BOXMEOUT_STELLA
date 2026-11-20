@@ -1478,6 +1478,35 @@
         }
       }
     },
+    "/api/admin/markets/cancel": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Cancel an Open or Locked market (B-137)",
+        "security": [{ "AdminKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["marketId", "reason"],
+                "properties": {
+                  "marketId": { "type": "string" },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": { "description": "Cancellation queued" },
+          "400": { "description": "Validation error" },
+          "401": { "description": "Missing or invalid admin key" },
+          "404": { "description": "Market not found" },
+          "409": { "description": "Market is not Open or Locked" }
+        }
+      }
+    },
     "/api/admin/markets/dispute/resolve": {
       "post": {
         "tags": [
