@@ -125,3 +125,6 @@ schema-engine-*
 *.seed
 .node_repl_history
 
+
+# Lighthouse CI output
+.lighthouseci/

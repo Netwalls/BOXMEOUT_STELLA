@@ -165,3 +165,56 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 7
+
+  lighthouse:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Production build with the E2E wallet and chain mocks, served by e2e/mock-api.mjs
+      - name: Build (E2E mocks)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_E2E: "true"
+          NEXT_PUBLIC_API_URL: "http://localhost:3001"
+          NEXT_PUBLIC_STELLAR_NETWORK: "testnet"
+          NEXT_PUBLIC_ADMIN_ADDRESSES: "GE2ETESTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWXYZ"
+
+      - name: Run Lighthouse CI
+        run: npx lhci autorun --config=lighthouserc.json
+
+      - name: Write Lighthouse summary
+        if: always()
+        run: |
+          {
+            echo "## Lighthouse CI"
+            echo ""
+            echo "Budgets are defined in frontend/lighthouserc.json."
+            ls .lighthouseci 2>/dev/null | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: frontend/.lighthouseci
+          if-no-files-found: ignore
+          retention-days: 7
