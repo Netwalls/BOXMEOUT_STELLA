@@ -1,9 +1,10 @@
+import { config } from "./config";
 import pino from "pino";
 import pinoHttp from "pino-http";
 import type { IncomingMessage } from "http";
 import { Prisma } from "@prisma/client";
 
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = config.NODE_ENV !== "production";
 
 /**
  * B-100: Secrets that must never reach a log line. Any log call that includes

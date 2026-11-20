@@ -1,3 +1,4 @@
+import { config } from "../../config";
 import { randomBytes } from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
@@ -7,7 +8,7 @@ let redis: Redis | null = null;
 
 function getRedis(): Redis {
   if (!redis) {
-    redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
+    redis = new Redis(config.REDIS_URL);
   }
   return redis;
 }

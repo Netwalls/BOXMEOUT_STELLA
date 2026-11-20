@@ -1,3 +1,4 @@
+import { config } from "./config";
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { Horizon } from 'stellar-sdk';
 
@@ -12,7 +13,7 @@ export class MarketVerificationService {
   private horizonClient: Horizon.Server;
 
   constructor() {
-    const horizonUrl = process.env.HORIZON_URL || 'https://horizon.stellar.org';
+    const horizonUrl = config.STELLAR_HORIZON_URL;
     this.horizonClient = new Horizon.Server(horizonUrl);
   }
 
@@ -149,7 +150,7 @@ export class MarketVerificationService {
     marketId: string,
   ): Promise<Record<string, any> | null> {
     try {
-      const rpcUrl = process.env.STELLAR_RPC_URL || 'http://localhost:11626';
+      const rpcUrl = config.STELLAR_RPC_URL;
 
       // Use Soroban RPC to invoke read-only contract function
       const response = await fetch(`${rpcUrl}`, {

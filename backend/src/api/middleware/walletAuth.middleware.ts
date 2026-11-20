@@ -1,10 +1,11 @@
+import { config } from "../../config";
 import { randomBytes } from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { Keypair } from "@stellar/stellar-sdk";
 import Redis from "ioredis";
 import { fail } from "../response";
 
-const CHALLENGE_TTL_MS = Number(process.env.WALLET_AUTH_CHALLENGE_TTL_MS ?? 5 * 60 * 1000);
+const CHALLENGE_TTL_MS = Number(config.WALLET_AUTH_CHALLENGE_TTL_MS ?? 5 * 60 * 1000);
 const CHALLENGE_PREFIX = "BOXMEOUT-AUTH";
 const REDIS_KEY_PREFIX = "wallet-challenge:";
 
@@ -33,14 +34,14 @@ let _redis: Redis | null = null;
 
 function getRedis(): Redis {
   if (!_redis) {
-    _redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+    _redis = new Redis(config.REDIS_URL, {
       lazyConnect: true,
     });
   }
   return _redis;
 }
 
-const useMemStore = process.env.NODE_ENV === "test";
+const useMemStore = config.NODE_ENV === "test";
 
 /**
  * Persist a challenge entry. Returns true on success, false if a challenge
@@ -149,7 +150,7 @@ export interface WalletAuthOptions {
  * like POST /api/markets where any wallet owner may create a market.
  */
 export function walletAuthMiddleware(options: WalletAuthOptions = {}) {
-  const whitelist = options.whitelist ?? parseWhitelist(process.env.ADMIN_WALLET_ADDRESSES);
+  const whitelist = options.whitelist ?? parseWhitelist(config.ADMIN_WALLET_ADDRESSES);
 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const address = req.headers["x-wallet-address"];

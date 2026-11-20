@@ -5,7 +5,9 @@
     "ecmaVersion": 2022,
     "sourceType": "module"
   },
-  "plugins": ["@typescript-eslint"],
+  "plugins": [
+    "@typescript-eslint"
+  ],
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended"
@@ -15,13 +17,35 @@
     "es2022": true
   },
   "rules": {
-    "no-console": "error"
+    "no-console": "error",
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "process",
+        "property": "env",
+        "message": "Read configuration through the typed config module (import { config } from config.ts) instead of process.env (B-125)."
+      }
+    ]
   },
   "overrides": [
     {
-      "files": ["**/*.test.ts", "**/*.spec.ts", "**/__tests__/**/*.ts"],
+      "files": [
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "**/__tests__/**/*.ts"
+      ],
       "rules": {
-        "no-console": "off"
+        "no-console": "off",
+        "no-restricted-properties": "off"
+      }
+    },
+    {
+      "files": [
+        "src/config.ts",
+        "src/config.schema.ts"
+      ],
+      "rules": {
+        "no-restricted-properties": "off"
       }
     }
   ]

@@ -1,7 +1,8 @@
+import { config } from "../config";
 import Redis from "ioredis";
 import { db as prisma } from "../db";
 
-const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
+const redis = new Redis(config.REDIS_URL);
 
 const CACHE_TTL = 10; // seconds
 

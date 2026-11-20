@@ -1,3 +1,4 @@
+import { config } from "../config";
 import { Dispute, Market, OracleResult, Outcome, PrismaClient } from "@prisma/client";
 import {
   SorobanRpc,
@@ -15,12 +16,12 @@ import { ContractError } from "../errors";
 import { db as prisma } from "../db";
 import { z } from "zod";
 import { createProviderClient } from "./external-provider.client";
-const RPC_URL = process.env.STELLAR_RPC_URL!;
-const NETWORK = process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
-const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
-const BOXREC_API_URL = process.env.BOXREC_API_URL!;
+const RPC_URL = config.STELLAR_RPC_URL;
+const NETWORK = config.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
+const ADMIN_SECRET = config.ADMIN_SECRET_KEY;
+const BOXREC_API_URL = config.BOXREC_API_URL;
 
-const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+const REDIS_URL = config.REDIS_URL;
 
 /**
  * BullMQ queue for on-chain resolve_market() submissions.
@@ -344,7 +345,7 @@ export async function fetchExternalResult(
 
   const data = await boxrecClient.getJson(
     url,
-    { headers: { Authorization: `Bearer ${process.env.ORACLE_API_KEY}` } },
+    { headers: { Authorization: `Bearer ${config.ORACLE_API_KEY}` } },
     BoxRecFightSchema,
   );
   if (!data) return null;

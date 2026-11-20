@@ -1,3 +1,4 @@
+import { config } from "../config";
 /**
  * Indexer entry point.
  *
@@ -30,7 +31,7 @@ import { metricsRouter } from "../metrics";
 
 // B-112: the indexer runs in its own process, so it serves its own /metrics for
 // Prometheus. Without this the lag gauges and histograms are not scrapeable.
-const METRICS_PORT = parseInt(process.env.INDEXER_METRICS_PORT ?? "9100", 10);
+const METRICS_PORT = config.INDEXER_METRICS_PORT;
 const metricsServer = express()
   .use(metricsRouter)
   .listen(METRICS_PORT, () => {
@@ -48,10 +49,7 @@ startIndexer().catch((err) => {
  * Configurable forced-exit timeout (ms).
  * Override via SHUTDOWN_TIMEOUT_MS env var.
  */
-const SHUTDOWN_TIMEOUT_MS = parseInt(
-  process.env.SHUTDOWN_TIMEOUT_MS ?? "10000",
-  10
-);
+const SHUTDOWN_TIMEOUT_MS = config.SHUTDOWN_TIMEOUT_MS;
 
 let shutdownInProgress = false;
 

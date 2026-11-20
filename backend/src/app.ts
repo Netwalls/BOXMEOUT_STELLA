@@ -79,7 +79,7 @@ export function createApp(): express.Application {
   app.use("/api/oracle", oracleRoutes);
 
   // B-37: Swagger UI — dev mode only (Issue #1095)
-  if (process.env.NODE_ENV !== "production") {
+  if (config.NODE_ENV !== "production") {
     app.use("/docs", docsRoutes);
   }
 

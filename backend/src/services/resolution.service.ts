@@ -46,14 +46,14 @@ import {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const RPC_URL = process.env.STELLAR_RPC_URL!;
+const RPC_URL = config.STELLAR_RPC_URL;
 const NETWORK =
-  process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
-const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
+  config.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
+const ADMIN_SECRET = config.ADMIN_SECRET_KEY;
 
 /** Dispute window in milliseconds (default 24 h). */
 const DISPUTE_WINDOW_MS =
-  parseInt(process.env.DISPUTE_WINDOW_MS ?? "86400000", 10);
+  config.DISPUTE_WINDOW_MS;
 
 const MAX_RETRIES = 3;
 /** Hard cap on fee regardless of backoff (in stroops). */
@@ -61,8 +61,8 @@ const MAX_FEE = 1_000_000;
 
 /** Redis connection for the oracle submission queue. */
 const REDIS_CONNECTION = {
-  host: process.env.REDIS_HOST ?? "127.0.0.1",
-  port: parseInt(process.env.REDIS_PORT ?? "6379", 10),
+  host: config.REDIS_HOST,
+  port: config.REDIS_PORT,
 };
 
 /** Queue name for oracle result submissions. */
@@ -396,10 +396,7 @@ export const LOCK_JOB_NAME = "enforce-market-locks";
 export const FINALIZE_JOB_NAME = "auto-finalize-expired-windows";
 
 /** How often each lifecycle job runs. Defaults to one minute. */
-export const LIFECYCLE_INTERVAL_MS = parseInt(
-  process.env.LIFECYCLE_JOB_INTERVAL_MS ?? "60000",
-  10
-);
+export const LIFECYCLE_INTERVAL_MS = config.LIFECYCLE_JOB_INTERVAL_MS;
 
 /**
  * TTL of the cross-replica single-flight lock. Longer than any single run so

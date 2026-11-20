@@ -1,3 +1,4 @@
+import { config } from "../config";
 import { MarketStatus } from "@prisma/client";
 import { Job, Queue, Worker } from "bullmq";
 import { db } from "../db";
@@ -23,7 +24,7 @@ export const RECONCILIATION_SCHEDULE_ID = "market-reconciliation-nightly";
 /** 03:00 every day, server time. */
 export const RECONCILIATION_CRON = "0 3 * * *";
 
-const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+const REDIS_URL = config.REDIS_URL;
 const OPEN_STATUSES: MarketStatus[] = ["Open", "Locked", "Disputed"];
 
 function createDbReconcilerDeps(): ReconcilerDeps {
@@ -59,7 +60,7 @@ export const reconciliationQueue = new Queue(RECONCILIATION_QUEUE, {
 export const reconciliationWorker = new Worker(
   RECONCILIATION_QUEUE,
   async (_job: Job) => {
-    const autoRepair = process.env.MARKET_RECONCILE_AUTO_REPAIR === "true";
+    const autoRepair = config.MARKET_RECONCILE_AUTO_REPAIR;
     await reconciler.runSweep({ autoRepair });
   },
   { connection: { url: REDIS_URL } },

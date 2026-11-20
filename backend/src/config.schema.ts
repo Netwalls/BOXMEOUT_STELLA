@@ -152,8 +152,46 @@ export const configSchema = z.object({
    */
   EVENT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 
+  /** Dispute window after a resolution, in ms (oracle / resolution service) */
+  DISPUTE_WINDOW_MS: z.coerce.number().int().nonnegative().default(86_400_000),
+
+  /** Redis host for the resolution-service queues (used when REDIS_URL is not the source) */
+  REDIS_HOST: z.string().min(1).default("127.0.0.1"),
+
+  /** Redis port for the resolution-service queues */
+  REDIS_PORT: z.coerce.number().int().positive().default(6379),
+
+  /** Interval of the market lifecycle job, in ms */
+  LIFECYCLE_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+
+  /** Run the market reconciliation sweep with auto-repair enabled ("true" / "false") */
+  MARKET_RECONCILE_AUTO_REPAIR: z
+    .string()
+    .default("false")
+    .transform((v) => v.trim().toLowerCase() === "true"),
+
+  /** Forced-exit deadline for graceful shutdown, in ms */
+  SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  /** Prometheus metrics port of the indexer process */
+  INDEXER_METRICS_PORT: z.coerce.number().int().positive().default(9100),
+
+  /** Maximum ledger lag before the indexer reports unhealthy. Empty or unset means the built-in default. */
+  INDEXER_MAX_LEDGER_LAG: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.coerce.number().int().nonnegative().optional()
+  ),
+
+  /** Lifetime of a wallet-auth challenge, in ms */
+  WALLET_AUTH_CHALLENGE_TTL_MS: z.coerce.number().positive().default(5 * 60 * 1000),
+
+  /** Comma-separated Stellar addresses allowed on admin wallet routes. Unset means any valid signature. */
+  ADMIN_WALLET_ADDRESSES: z.string().optional(),
+
   /** Base URL for the external fight data provider (BoxRec or equivalent) */
-  BOXREC_API_URL: z.string().url().optional(),
+  BOXREC_API_URL: z
+    .string({ required_error: "BOXREC_API_URL is required" })
+    .url("BOXREC_API_URL must be a valid URL"),
 
   /**
    * Comma-separated list of allowed CORS origins.

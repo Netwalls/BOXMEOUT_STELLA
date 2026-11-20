@@ -35,10 +35,7 @@ const server = app.listen(PORT, () => {
  * exits with code 1 so it is never left dangling.
  * Override via SHUTDOWN_TIMEOUT_MS env var.
  */
-const SHUTDOWN_TIMEOUT_MS = parseInt(
-  process.env.SHUTDOWN_TIMEOUT_MS ?? "10000",
-  10
-);
+const SHUTDOWN_TIMEOUT_MS = config.SHUTDOWN_TIMEOUT_MS;
 
 let shutdownInProgress = false;
 

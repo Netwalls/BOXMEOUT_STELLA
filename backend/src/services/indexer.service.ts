@@ -1,3 +1,4 @@
+import { config } from "../config";
 import { PrismaClient } from "@prisma/client";
 import pino from "pino";
 import { SorobanRpc } from "@stellar/stellar-sdk";
@@ -194,7 +195,7 @@ export async function startIndexer(): Promise<void> {
   _stopRequested = false;
   _stopPromise = null;
 
-  const rpcUrl = process.env.STELLAR_RPC_URL!;
+  const rpcUrl = config.STELLAR_RPC_URL;
   const server = new SorobanRpc.Server(rpcUrl);
 
   let backoff = 1000; // ms

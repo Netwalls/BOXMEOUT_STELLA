@@ -1,3 +1,4 @@
+import { config } from "../../config";
 /**
  * B-60: Readiness check controller
  *
@@ -37,8 +38,8 @@ interface DependencyResult {
 }
 
 function maxIndexerLagLedgers(): number {
-  const parsed = parseInt(process.env.INDEXER_MAX_LEDGER_LAG ?? "", 10);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_MAX_INDEXER_LAG_LEDGERS;
+  const parsed = config.INDEXER_MAX_LEDGER_LAG;
+  return parsed ?? DEFAULT_MAX_INDEXER_LAG_LEDGERS;
 }
 
 /** Races a promise against a timeout. Rejects with a timeout error if the
@@ -66,7 +67,7 @@ async function checkRedis(): Promise<DependencyResult> {
   try {
     // Create a short-lived client for the probe rather than reusing a shared
     // instance — avoids interfering with connection pool state on failure.
-    client = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+    client = new Redis(config.REDIS_URL, {
       // Disable auto-reconnect for the probe client
       lazyConnect: true,
       maxRetriesPerRequest: 0,
@@ -91,7 +92,7 @@ async function checkRedis(): Promise<DependencyResult> {
 
 async function checkRpc(): Promise<DependencyResult> {
   try {
-    const rpcUrl = process.env.STELLAR_RPC_URL ?? "";
+    const rpcUrl = config.STELLAR_RPC_URL;
     if (!rpcUrl) throw new Error("STELLAR_RPC_URL not configured");
     const server = new SorobanRpc.Server(rpcUrl);
     await withTimeout(server.getHealth(), CHECK_TIMEOUT_MS, "rpc");
@@ -103,7 +104,7 @@ async function checkRpc(): Promise<DependencyResult> {
 
 async function checkIndexer(): Promise<DependencyResult> {
   try {
-    const rpcUrl = process.env.STELLAR_RPC_URL ?? "";
+    const rpcUrl = config.STELLAR_RPC_URL;
     if (!rpcUrl) throw new Error("STELLAR_RPC_URL not configured");
     const server = new SorobanRpc.Server(rpcUrl);
     const [state, latest] = await withTimeout(
@@ -130,7 +131,7 @@ async function checkIndexer(): Promise<DependencyResult> {
 }
 
 function errorMessage(err: unknown): string {
-  if (process.env.NODE_ENV === "production") {
+  if (config.NODE_ENV === "production") {
     // Do not leak internal error details in production
     return "check failed";
   }

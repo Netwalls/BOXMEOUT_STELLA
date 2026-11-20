@@ -1,3 +1,4 @@
+import { config } from "../config";
 /**
  * Shared ioredis singleton.
  *
@@ -14,13 +15,13 @@ declare global {
 
 export const redis: Redis =
   globalThis.__redis ??
-  new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+  new Redis(config.REDIS_URL, {
     // Disable automatic reconnect so the process can exit cleanly.
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: true,
   });
 
-if (process.env.NODE_ENV !== "production") {
+if (config.NODE_ENV !== "production") {
   globalThis.__redis = redis;
 }

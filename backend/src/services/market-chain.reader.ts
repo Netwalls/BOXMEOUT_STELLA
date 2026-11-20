@@ -1,3 +1,4 @@
+import { config } from "../config";
 import {
   BASE_FEE,
   Contract,
@@ -15,7 +16,7 @@ import { OnChainMarket, parseOnChainMarket } from "./market-reconciliation.servi
  * needed; a throwaway keypair is used as the source account.
  */
 export async function readOnChainMarket(contractAddress: string): Promise<OnChainMarket> {
-  const rpcUrl = process.env.STELLAR_RPC_URL;
+  const rpcUrl = config.STELLAR_RPC_URL;
   if (!rpcUrl) {
     throw new Error("STELLAR_RPC_URL environment variable is not set");
   }
@@ -23,7 +24,7 @@ export async function readOnChainMarket(contractAddress: string): Promise<OnChai
   const server = new SorobanRpc.Server(rpcUrl);
   const throwaway = Keypair.random();
   const networkPassphrase =
-    process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
+    config.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 
   const account = await server.getAccount(throwaway.publicKey());
   const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase })

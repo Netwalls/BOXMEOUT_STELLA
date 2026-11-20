@@ -1,3 +1,4 @@
+import { config } from "../config";
 import { Market, MarketStatus, Outcome } from "@prisma/client";
 import {
   SorobanRpc,
@@ -388,7 +389,7 @@ export async function reconcileMarketFromChain(
     });
   }
 
-  const rpcUrl = process.env.STELLAR_RPC_URL;
+  const rpcUrl = config.STELLAR_RPC_URL;
   if (!rpcUrl) {
     throw new Error("STELLAR_RPC_URL environment variable is not set");
   }
@@ -401,7 +402,7 @@ export async function reconcileMarketFromChain(
   // keypair works because the tx is never submitted to the network.
   const throwawayKeypair = Keypair.random();
   const networkPassphrase =
-    process.env.STELLAR_NETWORK === "mainnet"
+    config.STELLAR_NETWORK === "mainnet"
       ? Networks.PUBLIC
       : Networks.TESTNET;
 

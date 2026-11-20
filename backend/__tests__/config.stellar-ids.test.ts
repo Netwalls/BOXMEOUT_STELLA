@@ -12,6 +12,7 @@ function baseEnv(overrides: Record<string, string> = {}): Record<string, string>
     DATABASE_URL: "postgresql://user:pass@localhost:5432/boxmeout",
     STELLAR_RPC_URL: "https://soroban-testnet.stellar.org",
     STELLAR_HORIZON_URL: "https://horizon-testnet.stellar.org",
+    BOXREC_API_URL: "https://api.boxrec.test",
     MARKET_FACTORY_CONTRACT_ID: validContract,
     TREASURY_CONTRACT_ID: validContract,
     ADMIN_SECRET_KEY: validSecret,
