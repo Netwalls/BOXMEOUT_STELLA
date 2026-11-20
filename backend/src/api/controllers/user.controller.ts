@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as userService from "../../services/user.service";
 import { ok, fail } from "../response";
+import { cursorQuerySchema } from "../schemas/pagination";
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 20;

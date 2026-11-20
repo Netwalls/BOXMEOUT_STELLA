@@ -4,6 +4,7 @@ import { z } from "zod";
 import { logger } from "../../logger";
 import * as betService from "../../services/bet.service";
 import { ok, fail } from "../response";
+import { pageQuerySchema } from "../schemas/pagination";
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 

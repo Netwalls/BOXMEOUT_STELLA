@@ -30,6 +30,13 @@ enum BetSide {
   FighterB
 }
 
+enum NotificationType {
+  MarketResolved
+  MarketCancelled
+  DisputeRaised
+  DisputeResolved
+}
+
 model Category {
   id        String    @id @default(uuid())
   name      String
@@ -156,6 +163,21 @@ model User {
   address   String   @id
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// B-133 (#1569): one row per bettor per market event, written by the indexer
+/// inside the same transaction as the event. `dedupeKey` makes replays idempotent.
+model Notification {
+  id        String           @id @default(uuid())
+  address   String
+  type      NotificationType
+  marketId  String
+  payload   Json
+  dedupeKey String           @unique
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([address, createdAt])
 }
 
 model EventLog {

@@ -409,7 +409,41 @@
             "format": "date-time"
           }
         }
+      },
+
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MarketResolved",
+              "MarketCancelled",
+              "DisputeRaised",
+              "DisputeResolved"
+            ]
+          },
+          "marketId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
+
     }
   },
   "paths": {
@@ -1874,6 +1908,195 @@
           }
         }
       }
+    },
+
+    "/api/users/{address}/notifications": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List notifications for the wallet owner (#1569)",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-address",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Notification"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature missing or invalid"
+          },
+          "403": {
+            "description": "Signer does not own the address"
+          },
+          "400": {
+            "description": "Validation failed"
+          }
+        }
+      }
+    },
+    "/api/users/{address}/notifications/read": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Mark notifications read (owner only, #1569)",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-address",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Count of rows updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "updated": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature missing or invalid"
+          },
+          "403": {
+            "description": "Signer does not own the address"
+          },
+          "400": {
+            "description": "Validation failed"
+          }
+        }
+      }
     }
+
   }
 }

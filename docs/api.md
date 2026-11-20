@@ -135,6 +135,28 @@ Paginated open positions for a wallet.
 
 ---
 
+### `GET /api/users/:address/notifications` (#1569)
+
+Market notifications for the wallet: resolved, cancelled and disputed markets the wallet has bet on. Owner-only: requires `x-wallet-address` and `x-wallet-signature` for the same address. Newest first, cursor-paginated.
+
+**Query params:** `unread=true|false`, `cursor` (the `nextCursor` from the previous page), `limit` (1–100, default 20)
+
+**Response `200`** — `data` is an array of `{ id, type, marketId, payload, readAt, createdAt }`; `meta.nextCursor` is `null` on the last page.
+
+**Errors:** `401 WALLET_AUTH_REQUIRED` / `CHALLENGE_EXPIRED` / `INVALID_SIGNATURE`, `403 FORBIDDEN` when the signer is not the address, `400 VALIDATION_ERROR`.
+
+---
+
+### `POST /api/users/:address/notifications/read` (#1569)
+
+Marks notifications read. Owner-only, same auth as above. Body: `{ "ids": ["..."] }` marks those rows; omit `ids` to mark every unread notification.
+
+**Response `200`** — `{ "data": { "updated": <count> } }`
+
+**Retention:** notifications older than `NOTIFICATION_RETENTION_DAYS` (default 90) are pruned by `pruneNotificationsOlderThan`.
+
+---
+
 ## Markets
 
 ### `GET /api/markets`
