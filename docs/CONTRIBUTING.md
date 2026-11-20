@@ -15,7 +15,8 @@ This guide covers everything you need to pick an issue, write code, and get your
 6. [Commit Messages](#commit-messages)
 7. [Pull Request Process](#pull-request-process)
 8. [Testing Requirements](#testing-requirements)
-9. [Labels Explained](#labels-explained)
+9. [Dependency Updates (Dependabot)](#dependency-updates-dependabot)
+10. [Labels Explained](#labels-explained)
 
 ---
 
@@ -250,6 +251,21 @@ Test files live next to the code they test:
 - `contracts/market/src/lib.rs` → tests in `#[cfg(test)]` module in the same file
 - `backend/src/services/market.service.ts` → `market.service.test.ts` in the same folder
 - `frontend/hooks/useMarkets.ts` → `useMarkets.test.ts` in the same folder
+
+## Dependency Updates (Dependabot)
+
+Dependabot is configured in `.github/dependabot.yml` and opens weekly update PRs (Mondays, UTC) for:
+
+| Ecosystem | Directory | Label | Commit prefix |
+|---|---|---|---|
+| `npm` | `/frontend` | `frontend` | `chore(frontend)` |
+| `npm` | `/backend` | `backend` | `chore(backend)` |
+| `cargo` | `/contracts` | `smart-contract` | `chore(contracts)` |
+| `github-actions` | `/` | `devops` | `ci` |
+
+Minor and patch updates are grouped into one PR per ecosystem. Major updates open as individual PRs so they can be reviewed on their own. Each ecosystem has at most 5 open Dependabot PRs at a time.
+
+When reviewing a Dependabot PR, check the CI result for the matching workspace before merging.
 
 ---
 
