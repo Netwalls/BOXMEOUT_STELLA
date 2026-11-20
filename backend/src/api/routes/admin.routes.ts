@@ -22,6 +22,14 @@ import {
 import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 import { adminAuth } from "../middleware/adminAuth";
 import { auditLogMiddleware } from "../middleware/audit-log.middleware";
+import { validate } from "../middleware/validate";
+import {
+  auditLogsQuery,
+  createOracleBody,
+  idParams,
+  pagedQuery,
+  updateOracleBody,
+} from "../schemas/routes.schema";
 
 const router = Router();
 
@@ -58,24 +66,30 @@ router.get("/markets/pending", getPendingResolutionsHandler);
 // Registered before "/markets/:marketId/resolve" so "dispute" is not captured as a market id.
 router.post("/markets/dispute/resolve", marketResolutionLimiter, resolveDisputeHandler);
 // #1412: reconcile one market against on-chain state (report-only unless autoRepair).
-router.post("/markets/:id/reconcile", reconcileMarketHandler);
+router.post("/markets/:id/reconcile", validate({ params: idParams }), reconcileMarketHandler);
 
 // Oracle address management (Issue #455)
 router.get("/oracles", getAllOraclesHandler);
-router.post("/oracles", oracleWriteLimiter, createOracleHandler);
-router.patch("/oracles/:id", oracleWriteLimiter, updateOracleHandler);
-router.delete("/oracles/:id", oracleWriteLimiter, deleteOracleHandler);
+router.post("/oracles", oracleWriteLimiter, validate({ body: createOracleBody }), createOracleHandler);
+router.patch(
+  "/oracles/:id",
+  oracleWriteLimiter,
+  validate({ params: idParams, body: updateOracleBody }),
+  updateOracleHandler,
+);
+router.delete("/oracles/:id", oracleWriteLimiter, validate({ params: idParams }), deleteOracleHandler);
 
 // Oracle result submission jobs (Issue #1257)
-router.get("/oracle-submissions/failed", getFailedSubmissionsHandler);
+router.get("/oracle-submissions/failed", validate({ query: pagedQuery }), getFailedSubmissionsHandler);
 router.post(
   "/oracle-submissions/:id/retry",
   oracleSubmissionLimiter,
+  validate({ params: idParams }),
   retryFailedSubmissionHandler,
 );
 
 // Audit logging (Issue #456, #1258)
 // Supports ?actor=<id>&action=<action> filtering.
-router.get("/audit-logs", getAuditLogsHandler);
+router.get("/audit-logs", validate({ query: auditLogsQuery }), getAuditLogsHandler);
 
 export default router;

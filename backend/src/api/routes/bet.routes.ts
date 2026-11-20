@@ -6,7 +6,8 @@ import {
   getPayoutEstimateHandler,
   getLeaderboardHandler,
 } from "../controllers/bet.controller";
-import { validateAddressParam } from "../middleware/validate";
+import { validate, validateAddressParam } from "../middleware/validate";
+import { payoutEstimateQuery, pagedQuery } from "../schemas/routes.schema";
 import { fail } from "../response";
 
 const payoutEstimateLimiter = rateLimit({
@@ -28,10 +29,15 @@ const deprecatedLeaderboardAlias = (_req: Request, res: Response, next: NextFunc
 const router = Router();
 
 // GET /api/bets/leaderboard — deprecated alias of GET /api/leaderboard (#1382)
-router.get("/leaderboard", deprecatedLeaderboardAlias, getLeaderboardHandler);
+router.get("/leaderboard", deprecatedLeaderboardAlias, validate({ query: pagedQuery }), getLeaderboardHandler);
 
 // GET /api/bets/payout-estimate  — must come before /:address
-router.get("/payout-estimate", payoutEstimateLimiter, getPayoutEstimateHandler);
+router.get(
+  "/payout-estimate",
+  payoutEstimateLimiter,
+  validate({ query: payoutEstimateQuery }),
+  getPayoutEstimateHandler,
+);
 
 // GET /api/bets/:address/portfolio
 router.get("/:address/portfolio", validateAddressParam, getPortfolioHandler);
