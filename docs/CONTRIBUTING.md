@@ -16,7 +16,8 @@ This guide covers everything you need to pick an issue, write code, and get your
 7. [Pull Request Process](#pull-request-process)
 8. [Testing Requirements](#testing-requirements)
 9. [Dependency Updates (Dependabot)](#dependency-updates-dependabot)
-10. [Labels Explained](#labels-explained)
+10. [Git Hooks and Formatting](#git-hooks-and-formatting)
+11. [Labels Explained](#labels-explained)
 
 ---
 
@@ -267,7 +268,29 @@ Minor and patch updates are grouped into one PR per ecosystem. Major updates ope
 
 When reviewing a Dependabot PR, check the CI result for the matching workspace before merging.
 
+## Git Hooks and Formatting
+
+Pre-commit hooks run [lint-staged](https://github.com/lint-staged/lint-staged) through [husky](https://typicode.github.io/husky/). Hooks are configured at the repo root (`package.json`, `.husky/pre-commit`) and only touch staged files:
+
+| Staged files | Commands |
+|---|---|
+| `frontend/**/*.{ts,tsx,js,jsx,mjs,cjs}` | `eslint --fix`, then `prettier --write` |
+| `backend/**/*.ts` | `eslint --fix`, then `prettier --write` |
+| `frontend/**/*.{json,css}`, `backend/**/*.json` | `prettier --write` |
+
+Install once from the repo root with `npm install`. The `prepare` script wires up husky. It is skipped when `CI` is set, and it does not fail when there is no `.git` directory (for example, a zip download). It works the same in Git Bash and PowerShell, because Git for Windows runs hooks through `sh`.
+
+Run formatting by hand from `frontend/` or `backend/`:
+
+```bash
+npm run format        # rewrite files with Prettier
+npm run format:check  # report files that differ from Prettier output
+```
+
+Prettier settings live in `frontend/.prettierrc`. Ignored paths are in each package's `.prettierignore`.
+
 ---
+
 
 ## Labels Explained
 
