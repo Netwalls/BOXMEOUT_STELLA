@@ -247,6 +247,18 @@ Creates a new market record. Requires wallet-signature auth (creator must prove 
 
 ---
 
+### `GET /api/markets/trending` (#1572)
+
+Open markets ranked by stake placed in a recent window. Declared before `/:id`, so `trending` is never read as a market id.
+
+**Query params:** `window=1h|24h|7d` (default `24h`), `limit` (default 10, capped at 50)
+
+**Response `200`** — `data` is an array of market objects, each with `windowVolume` (the summed stake in the window, as a decimal string). `meta` is `{ window, limit }`. Results are cached for 15 seconds.
+
+**Errors:** `400 VALIDATION_ERROR` for an unknown `window` or a non-numeric `limit`.
+
+---
+
 ### `GET /api/markets/:id`
 
 Returns full detail for a single market.
