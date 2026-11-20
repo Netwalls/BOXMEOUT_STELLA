@@ -3,7 +3,6 @@
 import {
   createElement,
   createContext,
-  createElement,
   useCallback,
   useContext,
   useEffect,
@@ -64,7 +63,6 @@ export interface UseWalletResult {
   connect: () => Promise<void>;
   disconnect: () => void;
   signTransaction: (xdr: string) => Promise<string>;
-  signMessage: (message: string) => Promise<string>;
 }
 
 const WalletContext = createContext<UseWalletResult | null>(null);
@@ -153,29 +151,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [state.address],
   );
 
-    let result: Awaited<ReturnType<typeof freighterSignTransaction>>;
-    try {
-      result = await freighterSignTransaction(xdr, {
-        networkPassphrase: NETWORK_PASSPHRASE,
-        address: state.address,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (isUserRejection(message)) throw new UserRejectedError(message);
-      throw err;
-    }
-
-    if (result.error) {
-      const message = result.error.message;
-      if (isUserRejection(message)) throw new UserRejectedError(message);
-      throw new Error(message);
-    }
-
-      return result.signedTxXdr;
-    },
-    [state.address],
-  );
-
   // On mount, silently restore a previously-authorised wallet without prompting.
   useEffect(() => {
     void restoreConnection();
@@ -202,9 +177,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       signTransaction,
-      signMessage,
     };
-  }, [state, connect, disconnect, signTransaction, signMessage]);
+  }, [state, connect, disconnect, signTransaction]);
 
   return createElement(WalletContext.Provider, { value }, children);
 }
