@@ -338,6 +338,13 @@ Oracle record management (list, create, update, delete) is admin-only and lives 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | GET | `/api/stats` | Aggregate platform statistics. |
+
+### `GET /api/stats` (#1571)
+
+Platform-wide totals: `totalVolume` (sum of market pools), `totalPaidOut` (sum of bet payouts), `totalMarkets`, `openMarkets` and `uniqueBettors`. BigInt amounts are decimal strings. Results are cached in Redis for 30 seconds.
+
+**Response `200`** — `{ "data": { "totalVolume", "totalPaidOut", "totalMarkets", "openMarkets", "uniqueBettors" } }`
+
 | GET | `/api/stats/leaderboard` | Top users by volume or profit. Query: `period?`, `limit?`. |
 
 ## Leaderboard

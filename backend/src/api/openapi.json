@@ -442,6 +442,41 @@
             "format": "date-time"
           }
         }
+      },
+
+      "PlatformStats": {
+        "type": "object",
+        "required": [
+          "totalVolume",
+          "totalPaidOut",
+          "totalMarkets",
+          "openMarkets",
+          "uniqueBettors"
+        ],
+        "properties": {
+          "totalVolume": {
+            "type": "string",
+            "description": "Sum of market pools, stroops as a decimal string",
+            "example": "800000000"
+          },
+          "totalPaidOut": {
+            "type": "string",
+            "description": "Sum of bet payouts, stroops as a decimal string",
+            "example": "300000000"
+          },
+          "totalMarkets": {
+            "type": "integer",
+            "example": 12
+          },
+          "openMarkets": {
+            "type": "integer",
+            "example": 3
+          },
+          "uniqueBettors": {
+            "type": "integer",
+            "example": 40
+          }
+        }
       }
 
     }

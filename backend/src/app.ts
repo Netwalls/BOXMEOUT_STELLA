@@ -18,6 +18,7 @@ import oracleRoutes from "./api/routes/oracle.routes";
 import healthRoutes from "./api/routes/health.routes";
 import docsRoutes from "./api/routes/docs.routes";
 import leaderboardRoutes from "./api/routes/leaderboard.routes";
+import statsRoutes from "./api/routes/stats.routes";
 
 export function createApp(): express.Application {
   const app = express();
@@ -70,6 +71,8 @@ export function createApp(): express.Application {
   app.use("/api/markets", marketRoutes);
   app.use("/api/bets", betRoutes);
   app.use("/api/users", usersRoutes);
+  // #1571 B-135: platform-wide totals
+  app.use("/api/stats", statsRoutes);
   app.use("/api/admin", adminRoutes);
 
   // #1220: Mount auth routes so clients can obtain wallet-auth challenges.
