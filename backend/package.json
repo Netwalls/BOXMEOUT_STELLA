@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "BOXMEOUT backend — indexer + REST API for the boxing prediction market on Stellar",
   "private": true,
+  "engines": {
+    "node": ">=20 <21",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
