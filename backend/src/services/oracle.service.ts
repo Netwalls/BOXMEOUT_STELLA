@@ -13,6 +13,7 @@ import { Queue, Worker, Job } from "bullmq";
 import { logger } from "../logger";
 import { ContractError } from "../errors";
 import { db as prisma } from "../db";
+import { setResolutionQueueForMetrics } from "../metrics";
 import { z } from "zod";
 import { createProviderClient } from "./external-provider.client";
 const RPC_URL = process.env.STELLAR_RPC_URL!;
@@ -36,6 +37,8 @@ export const resolutionQueue = new Queue("oracle-resolution", {
     removeOnFail: false,
   },
 });
+
+setResolutionQueueForMetrics(resolutionQueue);
 
 /**
  * Idempotency key per market. A market can only ever have one in-flight or

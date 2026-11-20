@@ -19,6 +19,8 @@
 
 import { Router } from "express";
 import client, { Registry } from "prom-client";
+import type { Queue } from "bullmq";
+import { db } from "./db";
 
 // ─── Registry & default metrics ───────────────────────────────────────────────
 
@@ -167,6 +169,96 @@ export const retentionRowsPruned = new client.Counter({
   name: "retention_rows_pruned_total",
   help: "Total number of rows deleted by the retention pruning job",
   labelNames: ["table"],
+  registers: [metricsRegistry],
+});
+
+// ─── Business metrics (B-131) ────────────────────────────────────────────────
+// Label values are bounded: side and result are fixed sets, status is the
+// market enum. Market ids and addresses are never used as labels.
+
+const KNOWN_SIDES = ["FighterA", "FighterB"] as const;
+
+export const betsPlacedTotal = new client.Counter({
+  name: "bets_placed_total",
+  help: "Bets placed, by side",
+  labelNames: ["side"],
+  registers: [metricsRegistry],
+});
+
+export const betVolumeStroopsTotal = new client.Counter({
+  name: "bet_volume_stroops_total",
+  help: "Total bet stake placed, in stroops",
+  registers: [metricsRegistry],
+});
+
+export const oracleSubmissionsTotal = new client.Counter({
+  name: "oracle_submissions_total",
+  help: "Oracle result submissions, by outcome of the request",
+  labelNames: ["result"],
+  registers: [metricsRegistry],
+});
+
+/**
+ * Records one indexed BetPlaced event. Unknown sides and malformed amounts are
+ * counted under side="unknown" / skipped for volume rather than dropped.
+ */
+export function recordBetPlaced(body: unknown): void {
+  const { side, amount } = (body ?? {}) as { side?: unknown; amount?: unknown };
+  const label = (KNOWN_SIDES as readonly string[]).includes(String(side))
+    ? String(side)
+    : "unknown";
+  betsPlacedTotal.inc({ side: label });
+
+  const stroops = typeof amount === "bigint" || typeof amount === "number" || typeof amount === "string"
+    ? Number(amount)
+    : NaN;
+  if (Number.isFinite(stroops) && stroops > 0) {
+    betVolumeStroopsTotal.inc(stroops);
+  }
+}
+
+export const marketsByStatus = new client.Gauge({
+  name: "markets_by_status",
+  help: "Current number of markets, by status (sampled on scrape)",
+  labelNames: ["status"],
+  registers: [metricsRegistry],
+  async collect() {
+    const rows = await db.market.groupBy({ by: ["status"], _count: { _all: true } });
+    this.reset();
+    for (const row of rows) {
+      this.set({ status: String(row.status) }, row._count._all);
+    }
+  },
+});
+
+let resolutionQueueRef: Queue | null = null;
+
+/** Called by the oracle service once its resolution queue exists. */
+export function setResolutionQueueForMetrics(queue: Queue): void {
+  resolutionQueueRef = queue;
+}
+
+export const resolutionQueueWaiting = new client.Gauge({
+  name: "resolution_queue_waiting",
+  help: "Resolution jobs waiting to run (sampled on scrape)",
+  registers: [metricsRegistry],
+  async collect() {
+    this.set(resolutionQueueRef ? await resolutionQueueRef.getWaitingCount() : 0);
+  },
+});
+
+export const resolutionQueueFailed = new client.Gauge({
+  name: "resolution_queue_failed",
+  help: "Resolution jobs in the failed state (sampled on scrape)",
+  registers: [metricsRegistry],
+  async collect() {
+    this.set(resolutionQueueRef ? await resolutionQueueRef.getFailedCount() : 0);
+  },
+});
+
+export const sseConnections = new client.Gauge({
+  name: "sse_connections",
+  help: "Open market SSE connections",
   registers: [metricsRegistry],
 });
 

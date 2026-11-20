@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import * as oracleService from "../../services/oracle.service";
 import { db } from "../../db";
 import { ok, fail } from "../response";
+import { oracleSubmissionsTotal } from "../../metrics";
 
 /**
  * POST /api/oracle/submit (issue #908)
@@ -29,8 +30,10 @@ export async function submitOracleResultHandler(
       "oracle",
     );
 
+    oracleSubmissionsTotal.inc({ result: "accepted" });
     ok(res, result, { status: 201 });
   } catch (err) {
+    oracleSubmissionsTotal.inc({ result: "rejected" });
     next(err);
   }
 }

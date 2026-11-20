@@ -13,6 +13,7 @@ import {
   observeSorobanRpc,
 } from "../metrics";
 import { checkpointLedgerForPage } from "./indexer.checkpoint";
+import { recordBetPlaced } from "../metrics";
 
 /** Maximum events returned by one getEvents call. */
 const EVENTS_PAGE_LIMIT = 100;
@@ -392,6 +393,7 @@ async function handleEvent(event: SorobanEvent, tx: PrismaClient): Promise<void>
       break;
     case "BetPlaced":
       await betService.handleBetPlaced(event.body, tx);
+      recordBetPlaced(event.body);
       break;
     case "MarketResolved":
     case "MarketCancelled":
