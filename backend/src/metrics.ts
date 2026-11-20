@@ -131,6 +131,17 @@ export async function observeSorobanRpc<T>(
   }
 }
 
+// ─── Database query duration (B-140) ─────────────────────────────────────────
+
+/** Duration of every Prisma query, labelled by model and action. */
+export const dbQueryDuration = new client.Histogram({
+  name: "db_query_duration_seconds",
+  help: "Prisma query duration in seconds",
+  labelNames: ["model", "action"],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1, 2.5, 5, 10],
+  registers: [metricsRegistry],
+});
+
 // ─── Job outcome counters ─────────────────────────────────────────────────────
 
 export const lockJobSuccess = new client.Counter({

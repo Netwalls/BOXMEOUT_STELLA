@@ -103,6 +103,9 @@ const configSchema = z.object({
   /** B-102: Upper bound on a single Prisma query before it rejects (ms) */
   DB_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  /** B-140: Queries slower than this are logged at warn level (ms) */
+  SLOW_QUERY_MS: z.coerce.number().int().positive().default(200),
+
   /** B-102: Upper bound on a single Soroban RPC call (ms) */
   RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
 
