@@ -67,6 +67,10 @@ model Market {
   txHash          String?
   categoryId      String?
   category        Category?    @relation(fields: [categoryId], references: [id])
+  fighterAId      String?
+  fighterBId      String?
+  fighterAProfile Fighter?     @relation("FighterA", fields: [fighterAId], references: [id])
+  fighterBProfile Fighter?     @relation("FighterB", fields: [fighterBId], references: [id])
   bets            Bet[]
   disputes        Dispute[]
   oracleResult    OracleResult?
@@ -74,7 +78,25 @@ model Market {
   tsVector        Unsupported("tsvector")?
 
   @@index([categoryId])
+  @@index([fighterAId])
+  @@index([fighterBId])
   @@index([tsVector(ops: raw("tsvector_ops"))], type: Gin)
+}
+
+model Fighter {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  record      String   @default("")
+  nationality String   @default("")
+  weightClass String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  marketsAsA  Market[] @relation("FighterA")
+  marketsAsB  Market[] @relation("FighterB")
+
+  @@index([weightClass])
+  @@index([name])
 }
 
 model Bet {
