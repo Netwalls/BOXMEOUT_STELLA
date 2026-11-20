@@ -58,6 +58,9 @@ model Market {
 
   @@index([createdBy])
   @@index([status, scheduledAt])
+  @@index([scheduledAt])
+  @@index([createdAt])
+  @@index([totalPool])
   outcome         Outcome?
   resolvedAt      DateTime?
   poolA           BigInt       @default(0)

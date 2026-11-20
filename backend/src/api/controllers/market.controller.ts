@@ -16,11 +16,6 @@ function adminIdFromRequest(req: Request): string {
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
-const marketsQuerySchema = pageQuerySchema.extend({
-  status: z.nativeEnum(MarketStatus).optional(),
-  weightClass: z.string().optional(),
-});
-
 const marketBetsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
@@ -46,6 +41,8 @@ export const createMarketSchema = z.object({
   txHash: z.string().optional(),
 });
 
+export { getMarketsHandler } from "./marketList.controller";
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -65,30 +62,6 @@ export async function searchMarketsHandler(
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
   const result = await searchMarkets(q, page, limit);
   ok(res, result.data, { meta: { total: result.total } });
-}
-
-/**
- * GET /api/markets
- * Optional query params: status, weightClass, page, limit
- */
-export async function getMarketsHandler(req: Request, res: Response): Promise<void> {
-  const parsed = marketsQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    fail(res, 400, "VALIDATION_ERROR", "Validation failed", { details: parsed.error.flatten() });
-    return;
-  }
-
-  try {
-    const { status, weightClass, page, limit } = parsed.data;
-    const { data, total } = await marketService.getAllMarkets(
-      { status, weightClass },
-      { page, pageSize: limit }
-    );
-    ok(res, markets, { meta: { page, limit } });
-  } catch (err) {
-    logger.error({ err }, "getMarketsHandler failed");
-    fail(res, 500, "INTERNAL_ERROR", "Internal server error");
-  }
 }
 
 /**
