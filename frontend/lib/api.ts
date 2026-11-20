@@ -326,34 +326,41 @@ const jsonHeaders = (adminKey: string) => ({
  * Fetches the market list with optional filters and pagination. Resolves to the
  * markets together with the page metadata returned by the backend.
  */
-export async function fetchMarkets(params?: MarketQueryParams): Promise<Paginated<Market[]>> {
+export async function fetchMarkets(
+  params?: MarketQueryParams,
+  signal?: AbortSignal,
+): Promise<Paginated<Market[]>> {
   const qs = toQueryString(params as Record<string, string | number | undefined> ?? {});
-  return request(`/api/markets${qs}`, z.array(marketSchema));
+  return request(`/api/markets${qs}`, z.array(marketSchema), { signal });
 }
 
 /**
  * GET /api/markets/:id
  * Fetches a single market by ID. Throws if not found.
  */
-export async function fetchMarketById(market_id: string): Promise<Market> {
-  return apiFetch(`/api/markets/${market_id}`, marketSchema);
+export async function fetchMarketById(market_id: string, signal?: AbortSignal): Promise<Market> {
+  return apiFetch(`/api/markets/${market_id}`, marketSchema, { signal });
 }
 
 /**
  * GET /api/markets/:id/stats
  * Fetches aggregated stats for a market.
  */
-export async function fetchMarketStats(market_id: string): Promise<MarketStats> {
-  return apiFetch(`/api/markets/${market_id}/stats`, marketStatsSchema);
+export async function fetchMarketStats(market_id: string, signal?: AbortSignal): Promise<MarketStats> {
+  return apiFetch(`/api/markets/${market_id}/stats`, marketStatsSchema, { signal });
 }
 
 /**
  * GET /api/markets/:id/bets
  * Fetches all bets for a market, optionally filtered by outcome.
  */
-export async function fetchMarketBets(market_id: string, filters?: MarketBetsFilters): Promise<Bet[]> {
+export async function fetchMarketBets(
+  market_id: string,
+  filters?: MarketBetsFilters,
+  signal?: AbortSignal,
+): Promise<Bet[]> {
   const qs = toQueryString(filters as Record<string, string | number | undefined> ?? {});
-  return apiFetch(`/api/markets/${market_id}/bets${qs}`, z.array(betSchema));
+  return apiFetch(`/api/markets/${market_id}/bets${qs}`, z.array(betSchema), { signal });
 }
 
 /**
@@ -369,16 +376,19 @@ export async function fetchUserBets(address: string, page: number, limit: number
   return apiFetch<Bet[]>(`/api/users/${address}/bets${qs}`);
 }
 
-export async function fetchBetsByAddress(address: string): Promise<Bet[]> {
-  return apiFetch(`/api/bets/${address}`, z.array(betSchema));
+export async function fetchBetsByAddress(address: string, signal?: AbortSignal): Promise<Bet[]> {
+  return apiFetch(`/api/bets/${address}`, z.array(betSchema), { signal });
 }
 
 /**
  * GET /api/bets/:address/portfolio
  * Fetches portfolio summary stats for a wallet address.
  */
-export async function fetchPortfolioSummary(address: string): Promise<PortfolioSummary> {
-  return apiFetch(`/api/bets/${address}/portfolio`, portfolioSummarySchema);
+export async function fetchPortfolioSummary(
+  address: string,
+  signal?: AbortSignal,
+): Promise<PortfolioSummary> {
+  return apiFetch(`/api/bets/${address}/portfolio`, portfolioSummarySchema, { signal });
 }
 
 /**

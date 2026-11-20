@@ -44,7 +44,7 @@ describe("useMarket", () => {
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       expect(result.current.market).toEqual(MARKET);
       expect(result.current.error).toBeNull();
-      expect(mockFetchMarketById).toHaveBeenCalledWith("mkt-1");
+      expect(mockFetchMarketById).toHaveBeenCalledWith("mkt-1", expect.anything());
     });
 
     it("refetches when the market id changes", async () => {
@@ -58,7 +58,7 @@ describe("useMarket", () => {
       rerender({ id: "mkt-2" });
 
       await waitFor(() => expect(result.current.market?.id).toBe("mkt-2"));
-      expect(mockFetchMarketById).toHaveBeenLastCalledWith("mkt-2");
+      expect(mockFetchMarketById).toHaveBeenLastCalledWith("mkt-2", expect.anything());
     });
 
     it("polls every 10 seconds", async () => {

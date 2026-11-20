@@ -56,8 +56,14 @@ export function useMarkets(
   // slow earlier response cannot overwrite the results of a later request.
   const requestIdRef = useRef(0);
   const hasLoadedRef = useRef(false);
+  // The in-flight request's controller. Aborting it on a new fetch or on
+  // unmount stops a stale response from ever reaching state.
+  const controllerRef = useRef<AbortController | null>(null);
 
   const doFetch = useCallback(async () => {
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     const requestId = ++requestIdRef.current;
     const isInitialLoad = !hasLoadedRef.current;
     if (isInitialLoad) {
@@ -67,12 +73,12 @@ export function useMarkets(
     }
     setError(null);
     try {
-      const { data } = await fetchMarkets(filtersRef.current);
-      if (requestId !== requestIdRef.current) return;
+      const { data } = await fetchMarkets(filtersRef.current, controller.signal);
+      if (controller.signal.aborted || requestId !== requestIdRef.current) return;
       hasLoadedRef.current = true;
       setMarkets(data);
     } catch (err) {
-      if (requestId !== requestIdRef.current) return;
+      if (controller.signal.aborted || requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
       if (requestId === requestIdRef.current) {
@@ -92,6 +98,13 @@ export function useMarkets(
     doFetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
+
+  // Abort any in-flight request when the component unmounts.
+  useEffect(() => {
+    return () => {
+      controllerRef.current?.abort();
+    };
+  }, []);
 
   // Poll for live odds, paused while the tab is hidden.
   useVisibilityInterval(doFetch, pollingInterval);
