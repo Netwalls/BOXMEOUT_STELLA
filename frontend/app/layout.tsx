@@ -10,6 +10,7 @@ import { MotionConfigProvider } from '@/components/MotionConfigProvider';
 import { WalletProvider } from '@/hooks/useWallet';
 import { SkipToContent } from '@/components/SkipToContent';
 import { RouteAnnouncer } from '@/components/RouteAnnouncer';
+import { uiFont } from '@/lib/fonts';
 import '@/app/globals.css';
 
 export const metadata: Metadata = {
@@ -50,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={uiFont.variable}>
       <head>
         <ThemeScript />
       </head>
