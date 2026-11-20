@@ -32,6 +32,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@next/bundle-analyzer": "14.2.0",
     "@playwright/test": "^1.55.0",
     "@storybook/addon-themes": "^8.0.0",
@@ -41,8 +42,6 @@
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.0",
     "@types/jest": "^29.0.0",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "eslint-plugin-jsx-a11y": "^6.8.0",
     "@types/jest-axe": "^3.5.9",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
