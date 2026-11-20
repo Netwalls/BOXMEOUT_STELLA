@@ -1,6 +1,9 @@
 name: Frontend CI
 
 on:
+  schedule:
+    # Nightly full browser matrix
+    - cron: "0 3 * * *"
   push:
     branches:
       - main
@@ -124,12 +127,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Full matrix (chromium, firefox, webkit, Pixel 5, iPhone 13) on main and nightly;
+      # pull requests run chromium plus one mobile project.
+      - name: Determine browser matrix
+        id: matrix
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "browsers=chromium" >> "$GITHUB_OUTPUT"
+          else
+            echo "browsers=chromium firefox webkit" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}-${{ steps.matrix.outputs.browsers }}
+
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps ${{ steps.matrix.outputs.browsers }}
 
       # playwright.config.ts starts the mock API and an E2E build of the app
       - name: E2E tests
-        run: npm run test:e2e
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            npx playwright test --project=chromium --project="Pixel 5"
+          else
+            npx playwright test
+          fi
         env:
           NEXT_PUBLIC_STELLAR_NETWORK: "testnet"
 
