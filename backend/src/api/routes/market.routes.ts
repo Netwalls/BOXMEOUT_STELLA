@@ -6,6 +6,7 @@ import {
   getMarketStatsHandler,
   getMarketBetsHandler,
   getMarketOddsHistoryHandler,
+  getMarketDisputesHandler,
   createMarketHandler,
 } from "../controllers/market.controller";
 import { createMarketSchema } from "../schemas/market.schema";
@@ -93,5 +94,8 @@ router.get("/:id/bets", getMarketBetsHandler);
 
 // GET /api/markets/:id/odds-history?interval=5m|1h
 router.get("/:id/odds-history", getMarketOddsHistoryHandler);
+
+// GET /api/markets/:id/disputes?page=&limit=  (B-144 #1580)
+router.get("/:id/disputes", getMarketDisputesHandler);
 
 export default router;

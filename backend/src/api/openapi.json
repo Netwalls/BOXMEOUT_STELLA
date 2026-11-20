@@ -950,6 +950,59 @@
         }
       }
     },
+    "/api/v1/markets/{id}/disputes": {
+      "get": {
+        "tags": ["Markets"],
+        "summary": "List disputes for a market",
+        "description": "B-144 (#1580): disputes raised against a market, newest first. Returns 404 for an unknown market id.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "marketId", "raisedBy", "reason", "raisedAt"],
+                        "properties": {
+                          "id": { "type": "string" },
+                          "marketId": { "type": "string" },
+                          "raisedBy": { "type": "string", "description": "Stellar address of the disputing bettor" },
+                          "reason": { "type": "string" },
+                          "raisedAt": { "type": "string", "format": "date-time" },
+                          "resolvedAt": { "type": "string", "format": "date-time", "nullable": true },
+                          "resolution": { "type": "string", "nullable": true }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": ["total", "hasMore"],
+                      "properties": {
+                        "total": { "type": "integer" },
+                        "hasMore": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Market not found" },
+          "400": { "description": "VALIDATION_ERROR (page or limit out of range)" }
+        }
+      }
+    },
     "/api/v1/markets/search": {
       "get": {
         "tags": [

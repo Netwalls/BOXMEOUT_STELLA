@@ -250,9 +250,10 @@ Creates a new market record. Requires wallet-signature auth (creator must prove 
 
 ### `GET /api/markets/:id`
 
-Returns full detail for a single market.
+Returns full detail for a single market. Includes `disputeWindowEndsAt` (B-144 #1580): the
+end of the dispute window, `bettingEndsAt` plus `DISPUTE_WINDOW_MS` (default 24 h).
 
-**Response `200`** — same shape as one item above.
+**Response `200`** — same shape as one item above, plus `disputeWindowEndsAt` (ISO 8601).
 **Response `404`** — `{ "error": "Market not found" }`
 
 ---
@@ -273,6 +274,17 @@ Returns aggregate stats for a market.
   "impliedOddsB": 37.5
 }
 ```
+
+---
+
+### `GET /api/markets/:id/disputes`
+
+Disputes raised against a market, newest first (B-144 #1580). Page rule: `page`, `limit`.
+
+**Response `200`** — `{ "data": Dispute[], "meta": { "total": number, "hasMore": boolean } }`, where
+each `Dispute` is `{ id, marketId, raisedBy, reason, raisedAt, resolvedAt, resolution }`.
+**Response `404`** — market not found.
+**Response `400`** — `VALIDATION_ERROR` if `page` or `limit` is out of range.
 
 ---
 

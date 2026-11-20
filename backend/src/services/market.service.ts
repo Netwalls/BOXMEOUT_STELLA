@@ -1,4 +1,4 @@
-import { Market, MarketStatus, Outcome } from "@prisma/client";
+import { Dispute, Market, MarketStatus, Outcome } from "@prisma/client";
 import {
   SorobanRpc,
   TransactionBuilder,
@@ -228,6 +228,42 @@ export async function getAllMarkets(
   }
 
   return result;
+}
+
+/** B-144 (#1580): same default and env var as resolution.service.ts (24 h). */
+const DISPUTE_WINDOW_MS = parseInt(process.env.DISPUTE_WINDOW_MS ?? "86400000", 10);
+
+/**
+ * B-144 (#1580): end of the dispute window, measured from bettingEndsAt the
+ * same way resolution.service.ts decides when a market auto-finalises.
+ */
+export function disputeWindowEndsAt(market: Pick<Market, "bettingEndsAt">): Date {
+  return new Date(market.bettingEndsAt.getTime() + DISPUTE_WINDOW_MS);
+}
+
+/**
+ * B-144 (#1580): paginated disputes for one market, newest first.
+ * Returns null for unknown market ids so the route can 404.
+ */
+export async function getMarketDisputes(
+  marketId: string,
+  pagination: Pagination
+): Promise<PaginatedResult<Dispute> | null> {
+  const market = await db.market.findUnique({ where: { id: marketId }, select: { id: true } });
+  if (!market) return null;
+
+  const skip = (pagination.page - 1) * pagination.pageSize;
+  const [data, total] = await Promise.all([
+    db.dispute.findMany({
+      where: { marketId },
+      orderBy: { raisedAt: "desc" },
+      skip,
+      take: pagination.pageSize,
+    }),
+    db.dispute.count({ where: { marketId } }),
+  ]);
+
+  return { data, total, page: pagination.page, pageSize: pagination.pageSize };
 }
 
 /**
