@@ -546,3 +546,88 @@ export async function updateOracle(
     body: JSON.stringify(patch),
   });
 }
+
+// ─── SYSTEM STATUS (F-155) ───────────────────────────────────────────────────
+
+export type DependencyState = "ok" | "error";
+
+export interface DependencyCheck {
+  status: DependencyState;
+  error?: string;
+  lagLedgers?: number;
+}
+
+/** Body returned by GET /ready. Present on both 200 and 503 responses. */
+export interface ReadinessReport {
+  status: "ok" | "not_ready";
+  checks: Record<string, DependencyCheck>;
+}
+
+const dependencyCheckSchema = z.object({
+  status: z.enum(["ok", "error"]),
+  error: z.string().optional(),
+  lagLedgers: z.number().optional(),
+});
+
+const readinessReportSchema = z.object({
+  status: z.enum(["ok", "not_ready"]),
+  checks: z.record(dependencyCheckSchema),
+}) satisfies z.ZodType<ReadinessReport>;
+
+/** Default per-request timeout for status probes, in milliseconds. */
+export const STATUS_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * Races `promise` against a timer and aborts the underlying request, so a hung
+ * endpoint rejects instead of stalling the caller.
+ */
+async function withProbeTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([run(controller.signal), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * GET /health. Resolves when the API answers with a 2xx status and rejects on
+ * network failure, timeout or a non-2xx response.
+ */
+export async function fetchApiHealth(timeoutMs: number = STATUS_PROBE_TIMEOUT_MS): Promise<void> {
+  await withProbeTimeout(async (signal) => {
+    const res = await fetch(`${BASE}/health`, { signal, cache: "no-store" });
+    if (!res.ok) throw new ApiError(res.status, res.statusText);
+  }, timeoutMs);
+}
+
+/**
+ * GET /ready. Returns the per-dependency report for both 200 (`ok`) and 503
+ * (`not_ready`) responses. Rejects on network failure, timeout, a non-JSON body
+ * or a body that does not match the readiness schema.
+ */
+export async function fetchReadiness(
+  timeoutMs: number = STATUS_PROBE_TIMEOUT_MS
+): Promise<ReadinessReport> {
+  return withProbeTimeout(async (signal) => {
+    const res = await fetch(`${BASE}/ready`, { signal, cache: "no-store" });
+    if (res.status !== 200 && res.status !== 503) {
+      throw new ApiError(res.status, res.statusText);
+    }
+    const body: unknown = await res.json();
+    const payload = isEnvelope(body) ? body.data : body;
+    const parsed = readinessReportSchema.safeParse(payload);
+    if (!parsed.success) throw new ApiResponseError("/ready", parsed.error.issues);
+    return parsed.data;
+  }, timeoutMs);
+}
