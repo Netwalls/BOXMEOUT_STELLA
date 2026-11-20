@@ -8,6 +8,7 @@ import { errorHandlerMiddleware } from "./api/middleware/errorHandler.middleware
 import { notFoundMiddleware } from "./api/middleware/notFound.middleware";
 import { requestIdMiddleware } from "./api/middleware/requestId.middleware";
 import { securityHeadersMiddleware } from "./api/middleware/securityHeaders.middleware";
+import { createCompressionMiddleware } from "./api/middleware/compression.middleware";
 import { metricsRouter, httpRequestDuration } from "./metrics";
 import marketRoutes from "./api/routes/market.routes";
 import betRoutes from "./api/routes/bet.routes";
@@ -43,6 +44,9 @@ export function createApp(): express.Application {
 
   // B-86: security headers before any route handler
   app.use(securityHeadersMiddleware);
+
+  // B-124 (#1560): gzip JSON responses; SSE is excluded inside the middleware
+  app.use(createCompressionMiddleware(config.COMPRESSION_ENABLED));
 
   // B-57: cap JSON body size to mitigate oversized-payload abuse
   app.use(express.json({ limit: "100kb" }));

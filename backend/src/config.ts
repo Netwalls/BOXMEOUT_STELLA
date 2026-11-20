@@ -88,6 +88,15 @@ const configSchema = z.object({
     .string({ required_error: "REDIS_URL is required" })
     .url("REDIS_URL must be a valid URL"),
 
+  /**
+   * B-124 (#1560): gzip/deflate for JSON responses (SSE is always excluded).
+   * Set to "false" or "0" when a compressing reverse proxy already handles it.
+   */
+  COMPRESSION_ENABLED: z
+    .string()
+    .default("true")
+    .transform((value) => !["false", "0", "off", "no"].includes(value.trim().toLowerCase())),
+
   /** B-102: Idle keep-alive socket lifetime on the HTTP server (ms) */
   SERVER_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 
