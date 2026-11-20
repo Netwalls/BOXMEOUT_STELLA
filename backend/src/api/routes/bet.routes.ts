@@ -7,6 +7,7 @@ import {
   getLeaderboardHandler,
 } from "../controllers/bet.controller";
 import { validateAddressParam } from "../middleware/validate";
+import { cacheControl, privateNoStore } from "../middleware/cacheControl.middleware";
 import { fail } from "../response";
 
 const payoutEstimateLimiter = rateLimit({
@@ -28,15 +29,15 @@ const deprecatedLeaderboardAlias = (_req: Request, res: Response, next: NextFunc
 const router = Router();
 
 // GET /api/bets/leaderboard — deprecated alias of GET /api/leaderboard (#1382)
-router.get("/leaderboard", deprecatedLeaderboardAlias, getLeaderboardHandler);
+router.get("/leaderboard", deprecatedLeaderboardAlias, cacheControl({ maxAge: 30, staleWhileRevalidate: 60 }), getLeaderboardHandler);
 
 // GET /api/bets/payout-estimate  — must come before /:address
-router.get("/payout-estimate", payoutEstimateLimiter, getPayoutEstimateHandler);
+router.get("/payout-estimate", payoutEstimateLimiter, cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getPayoutEstimateHandler);
 
 // GET /api/bets/:address/portfolio
-router.get("/:address/portfolio", validateAddressParam, getPortfolioHandler);
+router.get("/:address/portfolio", validateAddressParam, privateNoStore, getPortfolioHandler);
 
 // GET /api/bets/:address
-router.get("/:address", validateAddressParam, getBetsByAddressHandler);
+router.get("/:address", validateAddressParam, privateNoStore, getBetsByAddressHandler);
 
 export default router;

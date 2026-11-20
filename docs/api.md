@@ -146,6 +146,9 @@ Returns a paginated list of boxing markets.
 |---|---|---|
 | `status` | string | Filter by `Open`, `Locked`, `Resolved`, `Cancelled`, `Disputed` |
 | `weightClass` | string | Filter by fighter weight class |
+| `categoryId` | string | Only markets in this category |
+| `sort` | string | `soonest` (default, by `scheduledAt`), `newest` (by `createdAt`), or `pool` (by `totalPool`). Any other value returns 400 `VALIDATION_ERROR` |
+| `order` | string | `asc` (default) or `desc` |
 | `page` | number | Page number (default 1) |
 | `limit` | number | Results per page (default 20, max 100) |
 
@@ -314,6 +317,20 @@ Oracle record management (list, create, update, delete) is admin-only and lives 
 | ------ | ---- | ----------- |
 | GET | `/api/docs` | Swagger UI for the OpenAPI spec. |
 | GET | `/api/openapi.json` | Raw OpenAPI specification. |
+
+## Caching
+
+Read endpoints send `Cache-Control` headers (B-123, #1559).
+
+| Routes | Header |
+|---|---|
+| Market list, search, detail, stats, bets, odds history; `GET /api/users/:address`; `GET /api/bets/payout-estimate` | `public, max-age=5, stale-while-revalidate=30` |
+| Leaderboard (`GET /api/leaderboard`, and the deprecated `GET /api/bets/leaderboard`) | `public, max-age=30, stale-while-revalidate=60` |
+| Per-wallet data: `GET /api/bets/:address`, `GET /api/bets/:address/portfolio`, `GET /api/users/:address/bets`, `GET /api/users/:address/positions` | `private, no-store` |
+
+Responses also carry a weak `ETag`. Send it back in `If-None-Match` and the server answers
+`304 Not Modified` when the body has not changed. The market SSE stream
+(`GET /api/markets/:id/stream`) sets its own `Cache-Control: no-cache, no-transform`.
 
 ## Keeping the spec in sync
 
