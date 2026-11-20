@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  createElement,
   createContext,
   createElement,
   useCallback,
@@ -149,29 +148,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (isUserRejection(message)) throw new UserRejectedError(message);
         throw err;
       }
-    },
-    [state.address],
-  );
-
-    let result: Awaited<ReturnType<typeof freighterSignTransaction>>;
-    try {
-      result = await freighterSignTransaction(xdr, {
-        networkPassphrase: NETWORK_PASSPHRASE,
-        address: state.address,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (isUserRejection(message)) throw new UserRejectedError(message);
-      throw err;
-    }
-
-    if (result.error) {
-      const message = result.error.message;
-      if (isUserRejection(message)) throw new UserRejectedError(message);
-      throw new Error(message);
-    }
-
-      return result.signedTxXdr;
     },
     [state.address],
   );
