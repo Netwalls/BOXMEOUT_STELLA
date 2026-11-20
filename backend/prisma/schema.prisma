@@ -74,6 +74,7 @@ model Market {
   bets            Bet[]
   disputes        Dispute[]
   oracleResult    OracleResult?
+  oracleReports   OracleReport[]
   /// @db.Unsupported("tsvector")
   tsVector        Unsupported("tsvector")?
 
@@ -136,6 +137,21 @@ model OracleResult {
   source      String
   reportedAt  DateTime @default(now())
   confirmed   Boolean  @default(false)
+}
+
+// B-143 (#1579): every individual oracle report. OracleResult stays the single
+// decision row per market; OracleReport holds the reports it is decided from.
+model OracleReport {
+  id         String   @id @default(uuid())
+  marketId   String
+  market     Market   @relation(fields: [marketId], references: [id])
+  reportedBy String
+  outcome    Outcome
+  source     String
+  reportedAt DateTime @default(now())
+
+  @@unique([marketId, reportedBy])
+  @@index([marketId])
 }
 
 model IndexerState {
