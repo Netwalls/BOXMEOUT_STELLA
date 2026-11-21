@@ -16,6 +16,18 @@
 //! Every balance is checked against the token contract after each step, and
 //! the lifecycle ends with the invariant `payouts + fees + dust == stakes`.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Outcome};
 use market::MarketContractClient;
 use market_factory::{MarketFactory, MarketFactoryClient};
@@ -44,6 +56,9 @@ struct World {
     admin: Address,
     oracle: Address,
     fee_collector: Address,
+    // Kept on the harness for tests that need the token address; not every test reads it.
+    #[allow(dead_code)]
+    token_id: Address,
     treasury_id: Address,
     token: token::Client<'static>,
     token_admin: token::StellarAssetClient<'static>,
@@ -214,6 +229,7 @@ fn full_lifecycle_two_sides_pays_winners_and_conserves_funds() {
     // ── Lock, resolve, finalise ──────────────────────────────────────────
     set_time(&w.env, LOCK_TIME);
     market.lock_market(&w.oracle);
+    set_time(&w.env, END_TIME);
     market.resolve_market(&w.oracle, &Outcome::FighterA);
 
     let resolved_at = market.get_market_info().resolved_at;
@@ -311,6 +327,7 @@ fn dispute_then_admin_override_pays_the_overridden_outcome() {
 
     set_time(&w.env, LOCK_TIME);
     market.lock_market(&w.oracle);
+    set_time(&w.env, END_TIME);
     market.resolve_market(&w.oracle, &Outcome::FighterA);
 
     // Bob disputes the oracle's result; the admin overrides it to FighterB.

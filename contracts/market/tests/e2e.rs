@@ -12,6 +12,18 @@
 //!   5. Winners claim their proportional payouts
 //!   6. Assert final balances match expected payouts *exactly*
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{
     BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig, SettledOutcome,
 };
@@ -49,7 +61,7 @@ impl MockFactory {
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
-            bet_token: admin.clone(),
+            bet_token: env.current_contract_address(),
             resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
@@ -149,9 +161,9 @@ fn e2e_create_bet_lock_resolve_claim() {
         &factory_id,
         &200u32, // 2% protocol fee
         &fee_collector,
-        &86_400u64, // dispute_window_sec
-        &treasury_id,
-        &bet_token,
+        &86_400u64,
+        &Address::generate(&env),
+        &Address::generate(&env),
     );
 
     // Verify market is initialized and Open
@@ -217,6 +229,7 @@ fn e2e_create_bet_lock_resolve_claim() {
     assert!(matches!(m.status, MarketStatus::Locked));
 
     // ── 4. Resolve market (FighterA wins) ─────────────────────────────────
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let m = client.get_market_info();
@@ -290,8 +303,8 @@ fn e2e_draw_both_sides_refunded() {
         &200u32,
         &fee_collector,
         &86_400u64,
-        &treasury_id,
-        &bet_token,
+        &Address::generate(&env),
+        &Address::generate(&env),
     );
 
     let bettor_a = Address::generate(&env);
@@ -315,6 +328,7 @@ fn e2e_draw_both_sides_refunded() {
     });
 
     // Resolve with Draw → status becomes Cancelled
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::Draw);
 
     let m = client.get_market_info();
@@ -363,8 +377,8 @@ fn e2e_cancelled_market_full_refund() {
         &200u32,
         &fee_collector,
         &86_400u64,
-        &treasury_id,
-        &bet_token,
+        &Address::generate(&env),
+        &Address::generate(&env),
     );
 
     let bettor = Address::generate(&env);

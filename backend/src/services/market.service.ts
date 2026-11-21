@@ -11,6 +11,7 @@ import {
 import { db } from "../db";
 import { logger } from "../logger";
 import { redis } from "../redis";
+import { dispatchWebhookEvent } from "./webhook.service";
 
 export interface MarketFilters {
   status?: MarketStatus;
@@ -86,22 +87,25 @@ function statsCacheKey(marketId: string): string {
  * next poll re-reads fresh data from Postgres.
  */
 export async function invalidateMarketCache(marketId?: string): Promise<void> {
-  try {
-    const keys: string[] = [];
-    if (marketId) {
-      keys.push(statsCacheKey(marketId));
-    }
+  // Best-effort: a missed invalidation is bounded by the cache TTL (#1590).
+  await guardRedis(
+    "market_cache",
+    async () => {
+      const keys: string[] = [];
+      if (marketId) {
+        keys.push(statsCacheKey(marketId));
+      }
 
-    // Invalidate all list variants (status/weightClass/page/pageSize combos).
-    const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
-    keys.push(...listKeys);
+      // Invalidate all list variants (status/weightClass/page/pageSize combos).
+      const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
+      keys.push(...listKeys);
 
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
-  } catch (err) {
-    logger.warn({ err, marketId }, "Failed to invalidate market cache");
-  }
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    },
+    undefined
+  );
 }
 
 export interface MarketStats {
@@ -180,14 +184,11 @@ export async function getAllMarkets(
 ): Promise<MarketPage> {
   const cacheKey = listCacheKey(filters, pagination);
 
-  try {
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      recordCacheHit();
-      return JSON.parse(cached) as MarketPage;
-    }
-  } catch (err) {
-    logger.warn({ err, cacheKey }, "Market list cache read failed");
+  // Cache reads fall back to Postgres when Redis is unavailable (#1590).
+  const cached = await guardRedis<string | null>("market_cache", () => redis.get(cacheKey), null);
+  if (cached) {
+    recordCacheHit();
+    return JSON.parse(cached) as MarketPage;
   }
 
   recordCacheMiss();
@@ -216,16 +217,11 @@ export async function getAllMarkets(
 
   const result: MarketPage = { data: markets, total };
 
-  try {
-    await redis.set(
-      cacheKey,
-      JSON.stringify(result),
-      "EX",
-      MARKET_CACHE_TTL_SECONDS
-    );
-  } catch (err) {
-    logger.warn({ err, cacheKey }, "Market list cache write failed");
-  }
+  await guardRedis(
+    "market_cache",
+    () => redis.set(cacheKey, JSON.stringify(result), "EX", MARKET_CACHE_TTL_SECONDS),
+    undefined
+  );
 
   return result;
 }
@@ -313,6 +309,24 @@ export async function getOddsHistory(
 export async function createMarketRecord(
   marketData: CreateMarketDTO
 ): Promise<Market> {
+  const market = await persistMarketRecord(marketData);
+  // #1581: keyed by market id so a re-indexed MarketCreated event is not re-sent.
+  await dispatchWebhookEvent(
+    "market.created",
+    {
+      marketId: market.id,
+      contractAddress: market.contractAddress,
+      scheduledAt: market.scheduledAt.toISOString(),
+      bettingEndsAt: market.bettingEndsAt.toISOString(),
+    },
+    `market.created:${market.id}`,
+  );
+  return market;
+}
+
+async function persistMarketRecord(
+  marketData: CreateMarketDTO
+): Promise<Market> {
   return db.$transaction(async (tx) => {
     // Check for an existing optimistic row matched by txHash (inside txn)
     if (marketData.txHash) {
@@ -388,12 +402,7 @@ export async function reconcileMarketFromChain(
     });
   }
 
-  const rpcUrl = process.env.STELLAR_RPC_URL;
-  if (!rpcUrl) {
-    throw new Error("STELLAR_RPC_URL environment variable is not set");
-  }
-
-  const server = new SorobanRpc.Server(rpcUrl);
+  const server = getRpcServer();
   const contract = new Contract(market.contractAddress);
 
   // Use a throwaway keypair as the source account for read-only simulation.
@@ -406,7 +415,11 @@ export async function reconcileMarketFromChain(
       : Networks.TESTNET;
 
   // Build a minimal transaction for simulating the get_market_info() call
-  const account = await server.getAccount(throwawayKeypair.publicKey());
+  // Read-only: both calls are idempotent, so transient RPC errors are retried.
+  const account = await withRpcRetry(
+    () => server.getAccount(throwawayKeypair.publicKey()),
+    { method: "getAccount", idempotent: true },
+  );
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase,
@@ -415,7 +428,10 @@ export async function reconcileMarketFromChain(
     .setTimeout(30)
     .build();
 
-  const simResult = await server.simulateTransaction(tx);
+  const simResult = await withRpcRetry(
+    () => server.simulateTransaction(tx),
+    { method: "simulateTransaction", idempotent: true },
+  );
 
   if (SorobanRpc.Api.isSimulationError(simResult)) {
     throw new Error(

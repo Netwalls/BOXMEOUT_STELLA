@@ -58,6 +58,8 @@ pub enum ContractError {
     ResolutionWindowExpired = 31,
     /// A conflicting oracle report already exists
     ConflictingOracleReport = 32,
+    /// resolve_market was called before the fight's scheduled_at
+    ResolutionTooEarly = 33,
 
     // ── Treasury ───────────────────────────────────────────
     /// Caller is not an approved market contract
@@ -70,8 +72,6 @@ pub enum ContractError {
     // ── Factory ────────────────────────────────────────────
     /// Factory is paused; market creation is disabled
     FactoryPaused = 50,
-    /// Protocol is paused; new bets are rejected (claims and refunds stay open)
-    ProtocolPaused = 53,
     /// Oracle address already in whitelist
     OracleAlreadyWhitelisted = 51,
     /// Vec of market IDs exceeds the maximum allowed (20)
