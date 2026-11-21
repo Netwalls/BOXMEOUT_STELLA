@@ -252,6 +252,42 @@ Test files live next to the code they test:
 - `backend/src/services/market.service.ts` → `market.service.test.ts` in the same folder
 - `frontend/hooks/useMarkets.ts` → `useMarkets.test.ts` in the same folder
 
+## Dependency Updates (Dependabot)
+
+Dependabot is configured in `.github/dependabot.yml` and opens weekly update PRs (Mondays, UTC) for:
+
+| Ecosystem | Directory | Label | Commit prefix |
+|---|---|---|---|
+| `npm` | `/frontend` | `frontend` | `chore(frontend)` |
+| `npm` | `/backend` | `backend` | `chore(backend)` |
+| `cargo` | `/contracts` | `smart-contract` | `chore(contracts)` |
+| `github-actions` | `/` | `devops` | `ci` |
+
+Minor and patch updates are grouped into one PR per ecosystem. Major updates open as individual PRs so they can be reviewed on their own. Each ecosystem has at most 5 open Dependabot PRs at a time.
+
+When reviewing a Dependabot PR, check the CI result for the matching workspace before merging.
+
+## Git Hooks and Formatting
+
+Pre-commit hooks run [lint-staged](https://github.com/lint-staged/lint-staged) through [husky](https://typicode.github.io/husky/). Hooks are configured at the repo root (`package.json`, `.husky/pre-commit`) and only touch staged files:
+
+| Staged files | Commands |
+|---|---|
+| `frontend/**/*.{ts,tsx,js,jsx,mjs,cjs}` | `eslint --fix`, then `prettier --write` |
+| `backend/**/*.ts` | `eslint --fix`, then `prettier --write` |
+| `frontend/**/*.{json,css}`, `backend/**/*.json` | `prettier --write` |
+
+Install once from the repo root with `npm install`. The `prepare` script wires up husky. It is skipped when `CI` is set, and it does not fail when there is no `.git` directory (for example, a zip download). It works the same in Git Bash and PowerShell, because Git for Windows runs hooks through `sh`.
+
+Run formatting by hand from `frontend/` or `backend/`:
+
+```bash
+npm run format        # rewrite files with Prettier
+npm run format:check  # report files that differ from Prettier output
+```
+
+Prettier settings live in `frontend/.prettierrc`. Ignored paths are in each package's `.prettierignore`.
+
 ---
 
 ## Contract Compatibility Policy

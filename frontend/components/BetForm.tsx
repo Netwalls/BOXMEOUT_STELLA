@@ -2,8 +2,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { Bet, BetSide, Market } from "@/lib/api";
 import { BetAmountInput } from "./BetAmountInput";
-import { TransactionStatusModal } from "./TransactionStatusModal";
-import type { TransactionStatus } from "@/lib/stellar";
+import { TransactionStatusModal, type TxStatus } from "./TransactionStatusModal";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
 
 const MIN_AMOUNT_XLM = 1;
@@ -47,7 +46,7 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
   const sideGroupId = useId();
   const [side, setSide] = useState<BetSide | null>(null);
   const [amount, setAmount] = useState<string>("");
-  const [txStatus, setTxStatus] = useState<TransactionStatus | null>(null);
+  const [txStatus, setTxStatus] = useState<TxStatus | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<FeeEstimate | null>(null);
@@ -141,7 +140,9 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
             aria-pressed={side === "FighterA"}
             aria-label={`Bet on ${market.fighterA.name}`}
             className={`h-11 rounded-lg text-sm font-medium transition-colors ${
-              side === "FighterA" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              side === "FighterA"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
             } ${focusRing} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {market.fighterA.name}
@@ -153,7 +154,9 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
             aria-pressed={side === "FighterB"}
             aria-label={`Bet on ${market.fighterB.name}`}
             className={`h-11 rounded-lg text-sm font-medium transition-colors ${
-              side === "FighterB" ? "bg-red-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              side === "FighterB"
+                ? "bg-red-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
             } ${focusRing} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {market.fighterB.name}
@@ -168,15 +171,12 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
         }}
         min={MIN_AMOUNT_XLM}
         max={MAX_AMOUNT_XLM}
-        estimatedPayout={estimate ? estimate.payoutXlm : null}
+        estimatedPayout={estimate ? BigInt(Math.round(estimate.payoutXlm * 1e7)) : null}
         disabled={allDisabled}
       />
 
       {isAmountValid && (
-        <dl
-          aria-live="polite"
-          className="rounded-lg bg-gray-900/60 p-3 text-sm space-y-1"
-        >
+        <dl aria-live="polite" className="rounded-lg bg-gray-900/60 p-3 text-sm space-y-1">
           <div className="flex items-center justify-between">
             <dt className="text-gray-400">Network fee</dt>
             <dd className="text-gray-200 tabular-nums">
@@ -196,9 +196,7 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
           <div className="flex items-center justify-between">
             <dt className="text-gray-400">Estimated payout</dt>
             <dd className="text-amber-400 font-medium tabular-nums">
-              {isEstimating || !formatted.payout
-                ? "Estimating…"
-                : `${formatted.payout} XLM`}
+              {isEstimating || !formatted.payout ? "Estimating…" : `${formatted.payout} XLM`}
             </dd>
           </div>
         </dl>
@@ -217,8 +215,8 @@ export function BetForm({ market, onBetPlaced }: BetFormProps): JSX.Element {
         <TransactionStatusModal
           isOpen
           status={txStatus}
-          txHash={txHash}
-          errorMessage={txError}
+          txHash={txHash ?? undefined}
+          errorMessage={txError ?? undefined}
           onClose={() => setTxStatus(null)}
         />
       )}

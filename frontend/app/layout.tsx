@@ -1,53 +1,50 @@
-import type { Metadata } from 'next';
-import { Navbar } from '@/components/Navbar';
-import { ToastProvider } from '@/components/ToastProvider';
-import { NetworkMismatchBanner } from '@/components/NetworkMismatchBanner';
-import { MarketStatusNotifier } from '@/components/MarketStatusNotifier';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { ThemeScript } from '@/components/ThemeScript';
-import { MotionConfigProvider } from '@/components/MotionConfigProvider';
-import { WalletProvider } from '@/hooks/useWallet';
-import { SkipToContent } from '@/components/SkipToContent';
-import { RouteAnnouncer } from '@/components/RouteAnnouncer';
-import '@/app/globals.css';
+import type { Metadata } from "next";
+import { Navbar } from "@/components/Navbar";
+import { ToastProvider } from "@/components/ToastProvider";
+import { NetworkMismatchBanner } from "@/components/NetworkMismatchBanner";
+import { MarketStatusNotifier } from "@/components/MarketStatusNotifier";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ThemeScript } from "@/components/ThemeScript";
+import { MotionConfigProvider } from "@/components/MotionConfigProvider";
+import { WalletProvider } from "@/hooks/useWallet";
+import { SkipToContent } from "@/components/SkipToContent";
+import { RouteAnnouncer } from "@/components/RouteAnnouncer";
+import "@/app/globals.css";
+import { SITE_URL } from "@/lib/config";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'BOXMEOUT — Boxing Prediction Market',
-    template: '%s | BOXMEOUT',
+    default: "BOXMEOUT — Boxing Prediction Market",
+    template: "%s | BOXMEOUT",
   },
-  description: 'Decentralized boxing prediction market on Stellar',
-  applicationName: 'BOXMEOUT',
-  keywords: ['boxing', 'prediction market', 'Stellar', 'Soroban', 'XLM', 'crypto betting'],
-  authors: [{ name: 'BOXMEOUT' }],
-  creator: 'BOXMEOUT',
-  publisher: 'BOXMEOUT',
-  manifest: '/manifest.webmanifest',
+  description: "Decentralized boxing prediction market on Stellar",
+  applicationName: "BOXMEOUT",
+  keywords: ["boxing", "prediction market", "Stellar", "Soroban", "XLM", "crypto betting"],
+  authors: [{ name: "BOXMEOUT" }],
+  creator: "BOXMEOUT",
+  publisher: "BOXMEOUT",
+  manifest: "/manifest.webmanifest",
   robots: {
     index: true,
     follow: true,
   },
   openGraph: {
-    type: 'website',
-    locale: 'en_US',
+    type: "website",
+    locale: "en_US",
     url: SITE_URL,
-    siteName: 'BOXMEOUT',
-    title: 'BOXMEOUT — Boxing Prediction Market',
-    description: 'Decentralized boxing prediction market on Stellar',
+    siteName: "BOXMEOUT",
+    title: "BOXMEOUT — Boxing Prediction Market",
+    description: "Decentralized boxing prediction market on Stellar",
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'BOXMEOUT — Boxing Prediction Market',
-    description: 'Decentralized boxing prediction market on Stellar',
+    card: "summary_large_image",
+    title: "BOXMEOUT — Boxing Prediction Market",
+    description: "Decentralized boxing prediction market on Stellar",
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
