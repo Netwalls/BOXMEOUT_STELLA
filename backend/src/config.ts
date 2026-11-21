@@ -88,6 +88,14 @@ const configSchema = z.object({
     .string({ required_error: "REDIS_URL is required" })
     .url("REDIS_URL must be a valid URL"),
 
+  /**
+   * B-132: HMAC key for signing short-lived session tokens issued by
+   * POST /api/auth/verify. Required at startup; at least 32 characters.
+   */
+  JWT_SECRET: z
+    .string({ required_error: "JWT_SECRET is required" })
+    .min(32, "JWT_SECRET must be at least 32 characters"),
+
   /** B-102: Idle keep-alive socket lifetime on the HTTP server (ms) */
   SERVER_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 
@@ -103,6 +111,9 @@ const configSchema = z.object({
   /** B-102: Upper bound on a single Prisma query before it rejects (ms) */
   DB_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  /** B-140: Queries slower than this are logged at warn level (ms) */
+  SLOW_QUERY_MS: z.coerce.number().int().positive().default(200),
+
   /** B-102: Upper bound on a single Soroban RPC call (ms) */
   RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
 
@@ -115,8 +126,38 @@ const configSchema = z.object({
    */
   EVENT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 
+  /**
+   * #1583: Behaviour when the rate limiter cannot reach Redis.
+   * "open" (default) lets requests through; "closed" answers 503. Write routes
+   * always fail closed, whatever this is set to.
+   */
+  RATE_LIMIT_FAIL_MODE: z.enum(["open", "closed"]).default("open"),
+
   /** Base URL for the external fight data provider (BoxRec or equivalent) */
   BOXREC_API_URL: z.string().url().optional(),
+
+  /**
+   * B-160: Env override for maintenance (read-only) mode. When true, every
+   * non-GET request gets 503 whatever the Redis flag says. Accepts 1/true/yes/on.
+   */
+  MAINTENANCE_MODE: z
+    .string()
+    .default("false")
+    .transform((val) => ["1", "true", "yes", "on"].includes(val.trim().toLowerCase())),
+
+  /**
+   * B-159: Optional comma-separated hostnames that profile avatar URLs may use.
+   * Empty means any https host is accepted. Example: "cdn.boxmeout.app,images.example.com"
+   */
+  AVATAR_HOST_ALLOWLIST: z
+    .string()
+    .default("")
+    .transform((val) =>
+      val
+        .split(",")
+        .map((h) => h.trim().toLowerCase())
+        .filter(Boolean)
+    ),
 
   /**
    * Comma-separated list of allowed CORS origins.

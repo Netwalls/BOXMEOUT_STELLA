@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { Keypair } from "@stellar/stellar-sdk";
 import Redis from "ioredis";
 import { fail } from "../response";
+import { requireRedis } from "../../lib/redis-guard";
 
 const CHALLENGE_TTL_MS = Number(process.env.WALLET_AUTH_CHALLENGE_TTL_MS ?? 5 * 60 * 1000);
 const CHALLENGE_PREFIX = "BOXMEOUT-AUTH";
@@ -58,11 +59,11 @@ async function setChallenge(address: string, nonce: string, ttlMs: number): Prom
   }
 
   const key = `${REDIS_KEY_PREFIX}${address}`;
-  // SET key value PX ttl NX — atomic, one-entry-per-address
-  await getRedis().set(key, JSON.stringify({ nonce, expiresAt }), "PX", ttlMs, "NX");
-  // If NX rejected (key existed), overwrite — a fresh challenge always supersedes.
-  // We use a second unconditional SET so callers always get a fresh challenge.
-  await getRedis().set(key, JSON.stringify({ nonce, expiresAt }), "PX", ttlMs);
+  // A fresh challenge always supersedes any earlier one for the same address.
+  // Fails closed: throws RedisUnavailableError (503) if Redis is unavailable (#1590).
+  await requireRedis("wallet_challenge", () =>
+    getRedis().set(key, JSON.stringify({ nonce, expiresAt }), "PX", ttlMs)
+  );
 }
 
 /**
@@ -80,7 +81,7 @@ async function consumeChallenge(address: string): Promise<StoredChallenge | null
 
   const key = `${REDIS_KEY_PREFIX}${address}`;
   // GETDEL atomically reads and removes the key — one-time use guarantee.
-  const raw = await getRedis().getdel(key);
+  const raw = await requireRedis("wallet_challenge", () => getRedis().getdel(key));
   if (!raw) return null;
 
   let entry: StoredChallenge;
@@ -112,6 +113,32 @@ export async function generateChallenge(
   await setChallenge(address, nonce, CHALLENGE_TTL_MS);
 
   return { challenge: `${CHALLENGE_PREFIX}:${address}:${nonce}`, expiresAt };
+}
+
+export type ChallengeResult =
+  | { ok: true }
+  | { ok: false; code: "CHALLENGE_EXPIRED" | "INVALID_SIGNATURE" };
+
+/**
+ * Consumes the stored challenge for `address` (one use, even on failure) and
+ * checks `signature` over it. Throws if the challenge store is unreachable.
+ */
+export async function consumeAndVerifyChallenge(
+  address: string,
+  signature: string,
+): Promise<ChallengeResult> {
+  const entry = await consumeChallenge(address);
+  if (!entry) return { ok: false, code: "CHALLENGE_EXPIRED" };
+
+  const challengeString = `${CHALLENGE_PREFIX}:${address}:${entry.nonce}`;
+  let verified: boolean;
+  try {
+    const keypair = Keypair.fromPublicKey(address);
+    verified = keypair.verify(Buffer.from(challengeString), Buffer.from(signature, "base64"));
+  } catch {
+    verified = false;
+  }
+  return verified ? { ok: true } : { ok: false, code: "INVALID_SIGNATURE" };
 }
 
 function isWhitelisted(address: string, whitelist: string[]): boolean {
@@ -152,8 +179,19 @@ export function walletAuthMiddleware(options: WalletAuthOptions = {}) {
   const whitelist = options.whitelist ?? parseWhitelist(process.env.ADMIN_WALLET_ADDRESSES);
 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const authorization = req.headers.authorization;
     const address = req.headers["x-wallet-address"];
     const signature = req.headers["x-wallet-signature"];
+
+    // B-132: a session token from POST /api/auth/verify authenticates the request
+    // on its own; no per-request challenge is consumed.
+    if (typeof authorization === "string" && authorization.startsWith("Bearer ")) {
+      await authenticateBearer(authorization.slice("Bearer ".length).trim(), req, res, next, {
+        whitelist,
+        headerAddress: typeof address === "string" ? address : undefined,
+      });
+      return;
+    }
 
     if (typeof address !== "string" || typeof signature !== "string" || !address || !signature) {
       fail(res, 401, "WALLET_AUTH_REQUIRED", "Wallet signature required");
@@ -166,38 +204,67 @@ export function walletAuthMiddleware(options: WalletAuthOptions = {}) {
       return;
     }
 
-    let entry: StoredChallenge | null;
+    let result: ChallengeResult;
     try {
-      entry = await consumeChallenge(address);
+      result = await consumeAndVerifyChallenge(address, signature);
     } catch {
       // Redis unavailable — fail closed to protect the route.
       fail(res, 503, "SERVICE_UNAVAILABLE", "Auth service unavailable");
       return;
     }
 
-    if (!entry) {
-      fail(res, 401, "CHALLENGE_EXPIRED", "Challenge expired or not found");
-      return;
-    }
-
-    const challengeString = `${CHALLENGE_PREFIX}:${address}:${entry.nonce}`;
-
-    let verified: boolean;
-    try {
-      const keypair = Keypair.fromPublicKey(address);
-      verified = keypair.verify(Buffer.from(challengeString), Buffer.from(signature, "base64"));
-    } catch {
-      verified = false;
-    }
-
-    if (!verified) {
-      fail(res, 401, "INVALID_SIGNATURE", "Invalid signature");
+    if (!result.ok) {
+      if (result.code === "CHALLENGE_EXPIRED") {
+        fail(res, 401, "CHALLENGE_EXPIRED", "Challenge expired or not found");
+      } else {
+        fail(res, 401, "INVALID_SIGNATURE", "Invalid signature");
+      }
       return;
     }
 
     (req as Request & { walletAddress?: string }).walletAddress = address;
     next();
   };
+}
+
+async function authenticateBearer(
+  token: string,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  opts: { whitelist: string[]; headerAddress?: string },
+): Promise<void> {
+  const claims = verifySessionToken(token);
+  if (!claims) {
+    fail(res, 401, "INVALID_TOKEN", "Session token is invalid or expired");
+    return;
+  }
+
+  let revoked: boolean;
+  try {
+    revoked = await isSessionRevoked(claims.jti);
+  } catch {
+    fail(res, 503, "SERVICE_UNAVAILABLE", "Auth service unavailable");
+    return;
+  }
+  if (revoked) {
+    fail(res, 401, "TOKEN_REVOKED", "Session token has been revoked");
+    return;
+  }
+
+  // A token is bound to one address; a different x-wallet-address header is refused.
+  if (opts.headerAddress !== undefined && opts.headerAddress !== claims.sub) {
+    fail(res, 403, "WALLET_MISMATCH", "Token does not belong to the given address");
+    return;
+  }
+
+  if (opts.whitelist.length > 0 && !isWhitelisted(claims.sub, opts.whitelist)) {
+    fail(res, 403, "WALLET_NOT_WHITELISTED", "Address is not whitelisted");
+    return;
+  }
+
+  (req as Request & { walletAddress?: string }).walletAddress = claims.sub;
+  next();
 }
 
 /**

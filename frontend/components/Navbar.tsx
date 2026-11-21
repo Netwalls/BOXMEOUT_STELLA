@@ -4,9 +4,13 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { useTheme } from "@/hooks/useTheme";
-import { DEFAULT_LOCALE, translate } from "@/lib/i18n";
+import { THEME_PREFERENCES, ThemePreference } from "@/lib/theme";
 
-const t = (key: string) => translate(DEFAULT_LOCALE, key);
+const THEME_LABELS: Record<ThemePreference, string> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
 
 const NAV_LINKS = [
   { href: "/", label: t("nav.home") },
@@ -18,7 +22,7 @@ const NAV_LINKS = [
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [, setWalletAddress] = useState<string | null>(null);
-  const { theme, toggleTheme } = useTheme();
+  const { preference, setPreference } = useTheme();
 
   const handleWalletConnected = useCallback((address: string) => {
     setWalletAddress(address);
@@ -48,13 +52,25 @@ export function Navbar() {
             </li>
           ))}
           <li>
-            <button
-              onClick={toggleTheme}
-              aria-label={theme === "dark" ? t("nav.switchToLight") : t("nav.switchToDark")}
-              className="w-9 h-9 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
+            <div role="radiogroup" aria-label="Colour theme" className="flex items-center rounded-md border border-gray-700 p-0.5">
+              {THEME_PREFERENCES.map((option) => {
+                const selected = preference === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setPreference(option)}
+                    className={`px-2 py-1 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+                      selected ? "bg-gray-700 text-white" : "text-gray-300 hover:text-white hover:bg-gray-800"
+                    }`}
+                  >
+                    {THEME_LABELS[option]}
+                  </button>
+                );
+              })}
+            </div>
           </li>
         </ul>
 

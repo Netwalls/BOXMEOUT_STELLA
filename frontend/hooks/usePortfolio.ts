@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { Bet, PortfolioSummary, fetchBetsByAddress, fetchPortfolioSummary } from "@/lib/api";
+import { reportError } from "@/lib/telemetry";
 
 export interface UsePortfolioResult {
   bets: Bet[];
@@ -47,6 +48,7 @@ export function usePortfolio(address: string | null): UsePortfolioResult {
       if (error instanceof Error) {
         console.error("Failed to fetch portfolio data:", error.message);
       }
+      reportError(error, { source: "usePortfolio", operation: "fetchPortfolio" });
     } finally {
       if (!controller.signal.aborted) setIsLoading(false);
     }

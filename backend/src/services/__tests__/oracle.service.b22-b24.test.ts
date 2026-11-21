@@ -84,12 +84,13 @@ import {
   ExternalFightResult,
 } from "../oracle.service";
 import { PrismaClient } from "@prisma/client";
+import { db } from "../../db";
 import { logger } from "../../logger";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function makePrisma(): PrismaClient {
-  return new PrismaClient();
+  return db;
 }
 
 function makeExternalResult(

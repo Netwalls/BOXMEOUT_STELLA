@@ -19,6 +19,8 @@
 
 import { Router } from "express";
 import client, { Registry } from "prom-client";
+import type { Queue } from "bullmq";
+import { db } from "./db";
 
 // ─── Registry & default metrics ───────────────────────────────────────────────
 
@@ -117,6 +119,27 @@ export const sorobanRpcRequestSeconds = new client.Histogram({
 });
 
 /**
+ * B-157: Failed Soroban RPC attempts, labelled by method and reason
+ * (timeout | transient | permanent).
+ */
+export const sorobanRpcErrors = new client.Counter({
+  name: "soroban_rpc_errors_total",
+  help: "Failed Soroban RPC attempts, by method and reason",
+  labelNames: ["method", "reason"],
+  registers: [metricsRegistry],
+});
+
+/**
+ * B-157: Soroban RPC calls retried after a transient failure, by method.
+ */
+export const sorobanRpcRetries = new client.Counter({
+  name: "soroban_rpc_retries_total",
+  help: "Soroban RPC calls retried after a transient failure, by method",
+  labelNames: ["method"],
+  registers: [metricsRegistry],
+});
+
+/**
  * Runs a Soroban RPC call and records its duration, whether it succeeds or throws.
  */
 export async function observeSorobanRpc<T>(
@@ -130,6 +153,17 @@ export async function observeSorobanRpc<T>(
     endTimer();
   }
 }
+
+// ─── Database query duration (B-140) ─────────────────────────────────────────
+
+/** Duration of every Prisma query, labelled by model and action. */
+export const dbQueryDuration = new client.Histogram({
+  name: "db_query_duration_seconds",
+  help: "Prisma query duration in seconds",
+  labelNames: ["model", "action"],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1, 2.5, 5, 10],
+  registers: [metricsRegistry],
+});
 
 // ─── Job outcome counters ─────────────────────────────────────────────────────
 
@@ -170,7 +204,48 @@ export const retentionRowsPruned = new client.Counter({
   registers: [metricsRegistry],
 });
 
+// ─── Rate limiter (#1583) ─────────────────────────────────────────────────────
+
+/** Redis failures seen by the rate limiter, labelled by the fail mode applied. */
+export const rateLimitRedisErrorsTotal = new client.Counter({
+  name: "rate_limit_redis_errors_total",
+  help: "Rate limiter Redis failures, by the fail mode that was applied",
+  labelNames: ["fail_mode"],
+  registers: [metricsRegistry],
+});
+
+// ─── Scheduled job single-flight lock (#1582) ─────────────────────────────────
+
+/** A replica did not get the cross-replica lock, so it skipped this tick. */
+export const lifecycleLockSkipped = new client.Counter({
+  name: "lifecycle_lock_skipped_total",
+  help: "Scheduled job runs skipped because another replica holds the lock",
+  labelNames: ["job"],
+  registers: [metricsRegistry],
+});
+
+// ─── Outbound webhook deliveries (#1581) ──────────────────────────────────────
+
+/** Terminal webhook outcomes: status is "delivered" or "failed". */
+export const webhookDeliveriesTotal = new client.Counter({
+  name: "webhook_deliveries_total",
+  help: "Outbound webhook deliveries that reached a terminal state",
+  labelNames: ["status"],
+  registers: [metricsRegistry],
+});
+
 // ─── /metrics router ──────────────────────────────────────────────────────────
+
+/**
+ * #1590: Redis failures and timeouts per feature (rate_limit, wallet_challenge,
+ * idempotency, market_cache, leaderboard_cache, sse, lifecycle_lock, readiness).
+ */
+export const redisErrorsTotal = new client.Counter({
+  name: "redis_errors_total",
+  help: "Redis operations that failed or timed out, by feature",
+  labelNames: ["feature"] as const,
+  registers: [metricsRegistry],
+});
 
 export const metricsRouter = Router();
 

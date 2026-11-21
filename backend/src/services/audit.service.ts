@@ -1,4 +1,5 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { db as prisma } from "../db";
 
 /** Rows deleted per statement, so a large backlog never holds one long delete. */
 export const PRUNE_BATCH_SIZE = 1000;

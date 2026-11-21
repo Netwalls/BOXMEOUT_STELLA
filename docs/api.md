@@ -4,9 +4,58 @@ This document describes the HTTP API exposed by the backend. The canonical machi
 specification lives in [`backend/src/api/openapi.json`](../backend/src/api/openapi.json) and is
 served at `GET /api/docs` (Swagger UI) and `GET /api/openapi.json`.
 
-All routes are mounted under the `/api` prefix. Every mounted Express route is documented in the
+All routes are mounted under the `/api/v1` prefix. Every mounted Express route is documented in the
 OpenAPI spec, and a test (`backend/src/api/__tests__/openapi.test.ts`) fails if a mounted route is
 missing from the spec.
+
+---
+
+## Versioning (B-141)
+
+Resource routes live under a version prefix so a breaking change to a response shape can ship as a
+new version instead of breaking every deployed client at once.
+
+| Prefix | Status | Notes |
+|---|---|---|
+| `/api/v1` | current | Canonical. New clients use this. |
+| `/api` | deprecated | Alias of `/api/v1`, identical responses. Scheduled for removal on the sunset date. |
+
+`/health`, `/metrics` and `/docs` sit outside the version prefix and are unaffected.
+
+### What counts as breaking
+
+A new version is cut for any of these; everything else ships inside the current version:
+
+- removing or renaming a field in a response
+- changing a field's type, or its units
+- removing an endpoint, or changing its path
+- making a previously optional request field required
+- changing an error `code` for an existing failure case
+
+Additive changes (a new optional field, a new endpoint, a new optional query param) are not
+breaking and land in the current version.
+
+### Deprecation headers
+
+Every response served from the legacy `/api` prefix carries:
+
+| Header | Value |
+|---|---|
+| `Deprecation` | `true` |
+| `Sunset` | the removal date as an HTTP-date, from the `API_SUNSET_DATE` env var |
+| `Link` | `</api/v1/...>; rel="successor-version"` pointing at the replacement path |
+
+Clients should treat `Deprecation: true` as a build-time warning and migrate before `Sunset`.
+The `/api` mount is scheduled for removal after that date; removing it is a separate change.
+
+### Migrating
+
+Prefix the version onto the base URL, nothing else changes:
+
+```diff
+- const res = await fetch(`${API_BASE_URL}/api/markets`);
++ const res = await fetch(`${API_BASE_URL}/api/v1/markets`);
+```
 
 ---
 
@@ -33,6 +82,16 @@ Routes protected by wallet auth require the caller to prove they control a Stell
    - `x-wallet-signature: <base64 encoded signature>`
 
 Challenges expire after 5 minutes and are one-time use.
+
+### Session tokens (B-132)
+
+Signing every request is impractical for features such as notifications or watchlists. A verified challenge can instead be exchanged for a short-lived bearer token:
+
+1. `POST /api/auth/verify` with `{ "address": "G...", "signature": "<base64>" }` — consumes the challenge (one use) and returns `{ "token", "tokenType": "Bearer", "expiresAt" }` (epoch ms). Rate limited to 10 requests per minute per IP.
+2. Send `Authorization: Bearer <token>` on wallet-protected routes. The token is valid for 15 minutes and bound to its address; sending a different `x-wallet-address` header returns `403 WALLET_MISMATCH`.
+3. `POST /api/auth/logout` with the bearer token revokes it until its expiry (`200 { "revoked": true }`). A revoked token returns `401 TOKEN_REVOKED`; an expired one returns `401 INVALID_TOKEN`.
+
+Tokens are signed with HMAC-SHA256 using `JWT_SECRET` (required, at least 32 characters, checked at startup). Revocations are stored in Redis until the token's own expiry.
 
 ### Header consistency
 
@@ -125,6 +184,31 @@ Cursor-paginated bet history for a wallet, ordered by `(placedAt, id)` descendin
 
 ---
 
+### `GET /api/users/:address/activity`
+
+Unified portfolio activity feed for a wallet (#1588, B-152): bets placed, winnings claimed, refunds claimed and disputes raised, newest first. Each item has a typed `kind`.
+
+- `bet_placed`: `timestamp` is `placedAt`; includes `side`, `amount`.
+- `winnings_claimed`: `timestamp` is `claimedAt`; claimed bet on the winning side; includes `side`, `amount`, `payout`.
+- `refund_claimed`: `timestamp` is `claimedAt`; claimed bet on a cancelled, drawn or no-contest market; includes `side`, `amount`, `payout`.
+- `dispute_raised`: `timestamp` is `raisedAt`; includes `reason`.
+
+**Query params:** `cursor` (opaque; from `meta.nextCursor`), `limit` (default 20, max 100)
+
+**Response `200`**
+```json
+{
+  "data": [
+    { "kind": "bet_placed", "id": "bet-123", "marketId": "m-1", "timestamp": "2026-11-01T12:00:00.000Z", "side": "FighterA", "amount": "1000" }
+  ],
+  "meta": { "hasMore": false, "nextCursor": null }
+}
+```
+
+An empty address returns an empty page. A malformed `cursor` returns `400` with code `INVALID_CURSOR`.
+
+---
+
 ### `GET /api/users/:address/positions`
 
 Paginated open positions for a wallet.
@@ -146,6 +230,9 @@ Returns a paginated list of boxing markets.
 |---|---|---|
 | `status` | string | Filter by `Open`, `Locked`, `Resolved`, `Cancelled`, `Disputed` |
 | `weightClass` | string | Filter by fighter weight class |
+| `categoryId` | string | Only markets in this category |
+| `sort` | string | `soonest` (default, by `scheduledAt`), `newest` (by `createdAt`), or `pool` (by `totalPool`). Any other value returns 400 `VALIDATION_ERROR` |
+| `order` | string | `asc` (default) or `desc` |
 | `page` | number | Page number (default 1) |
 | `limit` | number | Results per page (default 20, max 100) |
 
@@ -201,9 +288,10 @@ Creates a new market record. Requires wallet-signature auth (creator must prove 
 
 ### `GET /api/markets/:id`
 
-Returns full detail for a single market.
+Returns full detail for a single market. Includes `disputeWindowEndsAt` (B-144 #1580): the
+end of the dispute window, `bettingEndsAt` plus `DISPUTE_WINDOW_MS` (default 24 h).
 
-**Response `200`** — same shape as one item above.
+**Response `200`** — same shape as one item above, plus `disputeWindowEndsAt` (ISO 8601).
 **Response `404`** — `{ "error": "Market not found" }`
 
 ---
@@ -227,6 +315,17 @@ Returns aggregate stats for a market.
 
 ---
 
+### `GET /api/markets/:id/disputes`
+
+Disputes raised against a market, newest first (B-144 #1580). Page rule: `page`, `limit`.
+
+**Response `200`** — `{ "data": Dispute[], "meta": { "total": number, "hasMore": boolean } }`, where
+each `Dispute` is `{ id, marketId, raisedBy, reason, raisedAt, resolvedAt, resolution }`.
+**Response `404`** — market not found.
+**Response `400`** — `VALIDATION_ERROR` if `page` or `limit` is out of range.
+
+---
+
 ### `GET /api/markets/:id/bets`
 
 Returns all bets placed on a market.
@@ -241,7 +340,8 @@ Returns all bets placed on a market.
 | ------ | ---- | ----------- |
 | POST | `/api/auth/register` | Register a new user. Body: `{ email, password, username? }`. Returns the created user and a session token. |
 | POST | `/api/auth/login` | Authenticate an existing user. Body: `{ email, password }`. Returns a session token. |
-| POST | `/api/auth/logout` | Invalidate the current session. Requires authentication. |
+| POST | `/api/auth/verify` | Exchange a signed challenge for a 15-minute bearer token. Body: `{ address, signature }`. Consumes the challenge; rate limited. |
+| POST | `/api/auth/logout` | Revoke the bearer token in `Authorization`. Returns `{ revoked: true }`. |
 | GET | `/api/auth/me` | Return the currently authenticated user. Requires authentication. |
 
 ## Users
@@ -307,6 +407,23 @@ Oracle record management (list, create, update, delete) is admin-only and lives 
 | GET | `/api/admin/users` | List all users. Requires admin authentication. |
 | PATCH | `/api/admin/users/:id` | Update a user's role or status. Requires admin authentication. |
 | POST | `/api/admin/markets/:id/resolve` | Force-resolve a market. Requires admin authentication. |
+| GET | `/api/admin/webhooks` | List outbound webhook endpoints (secrets are not returned). Requires admin authentication. |
+| POST | `/api/admin/webhooks` | Create an endpoint `{ url, eventTypes }`. The `secret` is returned once, in this response. Requires admin authentication. |
+| PATCH | `/api/admin/webhooks/:id` | Update `url`, `eventTypes` or `active`. Requires admin authentication. |
+| DELETE | `/api/admin/webhooks/:id` | Delete an endpoint and its delivery log. Requires admin authentication. |
+| GET | `/api/admin/webhooks/:id/deliveries` | Delivery log for an endpoint, newest first (`?limit=`, max 200). Requires admin authentication. |
+
+### Outbound webhooks (#1581)
+
+Endpoints: `GET /api/admin/webhooks`, `POST /api/admin/webhooks`, `PATCH /api/admin/webhooks/:id`, `DELETE /api/admin/webhooks/:id` and `GET /api/admin/webhooks/:id/deliveries`.
+
+Event types: `market.created` and `market.resolved`. Each delivery is a `POST` with a JSON body `{ id, type, createdAt, data }` and these headers:
+
+- `X-Boxmeout-Signature: t=<unix seconds>,v1=<hex>` where `v1` is HMAC-SHA256 of `<t>.<raw body>` using the endpoint secret.
+- `X-Boxmeout-Event-Id`: the event id. Use it to deduplicate, since retries reuse the same id.
+- `X-Boxmeout-Event-Type`: the event type.
+
+Endpoints must be `https` and resolve only to public addresses. Redirects are not followed. Failed deliveries are retried with exponential backoff (6 attempts in total) and then marked `Failed` in the delivery log.
 
 ## Docs
 
@@ -314,6 +431,20 @@ Oracle record management (list, create, update, delete) is admin-only and lives 
 | ------ | ---- | ----------- |
 | GET | `/api/docs` | Swagger UI for the OpenAPI spec. |
 | GET | `/api/openapi.json` | Raw OpenAPI specification. |
+
+## Caching
+
+Read endpoints send `Cache-Control` headers (B-123, #1559).
+
+| Routes | Header |
+|---|---|
+| Market list, search, detail, stats, bets, odds history; `GET /api/users/:address`; `GET /api/bets/payout-estimate` | `public, max-age=5, stale-while-revalidate=30` |
+| Leaderboard (`GET /api/leaderboard`, and the deprecated `GET /api/bets/leaderboard`) | `public, max-age=30, stale-while-revalidate=60` |
+| Per-wallet data: `GET /api/bets/:address`, `GET /api/bets/:address/portfolio`, `GET /api/users/:address/bets`, `GET /api/users/:address/positions` | `private, no-store` |
+
+Responses also carry a weak `ETag`. Send it back in `If-None-Match` and the server answers
+`304 Not Modified` when the body has not changed. The market SSE stream
+(`GET /api/markets/:id/stream`) sets its own `Cache-Control: no-cache, no-transform`.
 
 ## Keeping the spec in sync
 

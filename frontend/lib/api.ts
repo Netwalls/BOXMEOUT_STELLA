@@ -25,7 +25,7 @@ export interface Market {
   resolvedAt?: string | null;
   status: MarketStatus;
   outcome: Outcome | null;
-  poolA: string;  // BigInt serialized as string
+  poolA: string; // BigInt serialized as string
   poolB: string;
   totalPool: string;
   oracleAddress: string;
@@ -112,7 +112,10 @@ export interface CreateMarketMetaInput {
 // ─── ERRORS ───────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -120,7 +123,10 @@ export class ApiError extends Error {
 
 /** Thrown when a 2xx response does not match the schema for its endpoint. */
 export class ApiResponseError extends Error {
-  constructor(public path: string, public issues: z.ZodIssue[]) {
+  constructor(
+    public path: string,
+    public issues: z.ZodIssue[]
+  ) {
     const details = issues
       .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
       .join("; ");
@@ -326,12 +332,9 @@ const jsonHeaders = (adminKey: string) => ({
  * Fetches the market list with optional filters and pagination. Resolves to the
  * markets together with the page metadata returned by the backend.
  */
-export async function fetchMarkets(
-  params?: MarketQueryParams,
-  signal?: AbortSignal,
-): Promise<Paginated<Market[]>> {
-  const qs = toQueryString(params as Record<string, string | number | undefined> ?? {});
-  return request(`/api/markets${qs}`, z.array(marketSchema), { signal });
+export async function fetchMarkets(params?: MarketQueryParams): Promise<Paginated<Market[]>> {
+  const qs = toQueryString((params as Record<string, string | number | undefined>) ?? {});
+  return request(`/api/markets${qs}`, z.array(marketSchema));
 }
 
 /**
@@ -356,11 +359,10 @@ export async function fetchMarketStats(market_id: string, signal?: AbortSignal):
  */
 export async function fetchMarketBets(
   market_id: string,
-  filters?: MarketBetsFilters,
-  signal?: AbortSignal,
+  filters?: MarketBetsFilters
 ): Promise<Bet[]> {
-  const qs = toQueryString(filters as Record<string, string | number | undefined> ?? {});
-  return apiFetch(`/api/markets/${market_id}/bets${qs}`, z.array(betSchema), { signal });
+  const qs = toQueryString((filters as Record<string, string | number | undefined>) ?? {});
+  return apiFetch(`/api/markets/${market_id}/bets${qs}`, z.array(betSchema));
 }
 
 /**
@@ -373,7 +375,7 @@ export async function fetchMarketBets(
  */
 export async function fetchUserBets(address: string, page: number, limit: number): Promise<Bet[]> {
   const qs = toQueryString({ page, limit });
-  return apiFetch<Bet[]>(`/api/users/${address}/bets${qs}`);
+  return apiFetch(`/api/users/${address}/bets${qs}`, z.array(betSchema));
 }
 
 export async function fetchBetsByAddress(address: string, signal?: AbortSignal): Promise<Bet[]> {
@@ -402,7 +404,10 @@ export async function fetchPayoutEstimate(
   amount: bigint
 ): Promise<bigint> {
   const qs = toQueryString({ market_id, side, amount: amount.toString() });
-  const { estimatedPayout } = await apiFetch(`/api/bets/payout-estimate${qs}`, payoutEstimateSchema);
+  const { estimatedPayout } = await apiFetch(
+    `/api/bets/payout-estimate${qs}`,
+    payoutEstimateSchema
+  );
   return BigInt(estimatedPayout);
 }
 
@@ -426,7 +431,9 @@ export async function fetchUserPositions(address: string): Promise<UserPosition[
  * POST /api/markets
  * Submits created market metadata to the backend for reconciliation.
  */
-export async function createMarketMeta(data: CreateMarketMetaInput): Promise<{ success: boolean; marketId?: string }> {
+export async function createMarketMeta(
+  data: CreateMarketMetaInput
+): Promise<{ success: boolean; marketId?: string }> {
   return apiFetch(`/api/markets`, createMarketMetaSchema, {
     method: "POST",
     body: JSON.stringify(data),
@@ -440,7 +447,7 @@ export type LeaderboardPeriod = "7d" | "30d" | "all";
 export interface LeaderboardEntry {
   rank: number;
   address: string;
-  totalWinnings: string;  // stroops as string
+  totalWinnings: string; // stroops as string
   totalBets: number;
   winCount: number;
   roi: number;
@@ -496,7 +503,7 @@ export async function fetchPendingResolutions(adminKey: string): Promise<AdminMa
 export async function resolveMarket(
   marketId: string,
   outcome: Outcome,
-  adminKey: string,
+  adminKey: string
 ): Promise<{ success: boolean }> {
   return apiFetch(`/api/admin/markets/resolve`, successSchema, {
     method: "POST",
@@ -521,7 +528,7 @@ export async function fetchOracles(adminKey: string): Promise<OracleConfig[]> {
  */
 export async function createOracle(
   data: { address: string; name: string },
-  adminKey: string,
+  adminKey: string
 ): Promise<OracleConfig> {
   return apiFetch(`/api/admin/oracles`, oracleConfigSchema, {
     method: "POST",
@@ -548,11 +555,96 @@ export async function deleteOracle(id: string, adminKey: string): Promise<{ succ
 export async function updateOracle(
   id: string,
   patch: Partial<Pick<OracleConfig, "name" | "active">>,
-  adminKey: string,
+  adminKey: string
 ): Promise<OracleConfig> {
   return apiFetch(`/api/admin/oracles/${id}`, oracleConfigSchema, {
     method: "PATCH",
     headers: jsonHeaders(adminKey),
     body: JSON.stringify(patch),
   });
+}
+
+// ─── SYSTEM STATUS (F-155) ───────────────────────────────────────────────────
+
+export type DependencyState = "ok" | "error";
+
+export interface DependencyCheck {
+  status: DependencyState;
+  error?: string;
+  lagLedgers?: number;
+}
+
+/** Body returned by GET /ready. Present on both 200 and 503 responses. */
+export interface ReadinessReport {
+  status: "ok" | "not_ready";
+  checks: Record<string, DependencyCheck>;
+}
+
+const dependencyCheckSchema = z.object({
+  status: z.enum(["ok", "error"]),
+  error: z.string().optional(),
+  lagLedgers: z.number().optional(),
+});
+
+const readinessReportSchema = z.object({
+  status: z.enum(["ok", "not_ready"]),
+  checks: z.record(dependencyCheckSchema),
+}) satisfies z.ZodType<ReadinessReport>;
+
+/** Default per-request timeout for status probes, in milliseconds. */
+export const STATUS_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * Races `promise` against a timer and aborts the underlying request, so a hung
+ * endpoint rejects instead of stalling the caller.
+ */
+async function withProbeTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([run(controller.signal), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * GET /health. Resolves when the API answers with a 2xx status and rejects on
+ * network failure, timeout or a non-2xx response.
+ */
+export async function fetchApiHealth(timeoutMs: number = STATUS_PROBE_TIMEOUT_MS): Promise<void> {
+  await withProbeTimeout(async (signal) => {
+    const res = await fetch(`${BASE}/health`, { signal, cache: "no-store" });
+    if (!res.ok) throw new ApiError(res.status, res.statusText);
+  }, timeoutMs);
+}
+
+/**
+ * GET /ready. Returns the per-dependency report for both 200 (`ok`) and 503
+ * (`not_ready`) responses. Rejects on network failure, timeout, a non-JSON body
+ * or a body that does not match the readiness schema.
+ */
+export async function fetchReadiness(
+  timeoutMs: number = STATUS_PROBE_TIMEOUT_MS
+): Promise<ReadinessReport> {
+  return withProbeTimeout(async (signal) => {
+    const res = await fetch(`${BASE}/ready`, { signal, cache: "no-store" });
+    if (res.status !== 200 && res.status !== 503) {
+      throw new ApiError(res.status, res.statusText);
+    }
+    const body: unknown = await res.json();
+    const payload = isEnvelope(body) ? body.data : body;
+    const parsed = readinessReportSchema.safeParse(payload);
+    if (!parsed.success) throw new ApiResponseError("/ready", parsed.error.issues);
+    return parsed.data;
+  }, timeoutMs);
 }

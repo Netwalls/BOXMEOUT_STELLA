@@ -1,0 +1,115 @@
+{
+  "description": "Settlement payout vectors shared by the market contract (contracts/shared/src/payout.rs) and the backend (backend/src/lib/payout.ts). Pools are settlement-time totals and include the bettor's stake. payout = floor(stake * (total - floor(total * fee_bp / 10000)) / winning_pool), or 0 when winning_pool is 0. fee = floor(total * fee_bp / 10000). Amounts are strings because they can exceed 2^53. Regenerate expected values only from an intentional formula change.",
+  "cases": [
+    {
+      "name": "standard_split",
+      "note": "Two-sided pool; the stake is part of both totals",
+      "side": "FighterA",
+      "total_pool": "3000",
+      "winning_pool": "1500",
+      "stake": "500",
+      "fee_bp": 200,
+      "expected_payout": "980",
+      "expected_fee": "60"
+    },
+    {
+      "name": "uneven_split_rounds_down",
+      "note": "Payout 1796.67 rounds down to 1796",
+      "side": "FighterB",
+      "total_pool": "11000",
+      "winning_pool": "6000",
+      "stake": "1000",
+      "fee_bp": 200,
+      "expected_payout": "1796",
+      "expected_fee": "220"
+    },
+    {
+      "name": "single_stroop_rounds_down",
+      "note": "Stake 1 of a 3-stroop winning pool",
+      "side": "FighterA",
+      "total_pool": "1000003",
+      "winning_pool": "3",
+      "stake": "1",
+      "fee_bp": 200,
+      "expected_payout": "326667",
+      "expected_fee": "20000"
+    },
+    {
+      "name": "sole_winner_takes_net",
+      "note": "Only winners on the winning side: receives the whole net pool",
+      "side": "FighterA",
+      "total_pool": "1500",
+      "winning_pool": "500",
+      "stake": "500",
+      "fee_bp": 200,
+      "expected_payout": "1470",
+      "expected_fee": "30"
+    },
+    {
+      "name": "fee_rounds_down",
+      "note": "Fee 19.98 rounds down to 19",
+      "side": "FighterB",
+      "total_pool": "999",
+      "winning_pool": "999",
+      "stake": "999",
+      "fee_bp": 200,
+      "expected_payout": "980",
+      "expected_fee": "19"
+    },
+    {
+      "name": "dust_small_stake",
+      "note": "Fee 1.5 rounds down; payout 9.9 rounds down",
+      "side": "FighterA",
+      "total_pool": "100",
+      "winning_pool": "70",
+      "stake": "7",
+      "fee_bp": 150,
+      "expected_payout": "9",
+      "expected_fee": "1"
+    },
+    {
+      "name": "zero_fee",
+      "note": "No protocol fee",
+      "side": "FighterB",
+      "total_pool": "500",
+      "winning_pool": "250",
+      "stake": "250",
+      "fee_bp": 0,
+      "expected_payout": "500",
+      "expected_fee": "0"
+    },
+    {
+      "name": "full_fee_leaves_nothing",
+      "note": "100% fee: net pool is zero",
+      "side": "FighterA",
+      "total_pool": "1000",
+      "winning_pool": "400",
+      "stake": "400",
+      "fee_bp": 10000,
+      "expected_payout": "0",
+      "expected_fee": "1000"
+    },
+    {
+      "name": "zero_winner_pool",
+      "note": "Nobody bet on the winning side: payout is zero, fee still taken",
+      "side": "FighterA",
+      "total_pool": "1000000",
+      "winning_pool": "0",
+      "stake": "0",
+      "fee_bp": 200,
+      "expected_payout": "0",
+      "expected_fee": "20000"
+    },
+    {
+      "name": "large_values_precision",
+      "note": "Values above 2^53: exact integer arithmetic required",
+      "side": "FighterA",
+      "total_pool": "10000000000000000",
+      "winning_pool": "3000000000000000",
+      "stake": "1000000000000000",
+      "fee_bp": 200,
+      "expected_payout": "3266666666666666",
+      "expected_fee": "200000000000000"
+    }
+  ]
+}

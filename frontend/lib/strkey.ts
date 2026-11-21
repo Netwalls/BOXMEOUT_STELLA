@@ -56,10 +56,7 @@ export function isValidStellarPublicKey(address: string): boolean {
   return isValidStrKey(address, /^G[A-Z2-7]{55}$/, ED25519_PUBLIC_KEY_VERSION);
 }
 
-/**
- * True when `address` is a well-formed Soroban contract address (a C... StrKey)
- * whose checksum matches.
- */
-export function isValidContractAddress(address: string): boolean {
-  return isValidStrKey(address, /^C[A-Z2-7]{55}$/, CONTRACT_VERSION);
+  const payload = bytes.subarray(0, PUBLIC_KEY_BYTES - 2);
+  const checksum = (bytes[PUBLIC_KEY_BYTES - 2] ?? 0) | ((bytes[PUBLIC_KEY_BYTES - 1] ?? 0) << 8);
+  return crc16XModem(payload) === checksum;
 }
