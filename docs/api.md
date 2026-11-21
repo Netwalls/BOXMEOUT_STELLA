@@ -83,6 +83,16 @@ Routes protected by wallet auth require the caller to prove they control a Stell
 
 Challenges expire after 5 minutes and are one-time use.
 
+### Session tokens (B-132)
+
+Signing every request is impractical for features such as notifications or watchlists. A verified challenge can instead be exchanged for a short-lived bearer token:
+
+1. `POST /api/auth/verify` with `{ "address": "G...", "signature": "<base64>" }` — consumes the challenge (one use) and returns `{ "token", "tokenType": "Bearer", "expiresAt" }` (epoch ms). Rate limited to 10 requests per minute per IP.
+2. Send `Authorization: Bearer <token>` on wallet-protected routes. The token is valid for 15 minutes and bound to its address; sending a different `x-wallet-address` header returns `403 WALLET_MISMATCH`.
+3. `POST /api/auth/logout` with the bearer token revokes it until its expiry (`200 { "revoked": true }`). A revoked token returns `401 TOKEN_REVOKED`; an expired one returns `401 INVALID_TOKEN`.
+
+Tokens are signed with HMAC-SHA256 using `JWT_SECRET` (required, at least 32 characters, checked at startup). Revocations are stored in Redis until the token's own expiry.
+
 ### Header consistency
 
 The environment variable names and header names are consistent across code and configuration:
@@ -327,7 +337,8 @@ Returns all bets placed on a market.
 | ------ | ---- | ----------- |
 | POST | `/api/auth/register` | Register a new user. Body: `{ email, password, username? }`. Returns the created user and a session token. |
 | POST | `/api/auth/login` | Authenticate an existing user. Body: `{ email, password }`. Returns a session token. |
-| POST | `/api/auth/logout` | Invalidate the current session. Requires authentication. |
+| POST | `/api/auth/verify` | Exchange a signed challenge for a 15-minute bearer token. Body: `{ address, signature }`. Consumes the challenge; rate limited. |
+| POST | `/api/auth/logout` | Revoke the bearer token in `Authorization`. Returns `{ revoked: true }`. |
 | GET | `/api/auth/me` | Return the currently authenticated user. Requires authentication. |
 
 ## Users

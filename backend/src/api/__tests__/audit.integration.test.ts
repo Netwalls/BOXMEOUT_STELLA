@@ -1,8 +1,6 @@
 import request from "supertest";
 import { createApp } from "../../app";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { db as prisma } from "../../db";
 const app = createApp();
 
 describe("Audit Logging Integration Tests (Issue #456)", () => {

@@ -13,6 +13,7 @@ import { Queue, Worker, Job } from "bullmq";
 import { logger } from "../logger";
 import { ConflictError, ContractError } from "../errors";
 import { db as prisma } from "../db";
+import { setResolutionQueueForMetrics } from "../metrics";
 import { z } from "zod";
 import { createProviderClient } from "./external-provider.client";
 import { dispatchWebhookEvent } from "./webhook.service";
@@ -43,6 +44,8 @@ export const resolutionQueue = new Queue("oracle-resolution", {
     removeOnFail: false,
   },
 });
+
+setResolutionQueueForMetrics(resolutionQueue);
 
 /**
  * Idempotency key per market. A market can only ever have one in-flight or

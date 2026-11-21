@@ -391,6 +391,7 @@ async function handleEvent(event: SorobanEvent, tx: PrismaClient): Promise<void>
       break;
     case "BetPlaced":
       await betService.handleBetPlaced(event.body, tx);
+      recordBetPlaced(event.body);
       break;
     case "MarketResolved":
     case "MarketCancelled":

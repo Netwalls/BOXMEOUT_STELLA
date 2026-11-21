@@ -29,6 +29,14 @@ import {
 import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 import { adminAuth } from "../middleware/adminAuth";
 import { auditLogMiddleware } from "../middleware/audit-log.middleware";
+import { validate } from "../middleware/validate";
+import {
+  auditLogsQuery,
+  createOracleBody,
+  idParams,
+  pagedQuery,
+  updateOracleBody,
+} from "../schemas/routes.schema";
 
 const router = Router();
 
@@ -73,7 +81,7 @@ router.get("/markets/pending", getPendingResolutionsHandler);
 router.post("/markets/cancel", marketResolutionLimiter, cancelMarketHandler);
 router.post("/markets/dispute/resolve", marketResolutionLimiter, resolveDisputeHandler);
 // #1412: reconcile one market against on-chain state (report-only unless autoRepair).
-router.post("/markets/:id/reconcile", reconcileMarketHandler);
+router.post("/markets/:id/reconcile", validate({ params: idParams }), reconcileMarketHandler);
 
 // B-143 (#1579): all oracle reports for a market, so an admin can see agreement or conflict.
 router.get("/markets/:id/oracle-reports", async (req, res) => {
@@ -87,15 +95,21 @@ router.get("/markets/:id/oracle-reports", async (req, res) => {
 
 // Oracle address management (Issue #455)
 router.get("/oracles", getAllOraclesHandler);
-router.post("/oracles", oracleWriteLimiter, createOracleHandler);
-router.patch("/oracles/:id", oracleWriteLimiter, updateOracleHandler);
-router.delete("/oracles/:id", oracleWriteLimiter, deleteOracleHandler);
+router.post("/oracles", oracleWriteLimiter, validate({ body: createOracleBody }), createOracleHandler);
+router.patch(
+  "/oracles/:id",
+  oracleWriteLimiter,
+  validate({ params: idParams, body: updateOracleBody }),
+  updateOracleHandler,
+);
+router.delete("/oracles/:id", oracleWriteLimiter, validate({ params: idParams }), deleteOracleHandler);
 
 // Oracle result submission jobs (Issue #1257)
-router.get("/oracle-submissions/failed", getFailedSubmissionsHandler);
+router.get("/oracle-submissions/failed", validate({ query: pagedQuery }), getFailedSubmissionsHandler);
 router.post(
   "/oracle-submissions/:id/retry",
   oracleSubmissionLimiter,
+  validate({ params: idParams }),
   retryFailedSubmissionHandler,
 );
 
@@ -108,7 +122,7 @@ router.get("/webhooks/:id/deliveries", listWebhookDeliveriesHandler);
 
 // Audit logging (Issue #456, #1258)
 // Supports ?actor=<id>&action=<action> filtering.
-router.get("/audit-logs", getAuditLogsHandler);
+router.get("/audit-logs", validate({ query: auditLogsQuery }), getAuditLogsHandler);
 
 // B-160: maintenance (read-only) mode. POST is exempt from the write block so
 // an admin can always turn it off. Every change is written to the audit log.

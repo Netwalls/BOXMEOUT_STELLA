@@ -19,6 +19,8 @@
 
 import { Router } from "express";
 import client, { Registry } from "prom-client";
+import type { Queue } from "bullmq";
+import { db } from "./db";
 
 // ─── Registry & default metrics ───────────────────────────────────────────────
 

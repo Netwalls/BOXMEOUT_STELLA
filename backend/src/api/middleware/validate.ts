@@ -68,3 +68,10 @@ export function validate(schemas: {
     next();
   };
 }
+
+/**
+ * B-130: shared guard for `:address` path params. Responds 400 VALIDATION_ERROR.
+ */
+export const validateAddressParam = validate({
+  params: z.object({ address: stellarAddress }),
+});

@@ -40,10 +40,15 @@ const exportLimiter = rateLimit({
 const router = Router();
 
 // GET /api/bets/leaderboard — deprecated alias of GET /api/leaderboard (#1382)
-router.get("/leaderboard", deprecatedLeaderboardAlias, getLeaderboardHandler);
+router.get("/leaderboard", deprecatedLeaderboardAlias, validate({ query: pagedQuery }), getLeaderboardHandler);
 
 // GET /api/bets/payout-estimate  — must come before /:address
-router.get("/payout-estimate", payoutEstimateLimiter, getPayoutEstimateHandler);
+router.get(
+  "/payout-estimate",
+  payoutEstimateLimiter,
+  validate({ query: payoutEstimateQuery }),
+  getPayoutEstimateHandler,
+);
 
 // GET /api/bets/:address/export — B-138 streaming CSV, owner-only
 router.get(

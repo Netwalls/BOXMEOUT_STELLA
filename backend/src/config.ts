@@ -88,6 +88,14 @@ const configSchema = z.object({
     .string({ required_error: "REDIS_URL is required" })
     .url("REDIS_URL must be a valid URL"),
 
+  /**
+   * B-132: HMAC key for signing short-lived session tokens issued by
+   * POST /api/auth/verify. Required at startup; at least 32 characters.
+   */
+  JWT_SECRET: z
+    .string({ required_error: "JWT_SECRET is required" })
+    .min(32, "JWT_SECRET must be at least 32 characters"),
+
   /** B-102: Idle keep-alive socket lifetime on the HTTP server (ms) */
   SERVER_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 

@@ -16,6 +16,7 @@ import { enforceCreatorBinding } from "../middleware/creatorBinding.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { validate } from "../middleware/validate";
 import { subscribeToMarket, type MarketEventPayload } from "../../events/marketEvents";
+import { sseConnections } from "../../metrics";
 
 // B-99 (#1397): search is unauthenticated and runs a full-text query per call,
 // so it gets the shared Redis sliding-window limiter.
@@ -85,7 +86,13 @@ router.get("/:id/stream", (req: Request, res: Response) => {
     res.write(": heartbeat\n\n");
   }, HEARTBEAT_INTERVAL_MS);
 
+  sseConnections.inc();
+  let closed = false;
+  // Both req and res emit "close"; the guard keeps the gauge decrement single.
   const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    sseConnections.dec();
     clearInterval(heartbeat);
     unsubscribe();
   };
