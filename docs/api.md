@@ -307,6 +307,23 @@ Oracle record management (list, create, update, delete) is admin-only and lives 
 | GET | `/api/admin/users` | List all users. Requires admin authentication. |
 | PATCH | `/api/admin/users/:id` | Update a user's role or status. Requires admin authentication. |
 | POST | `/api/admin/markets/:id/resolve` | Force-resolve a market. Requires admin authentication. |
+| GET | `/api/admin/webhooks` | List outbound webhook endpoints (secrets are not returned). Requires admin authentication. |
+| POST | `/api/admin/webhooks` | Create an endpoint `{ url, eventTypes }`. The `secret` is returned once, in this response. Requires admin authentication. |
+| PATCH | `/api/admin/webhooks/:id` | Update `url`, `eventTypes` or `active`. Requires admin authentication. |
+| DELETE | `/api/admin/webhooks/:id` | Delete an endpoint and its delivery log. Requires admin authentication. |
+| GET | `/api/admin/webhooks/:id/deliveries` | Delivery log for an endpoint, newest first (`?limit=`, max 200). Requires admin authentication. |
+
+### Outbound webhooks (#1581)
+
+Endpoints: `GET /api/admin/webhooks`, `POST /api/admin/webhooks`, `PATCH /api/admin/webhooks/:id`, `DELETE /api/admin/webhooks/:id` and `GET /api/admin/webhooks/:id/deliveries`.
+
+Event types: `market.created` and `market.resolved`. Each delivery is a `POST` with a JSON body `{ id, type, createdAt, data }` and these headers:
+
+- `X-Boxmeout-Signature: t=<unix seconds>,v1=<hex>` where `v1` is HMAC-SHA256 of `<t>.<raw body>` using the endpoint secret.
+- `X-Boxmeout-Event-Id`: the event id. Use it to deduplicate, since retries reuse the same id.
+- `X-Boxmeout-Event-Type`: the event type.
+
+Endpoints must be `https` and resolve only to public addresses. Redirects are not followed. Failed deliveries are retried with exponential backoff (6 attempts in total) and then marked `Failed` in the delivery log.
 
 ## Docs
 

@@ -7,11 +7,13 @@ on:
     paths:
       - "backend/**"
       - "contracts/shared/test_snapshots/**"
+      - "contracts/shared/test_vectors/**"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/**"
       - "contracts/shared/test_snapshots/**"
+      - "contracts/shared/test_vectors/**"
       - ".github/workflows/backend-ci.yml"
 
 defaults:
