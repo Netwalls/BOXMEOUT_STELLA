@@ -99,6 +99,13 @@ Deploys new Market contracts and manages protocol configuration.
 ### Shared
 Common types, utilities, and constants used across contracts.
 
+## CLI Cookbook
+
+For verified `stellar contract invoke` examples covering every public entrypoint
+of the factory, market and treasury (including how to pass `Bytes` ids,
+`Address`, enums such as `Outcome`/`BetSide` and `Option` values), see
+[`docs/contracts-cli.md`](../docs/contracts-cli.md).
+
 ## Events Reference
 
 ### market_created
