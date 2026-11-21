@@ -61,9 +61,9 @@ router.get(
 );
 
 // GET /api/bets/:address/portfolio
-router.get("/:address/portfolio", validateAddressParam, getPortfolioHandler);
+router.get("/:address/portfolio", validateAddressParam, privateNoStore, getPortfolioHandler);
 
 // GET /api/bets/:address
-router.get("/:address", validateAddressParam, getBetsByAddressHandler);
+router.get("/:address", validateAddressParam, privateNoStore, getBetsByAddressHandler);
 
 export default router;

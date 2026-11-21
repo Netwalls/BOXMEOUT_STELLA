@@ -4,55 +4,65 @@ import { getBetsByAddressPaginated, type PaginatedBets } from "./bet.service";
 
 export interface UserProfile {
   address: string;
-  displayName?: string;
-  avatarUrl?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface UpdateUserDTO {
-  displayName?: string;
-  avatarUrl?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 }
 
 /**
  * Fetches a user profile by wallet address.
- * Returns null if the user has no profile record yet.
+ *
+ * Profile fields live on the User row (B-121, #1557). An address with a User
+ * row always has a profile, even with no bets. An address without a row falls
+ * back to a bet-derived profile (no display fields); an address with neither
+ * returns null.
  */
 export async function getUserByAddress(
   address: string
 ): Promise<UserProfile | null> {
-  // For now, aggregate user data from bets and return a basic profile.
-  // A full User table would be added later in the schema.
-  const betCount = await prisma.bet.count({
-    where: { bettor: address },
-  });
+  const user = await prisma.user.findUnique({ where: { address } });
 
-  if (betCount === 0) return null;
+  if (user) {
+    return {
+      address: user.address,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
 
   const firstBet = await prisma.bet.findFirst({
     where: { bettor: address },
     orderBy: { placedAt: "asc" },
   });
 
+  if (!firstBet) return null;
+
   return {
     address,
-    createdAt: firstBet?.placedAt ?? new Date(),
+    createdAt: firstBet.placedAt,
     updatedAt: new Date(),
   };
 }
 
 /**
- * Updates a user's profile metadata.
- * Currently stores profile data via an AdminLog pattern; a full User
- * table with displayName/avatarUrl fields should be added to the Prisma
- * schema for production use.
+ * Creates or updates a user's profile fields. Upserts the User row; profile
+ * data is no longer written to AdminLog.
  */
 export async function updateUser(
   address: string,
   data: UpdateUserDTO
 ): Promise<UserProfile> {
-  const existing = await getUserByAddress(address);
+  const patch: UpdateUserDTO = {};
+  if (data.displayName !== undefined) patch.displayName = data.displayName;
+  if (data.avatarUrl !== undefined) patch.avatarUrl = data.avatarUrl;
 
   await prisma.adminLog.create({
     data: {
@@ -64,11 +74,11 @@ export async function updateUser(
   });
 
   return {
-    address,
-    displayName: data.displayName,
-    avatarUrl: data.avatarUrl,
-    createdAt: existing?.createdAt ?? new Date(),
-    updatedAt: new Date(),
+    address: user.address,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
   };
 }
 

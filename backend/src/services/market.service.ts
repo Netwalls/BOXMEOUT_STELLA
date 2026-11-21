@@ -13,15 +13,31 @@ import { logger } from "../logger";
 import { redis } from "../redis";
 import { dispatchWebhookEvent } from "./webhook.service";
 
-export interface MarketFilters {
-  status?: MarketStatus;
-  weightClass?: string;
-}
+export {
+  MARKET_SORTS,
+  buildMarketOrderBy,
+  type MarketSort,
+  type SortOrder,
+} from "./market-sort";
+import { buildMarketOrderBy, type MarketSort, type SortOrder } from "./market-sort";
 
-export interface Pagination {
-  page: number;
-  pageSize: number;
-}
+import {
+  MAX_PAGE_SIZE,
+  MARKET_CACHE_TTL_SECONDS,
+  MARKET_LIST_CACHE_PREFIX,
+  getAllMarkets,
+  type MarketFilters,
+  type MarketPage,
+  type Pagination,
+} from "./market-list.service";
+export {
+  MAX_PAGE_SIZE,
+  MARKET_CACHE_TTL_SECONDS,
+  getAllMarkets,
+  type MarketFilters,
+  type MarketPage,
+  type Pagination,
+} from "./market-list.service";
 
 export interface PaginatedResult<T> {
   data: T[];
@@ -30,52 +46,7 @@ export interface PaginatedResult<T> {
   pageSize: number;
 }
 
-export const MAX_PAGE_SIZE = 100;
-
-/**
- * Short TTL (seconds) for cached market list and stats responses.
- * Kept small so the 4s frontend poll still sees fresh data while
- * absorbing bursts of concurrent viewers.
- */
-export const MARKET_CACHE_TTL_SECONDS = 5;
-
-const MARKET_LIST_CACHE_PREFIX = "market:list:";
 const MARKET_STATS_CACHE_PREFIX = "market:stats:";
-
-// Cache hit/miss counters used to log the hit ratio.
-let cacheHits = 0;
-let cacheMisses = 0;
-
-function logCacheHitRatio(): void {
-  const total = cacheHits + cacheMisses;
-  if (total === 0) return;
-  logger.info(
-    {
-      cacheHits,
-      cacheMisses,
-      hitRatio: Number((cacheHits / total).toFixed(4)),
-    },
-    "Market cache hit ratio"
-  );
-}
-
-function recordCacheHit(): void {
-  cacheHits += 1;
-  logCacheHitRatio();
-}
-
-function recordCacheMiss(): void {
-  cacheMisses += 1;
-  logCacheHitRatio();
-}
-
-function listCacheKey(filters?: MarketFilters, pagination?: Pagination): string {
-  const status = filters?.status ?? "all";
-  const weightClass = filters?.weightClass ?? "all";
-  const page = pagination?.page ?? 1;
-  const pageSize = Math.min(pagination?.pageSize ?? 20, MAX_PAGE_SIZE);
-  return `${MARKET_LIST_CACHE_PREFIX}${status}:${weightClass}:${page}:${pageSize}`;
-}
 
 function statsCacheKey(marketId: string): string {
   return `${MARKET_STATS_CACHE_PREFIX}${marketId}`;

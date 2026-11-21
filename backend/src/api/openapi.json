@@ -494,6 +494,35 @@
             }
           },
           {
+            "name": "categoryId",
+            "in": "query",
+            "description": "Only return markets in this category",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "soonest orders by scheduledAt, newest by createdAt, pool by totalPool. Ties break on id.",
+            "schema": {
+              "type": "string",
+              "enum": ["soonest", "newest", "pool"],
+              "default": "soonest"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "Sort direction",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"],
+              "default": "asc"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {

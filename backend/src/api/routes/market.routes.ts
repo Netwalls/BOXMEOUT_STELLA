@@ -15,6 +15,7 @@ import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 import { enforceCreatorBinding } from "../middleware/creatorBinding.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { validate } from "../middleware/validate";
+import { cacheControl } from "../middleware/cacheControl.middleware";
 import { subscribeToMarket, type MarketEventPayload } from "../../events/marketEvents";
 import { sseConnections } from "../../metrics";
 
@@ -31,7 +32,7 @@ const router = Router();
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
 // GET /api/markets/search?q=...  — must come before /:id (#1405 B-107)
-router.get("/search", searchRateLimiter, searchMarketsHandler);
+router.get("/search", searchRateLimiter, cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), searchMarketsHandler);
 
 // B-158 (#1594): autocomplete suggestions. Cheap, but still rate limited.
 // Must stay above "/:id" so "suggest" is not read as a market id.
@@ -43,7 +44,7 @@ const suggestRateLimiter = rateLimitMiddleware({
 router.get("/suggest", suggestRateLimiter, suggestMarketsHandler);
 
 // GET  /api/markets
-router.get("/", getMarketsHandler);
+router.get("/", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketsHandler);
 
 // POST /api/markets
 // Creator must prove wallet ownership via challenge/response (#1225 B-47).
@@ -102,16 +103,16 @@ router.get("/:id/stream", (req: Request, res: Response) => {
 });
 
 // GET /api/markets/:id
-router.get("/:id", getMarketByIdHandler);
+router.get("/:id", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketByIdHandler);
 
 // GET /api/markets/:id/stats
-router.get("/:id/stats", getMarketStatsHandler);
+router.get("/:id/stats", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketStatsHandler);
 
 // GET /api/markets/:id/bets
-router.get("/:id/bets", getMarketBetsHandler);
+router.get("/:id/bets", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketBetsHandler);
 
 // GET /api/markets/:id/odds-history?interval=5m|1h
-router.get("/:id/odds-history", getMarketOddsHistoryHandler);
+router.get("/:id/odds-history", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketOddsHistoryHandler);
 
 // GET /api/markets/:id/disputes?page=&limit=  (B-144 #1580)
 router.get("/:id/disputes", getMarketDisputesHandler);
