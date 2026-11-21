@@ -13,3 +13,6 @@ shared = { path = "../shared", features = ["testutils"] }
 market_factory = { path = "../market_factory" }
 treasury = { path = "../treasury" }
 proptest = "1.5"
+
+[lints]
+workspace = true

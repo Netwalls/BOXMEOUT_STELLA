@@ -10,6 +10,18 @@
 //! `PROPTEST_CASES` env var). Betting-only tests default to 256 cases; the
 //! heavier full-lifecycle tests (lock → resolve → claim) default to 64.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, MarketStatus, Outcome, ProtocolConfig};
 use market::{MarketContract, MarketContractClient};
 use proptest::prelude::ProptestConfig;
@@ -46,6 +58,8 @@ impl MockFactory {
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
+            bet_token: env.current_contract_address(),
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }
@@ -167,7 +181,7 @@ proptest::proptest! {
         for (amount, is_a) in &bets {
             let side = if *is_a { BetSide::FighterA } else { BetSide::FighterB };
             let bettor = Address::generate(&env);
-            let _bet_id = client.place_bet(&bettor, &side, &amount);
+            let _bet_id = client.place_bet(&bettor, &side, amount);
 
             // Basic invariant: total_pool >= pool_a + pool_b
             let m = client.get_market_info();
@@ -200,7 +214,7 @@ proptest::proptest! {
         for (amount, is_a) in &bets {
             let side = if *is_a { BetSide::FighterA } else { BetSide::FighterB };
             let bettor = Address::generate(&env);
-            let bet_id = client.place_bet(&bettor, &side, &amount);
+            let bet_id = client.place_bet(&bettor, &side, amount);
 
             match side {
                 BetSide::FighterA => bets_on_a.push_back((bettor, bet_id, *amount)),
@@ -260,7 +274,7 @@ proptest::proptest! {
         for (amount, is_a) in &bets {
             let side = if *is_a { BetSide::FighterA } else { BetSide::FighterB };
             let bettor = Address::generate(&env);
-            let _ = client.place_bet(&bettor, &side, &amount);
+            let _ = client.place_bet(&bettor, &side, amount);
         }
 
         let (pa, pb, odds_a, odds_b) = client.get_pool_odds();

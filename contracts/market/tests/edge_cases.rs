@@ -17,6 +17,18 @@
 //!
 //! ≥10 distinct test cases, all must pass without panic/overflow.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig};
 use market::{DataKey, MarketContract, MarketContractClient, MAX_DISPUTE_REASON_LEN};
 use soroban_sdk::{
@@ -52,6 +64,8 @@ impl MockFactory {
             max_bet_amount: i128::MAX / 2,
             dispute_window_sec: 86_400,
             paused: false,
+            bet_token: env.current_contract_address(),
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }
@@ -86,7 +100,7 @@ fn make_fighter(env: &Env, name: &str) -> Fighter {
     }
 }
 
-fn setup_market(env: &Env) -> (MarketContractClient, Address, Address, u64) {
+fn setup_market(env: &Env) -> (MarketContractClient<'_>, Address, Address, u64) {
     let admin = Address::generate(env);
     let factory_id = env.register(MockFactory, (admin.clone(),));
     let oracle = Address::generate(env);

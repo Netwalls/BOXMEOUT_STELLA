@@ -1,3 +1,6 @@
+//! BOXMEOUT Treasury contract: holds protocol fee balances and escrow, and enforces
+//! daily withdrawal limits.
+
 #![no_std]
 use shared::{errors::ContractError, events, types::ProtocolConfig};
 use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Bytes, Env, String, Symbol, Vec};
@@ -91,7 +94,7 @@ fn read_admin(env: &Env) -> Address {
     env.storage()
         .persistent()
         .get(&key_admin(env))
-        .expect("not initialized")
+        .unwrap_or_else(|| panic_with_error!(&env, ContractError::NotInitialized))
 }
 
 /// Returns `(window_start, spent)` for the window containing `now`.
@@ -875,10 +878,10 @@ impl Treasury {
 // ─── TESTS ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
+#[allow(missing_docs)] // test-only mock contracts are not public API
 mod tests {
     use super::*;
     use shared::test_utils::{create_test_address, create_test_env};
-    use soroban_sdk::IntoVal;
 
     #[test]
     fn test_version_returns_crate_version() {
@@ -899,7 +902,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -927,7 +930,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -957,7 +960,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -978,7 +981,7 @@ mod tests {
         let fee_recipient = create_test_address(&env);
         let token = create_test_address(&env);
 
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let client = TreasuryClient::new(&env, &contract_id);
 
         client.initialize(
@@ -997,7 +1000,10 @@ mod tests {
     /// Helper: registers treasury, initialises with a funded token, and seeds
     /// BALANCE by directly setting storage so we can test withdraw_fees without
     /// needing a real market factory cross-contract call.
-    fn setup_treasury_with_balance(env: &Env, balance: i128) -> (TreasuryClient, Address, Address) {
+    fn setup_treasury_with_balance(
+        env: &Env,
+        balance: i128,
+    ) -> (TreasuryClient<'_>, Address, Address) {
         use soroban_sdk::testutils::Ledger;
 
         env.ledger().with_mut(|li| li.timestamp = 1_000_000);
@@ -1007,7 +1013,7 @@ mod tests {
         let fee_recipient = create_test_address(env);
 
         // Mint `balance` tokens to the treasury contract so the token transfer succeeds.
-        let contract_id = env.register_contract(None, Treasury);
+        let contract_id = env.register(Treasury, ());
         let token_addr = shared::test_utils::fund_address(env, &contract_id, balance);
 
         let client = TreasuryClient::new(env, &contract_id);
@@ -1278,7 +1284,7 @@ mod tests {
 
     #[test]
     fn test_accept_admin_emits_admin_transferred_via_shared_helper() {
-        use shared::test_utils::{event_count, last_event_name};
+        use shared::test_utils::last_event_name;
         let env = create_test_env();
         env.mock_all_auths();
 
@@ -1306,7 +1312,7 @@ mod tests {
 
     #[test]
     fn test_set_fee_bps_emits_config_updated_via_shared_helper() {
-        use shared::test_utils::{event_count, last_event_name};
+        use shared::test_utils::last_event_name;
         let env = create_test_env();
         env.mock_all_auths();
 

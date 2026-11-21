@@ -9,6 +9,18 @@
 //! This test deploys the real factory and treasury, and the real market wasm,
 //! so it needs the optimised wasm built first (`stellar contract build`).
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market_factory::{MarketFactory, MarketFactoryClient};
 use shared::test_utils::{assert_within_budget, measure};
 use soroban_sdk::{
@@ -64,6 +76,7 @@ fn list_markets_full_page_stays_within_budget() {
         &MIN_BET,
         &MAX_BET,
         &DISPUTE_WINDOW_SEC,
+        &token_id,
     );
     treasury.initialize(
         &admin,

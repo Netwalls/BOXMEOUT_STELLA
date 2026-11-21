@@ -6,6 +6,18 @@
 //!   - before `betting_ends_at`: only the market's oracle may lock (early lock)
 //!   - at or after `betting_ends_at`: anyone may lock, no auth required
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, MarketStatus, ProtocolConfig};
 use market::{MarketContract, MarketContractClient};
 use soroban_sdk::{
@@ -41,6 +53,8 @@ impl MockFactory {
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
+            bet_token: env.current_contract_address(),
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }
