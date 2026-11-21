@@ -1,4 +1,4 @@
-import { Bet, BetSide } from "@prisma/client";
+import { Bet, BetSide, Prisma } from "@prisma/client";
 import { db } from "../db";
 import { computePayout } from "../lib/payout";
 
@@ -27,6 +27,7 @@ export interface PortfolioSummary {
 }
 
 export type LeaderboardPeriod = "7d" | "30d" | "all";
+export type LeaderboardSort = "profit" | "roi" | "winRate";
 
 export interface LeaderboardEntry {
   rank: number;
@@ -37,14 +38,33 @@ export interface LeaderboardEntry {
   settledBets: number;
   wonBets: number;
   winRate: number;
+  /** realisedProfit / totalStaked as a percentage (0 when nothing staked). */
+  roi: number;
+}
+
+export interface LeaderboardQuery {
+  /** Time window on Bet.placedAt. Defaults to "all". */
+  period?: LeaderboardPeriod;
+  /** Page size, clamped to [1, LEADERBOARD_MAX_LIMIT]. Defaults to 50. */
+  limit?: number;
+  /** Bettors with fewer settled bets than this are excluded. Defaults to 3. */
+  minBets?: number;
+  /** Primary ranking key. Ties fall through profit, then bettor address. */
+  sort?: LeaderboardSort;
+  /** Zero-based position in the ranking; derived from the decoded cursor. */
+  offset?: number;
 }
 
 export interface LeaderboardResult {
   period: LeaderboardPeriod;
+  sort: LeaderboardSort;
+  minBets: number;
   limit: number;
   generatedAt: Date;
   entries: LeaderboardEntry[];
+  nextCursor: string | null;
 }
+
 
 export const MAX_BET_PAGE_LIMIT = 100;
 export const DEFAULT_BET_PAGE_LIMIT = 20;
@@ -367,16 +387,12 @@ const LEADERBOARD_PERIOD_MS: Record<Exclude<LeaderboardPeriod, "all">, number> =
   "30d": 30 * 24 * 60 * 60 * 1000,
 };
 
-const LEADERBOARD_CACHE_TTL_MS = 30 * 1000;
+const LEADERBOARD_CACHE_TTL_SECONDS = 30;
+const LEADERBOARD_CACHE_PREFIX = "leaderboard:v2:";
 const LEADERBOARD_DEFAULT_LIMIT = 50;
 const LEADERBOARD_MAX_LIMIT = 100;
-
-interface LeaderboardCacheEntry {
-  expiresAt: number;
-  result: LeaderboardResult;
-}
-
-const leaderboardCache = new Map<string, LeaderboardCacheEntry>();
+export const LEADERBOARD_DEFAULT_MIN_BETS = 3;
+export const LEADERBOARD_MAX_MIN_BETS = 1000;
 
 /**
  * Normalises the period query param, defaulting to "all" for unknown values.
@@ -399,112 +415,240 @@ export function parseLeaderboardLimit(limit?: string | number): number {
   return Math.min(Math.floor(parsed), LEADERBOARD_MAX_LIMIT);
 }
 
+/** Cursors are opaque base64url-encoded page offsets. */
+export function encodeLeaderboardCursor(offset: number): string {
+  return Buffer.from(JSON.stringify({ o: offset }), "utf8").toString("base64url");
+}
+
 /**
- * Computes the leaderboard from claimed payouts minus stakes (realised profit).
+ * Returns the offset encoded in a cursor, 0 when no cursor is given, or
+ * `null` when the cursor is malformed.
+ */
+export function decodeLeaderboardCursor(cursor?: string | null): number | null {
+  if (!cursor) return 0;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "o" in parsed &&
+      typeof parsed.o === "number" &&
+      Number.isSafeInteger(parsed.o) &&
+      parsed.o >= 0
+    ) {
+      return parsed.o;
+    }
+  } catch {
+    // fall through to null
+  }
+  return null;
+}
+
+interface LeaderboardAggregateRow {
+  bettor: string;
+  staked: string;
+  payout: string;
+  settled: number;
+  won: number;
+}
+
+/**
+ * Aggregates claimed bets per bettor in SQL. The period filter uses
+ * Bet.placedAt, which is covered by the (claimed, placedAt) index. Bettors
+ * below `minBets` settled bets are dropped in HAVING.
  *
- * Only settled bets (claimed) contribute to realised profit and win rate:
+ * `Bet.side` (BetSide) and `Market.outcome` (Outcome) are distinct Postgres
+ * enum types, so they are compared as text.
+ */
+async function loadLeaderboardAggregates(
+  period: LeaderboardPeriod,
+  minBets: number
+): Promise<LeaderboardAggregateRow[]> {
+  const windowFilter =
+    period === "all"
+      ? Prisma.empty
+      : Prisma.sql`AND b."placedAt" >= ${new Date(Date.now() - LEADERBOARD_PERIOD_MS[period])}`;
+
+  return db.$queryRaw<LeaderboardAggregateRow[]>(Prisma.sql`
+    SELECT b."bettor" AS "bettor",
+           COALESCE(SUM(b."amount"), 0)::text AS "staked",
+           COALESCE(SUM(b."payout"), 0)::text AS "payout",
+           COUNT(*)::int AS "settled",
+           COALESCE(SUM(CASE WHEN m."outcome"::text = b."side"::text THEN 1 ELSE 0 END), 0)::int AS "won"
+    FROM "Bet" b
+    JOIN "Market" m ON m."id" = b."marketId"
+    WHERE b."claimed" = true ${windowFilter}
+    GROUP BY b."bettor"
+    HAVING COUNT(*) >= ${minBets}
+  `);
+}
+
+const cmpBigintDesc = (x: bigint, y: bigint): number => (x === y ? 0 : x > y ? -1 : 1);
+const cmpNumberDesc = (x: number, y: number): number => (x === y ? 0 : x > y ? -1 : 1);
+const cmpString = (x: string, y: string): number => (x === y ? 0 : x < y ? -1 : 1);
+
+/**
+ * Sorts entries by the requested key, then by the remaining metrics, then by
+ * bettor address, so every ordering is total and repeatable across requests.
+ */
+function compareLeaderboardEntries(sort: LeaderboardSort) {
+  return (a: Omit<LeaderboardEntry, "rank">, b: Omit<LeaderboardEntry, "rank">): number => {
+    const byProfit = () => cmpBigintDesc(a.realisedProfit, b.realisedProfit);
+    const byRoi = () => cmpNumberDesc(a.roi, b.roi);
+    const byWinRate = () => cmpNumberDesc(a.winRate, b.winRate);
+    const comparators =
+      sort === "roi"
+        ? [byRoi, byProfit, byWinRate]
+        : sort === "winRate"
+          ? [byWinRate, byProfit, byRoi]
+          : [byProfit, byWinRate, byRoi];
+    for (const compare of comparators) {
+      const result = compare();
+      if (result !== 0) return result;
+    }
+    return cmpString(a.bettor, b.bettor);
+  };
+}
+
+function rankLeaderboard(
+  rows: LeaderboardAggregateRow[],
+  sort: LeaderboardSort
+): Omit<LeaderboardEntry, "rank">[] {
+  return rows
+    .map((row) => {
+      const totalStaked = BigInt(row.staked);
+      const totalPayout = BigInt(row.payout);
+      const realisedProfit = totalPayout - totalStaked;
+      return {
+        bettor: row.bettor,
+        realisedProfit,
+        totalStaked,
+        totalPayout,
+        settledBets: row.settled,
+        wonBets: row.won,
+        winRate: row.settled > 0 ? (row.won / row.settled) * 100 : 0,
+        roi: totalStaked > 0n ? (Number(realisedProfit) / Number(totalStaked)) * 100 : 0,
+      };
+    })
+    .sort(compareLeaderboardEntries(sort));
+}
+
+/** Cached form: bigints are stored as decimal strings. */
+interface SerializedLeaderboardEntry extends Omit<LeaderboardEntry, "rank" | "realisedProfit" | "totalStaked" | "totalPayout"> {
+  rank: number;
+  realisedProfit: string;
+  totalStaked: string;
+  totalPayout: string;
+}
+
+interface SerializedLeaderboardResult extends Omit<LeaderboardResult, "generatedAt" | "entries"> {
+  generatedAt: string;
+  entries: SerializedLeaderboardEntry[];
+}
+
+function serializeLeaderboard(result: LeaderboardResult): string {
+  const payload: SerializedLeaderboardResult = {
+    ...result,
+    generatedAt: result.generatedAt.toISOString(),
+    entries: result.entries.map((e) => ({
+      ...e,
+      realisedProfit: e.realisedProfit.toString(),
+      totalStaked: e.totalStaked.toString(),
+      totalPayout: e.totalPayout.toString(),
+    })),
+  };
+  return JSON.stringify(payload);
+}
+
+function deserializeLeaderboard(raw: string): LeaderboardResult | null {
+  try {
+    const payload = JSON.parse(raw) as SerializedLeaderboardResult;
+    return {
+      ...payload,
+      generatedAt: new Date(payload.generatedAt),
+      entries: payload.entries.map((e) => ({
+        ...e,
+        realisedProfit: BigInt(e.realisedProfit),
+        totalStaked: BigInt(e.totalStaked),
+        totalPayout: BigInt(e.totalPayout),
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Computes the leaderboard from claimed bets.
+ *
  * - realisedProfit = sum(payout) - sum(amount) over claimed bets
  * - winRate = wonBets / settledBets * 100
+ * - roi = realisedProfit / totalStaked * 100
  *
- * Results are cached per (period, limit) for a short TTL.
+ * Only bettors with at least `minBets` settled bets in the window are ranked.
+ * Pages are read from a Redis cache keyed by every query parameter for
+ * LEADERBOARD_CACHE_TTL_SECONDS. A Redis outage or timeout falls back to the
+ * database, so the endpoint stays available.
  */
-export async function getLeaderboard(
-  period: LeaderboardPeriod = "all",
-  limit: number = LEADERBOARD_DEFAULT_LIMIT
-): Promise<LeaderboardResult> {
-  const normalisedLimit = parseLeaderboardLimit(limit);
-  const cacheKey = `${period}:${normalisedLimit}`;
-  const now = Date.now();
+export async function getLeaderboard(query: LeaderboardQuery = {}): Promise<LeaderboardResult> {
+  const period = query.period ?? "all";
+  const sort = query.sort ?? "profit";
+  const minBets = Math.min(
+    Math.max(Math.floor(query.minBets ?? LEADERBOARD_DEFAULT_MIN_BETS), 1),
+    LEADERBOARD_MAX_MIN_BETS
+  );
+  const limit = parseLeaderboardLimit(query.limit);
+  const offset = query.offset ?? 0;
+  const cacheKey = `${LEADERBOARD_CACHE_PREFIX}${period}:${sort}:${minBets}:${limit}:${offset}`;
 
-  const cached = leaderboardCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.result;
+  const cached = await guardRedis(
+    "leaderboard.cache.get",
+    () => redis.get(cacheKey),
+    null
+  );
+  if (cached !== null) {
+    const hit = deserializeLeaderboard(cached);
+    if (hit) return hit;
   }
 
-  const where: Record<string, unknown> = { claimed: true };
-  if (period !== "all") {
-    where.claimedAt = { gte: new Date(now - LEADERBOARD_PERIOD_MS[period]) };
-  }
+  const rows = await loadLeaderboardAggregates(period, minBets);
+  const ranked = rankLeaderboard(rows, sort);
+  const entries: LeaderboardEntry[] = ranked
+    .slice(offset, offset + limit)
+    .map((entry, index) => ({ ...entry, rank: offset + index + 1 }));
 
-  const bets = await db.bet.findMany({
-    where,
-    include: { market: true },
-  });
-
-  const stats = new Map<
-    string,
-    {
-      realisedProfit: bigint;
-      totalStaked: bigint;
-      totalPayout: bigint;
-      settledBets: number;
-      wonBets: number;
-    }
-  >();
-
-  for (const bet of bets) {
-    const payout = bet.payout ?? 0n;
-    const entry = stats.get(bet.bettor) ?? {
-      realisedProfit: 0n,
-      totalStaked: 0n,
-      totalPayout: 0n,
-      settledBets: 0,
-      wonBets: 0,
-    };
-
-    entry.totalStaked += bet.amount;
-    entry.totalPayout += payout;
-    entry.realisedProfit += payout - bet.amount;
-    entry.settledBets += 1;
-    if (bet.market.outcome !== null && bet.market.outcome === bet.side) {
-      entry.wonBets += 1;
-    }
-
-    stats.set(bet.bettor, entry);
-  }
-
-  const entries: LeaderboardEntry[] = Array.from(stats.entries())
-    .map(([bettor, s]) => ({
-      rank: 0,
-      bettor,
-      realisedProfit: s.realisedProfit,
-      totalStaked: s.totalStaked,
-      totalPayout: s.totalPayout,
-      settledBets: s.settledBets,
-      wonBets: s.wonBets,
-      winRate:
-        s.settledBets > 0 ? (s.wonBets / s.settledBets) * 100 : 0,
-    }))
-    .sort((a, b) => {
-      if (a.realisedProfit !== b.realisedProfit) {
-        return a.realisedProfit > b.realisedProfit ? -1 : 1;
-      }
-      if (a.winRate !== b.winRate) {
-        return b.winRate - a.winRate;
-      }
-      return a.bettor.localeCompare(b.bettor);
-    })
-    .slice(0, normalisedLimit)
-    .map((entry, index) => ({ ...entry, rank: index + 1 }));
-
+  const nextOffset = offset + limit;
   const result: LeaderboardResult = {
     period,
-    limit: normalisedLimit,
-    generatedAt: new Date(now),
+    sort,
+    minBets,
+    limit,
+    generatedAt: new Date(),
     entries,
+    nextCursor: nextOffset < ranked.length ? encodeLeaderboardCursor(nextOffset) : null,
   };
 
-  leaderboardCache.set(cacheKey, {
-    expiresAt: now + LEADERBOARD_CACHE_TTL_MS,
-    result,
-  });
+  await guardRedis(
+    "leaderboard.cache.set",
+    async () => {
+      await redis.set(cacheKey, serializeLeaderboard(result), "EX", LEADERBOARD_CACHE_TTL_SECONDS);
+    },
+    undefined
+  );
 
   return result;
 }
 
 /**
- * Clears the leaderboard cache. Useful for tests and after settlement events.
+ * Removes every cached leaderboard page. Useful for tests and after settlement events.
  */
-export function clearLeaderboardCache(): void {
-  leaderboardCache.clear();
+export async function clearLeaderboardCache(): Promise<void> {
+  await guardRedis(
+    "leaderboard.cache.clear",
+    async () => {
+      const keys = await redis.keys(`${LEADERBOARD_CACHE_PREFIX}*`);
+      if (keys.length > 0) await redis.del(...keys);
+    },
+    undefined
+  );
 }

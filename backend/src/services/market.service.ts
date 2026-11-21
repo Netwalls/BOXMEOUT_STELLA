@@ -87,22 +87,25 @@ function statsCacheKey(marketId: string): string {
  * next poll re-reads fresh data from Postgres.
  */
 export async function invalidateMarketCache(marketId?: string): Promise<void> {
-  try {
-    const keys: string[] = [];
-    if (marketId) {
-      keys.push(statsCacheKey(marketId));
-    }
+  // Best-effort: a missed invalidation is bounded by the cache TTL (#1590).
+  await guardRedis(
+    "market_cache",
+    async () => {
+      const keys: string[] = [];
+      if (marketId) {
+        keys.push(statsCacheKey(marketId));
+      }
 
-    // Invalidate all list variants (status/weightClass/page/pageSize combos).
-    const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
-    keys.push(...listKeys);
+      // Invalidate all list variants (status/weightClass/page/pageSize combos).
+      const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
+      keys.push(...listKeys);
 
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
-  } catch (err) {
-    logger.warn({ err, marketId }, "Failed to invalidate market cache");
-  }
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    },
+    undefined
+  );
 }
 
 export interface MarketStats {
@@ -181,14 +184,11 @@ export async function getAllMarkets(
 ): Promise<MarketPage> {
   const cacheKey = listCacheKey(filters, pagination);
 
-  try {
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      recordCacheHit();
-      return JSON.parse(cached) as MarketPage;
-    }
-  } catch (err) {
-    logger.warn({ err, cacheKey }, "Market list cache read failed");
+  // Cache reads fall back to Postgres when Redis is unavailable (#1590).
+  const cached = await guardRedis<string | null>("market_cache", () => redis.get(cacheKey), null);
+  if (cached) {
+    recordCacheHit();
+    return JSON.parse(cached) as MarketPage;
   }
 
   recordCacheMiss();
@@ -217,16 +217,11 @@ export async function getAllMarkets(
 
   const result: MarketPage = { data: markets, total };
 
-  try {
-    await redis.set(
-      cacheKey,
-      JSON.stringify(result),
-      "EX",
-      MARKET_CACHE_TTL_SECONDS
-    );
-  } catch (err) {
-    logger.warn({ err, cacheKey }, "Market list cache write failed");
-  }
+  await guardRedis(
+    "market_cache",
+    () => redis.set(cacheKey, JSON.stringify(result), "EX", MARKET_CACHE_TTL_SECONDS),
+    undefined
+  );
 
   return result;
 }

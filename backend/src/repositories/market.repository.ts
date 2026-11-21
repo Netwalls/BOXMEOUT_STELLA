@@ -1,5 +1,6 @@
 import Redis from "ioredis";
 import { db as prisma } from "../db";
+import { guardRedis } from "../lib/redis-guard";
 
 const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
 
@@ -22,7 +23,8 @@ export async function searchMarkets(
   limit = 20
 ): Promise<SearchResult> {
   const cacheKey = `search:${q}:${page}:${limit}`;
-  const cached = await redis.get(cacheKey);
+  // Cache reads and writes are best-effort: if Redis is unavailable, search falls back to Postgres (#1590).
+  const cached = await guardRedis<string | null>("market_cache", () => redis.get(cacheKey), null);
   if (cached) return JSON.parse(cached) as SearchResult;
 
   const offset = (page - 1) * limit;
@@ -47,6 +49,6 @@ export async function searchMarkets(
     total: Number(countRows[0].count),
   };
 
-  await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+  await guardRedis("market_cache", () => redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result)), undefined);
   return result;
 }

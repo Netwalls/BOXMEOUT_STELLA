@@ -202,6 +202,17 @@ export const webhookDeliveriesTotal = new client.Counter({
 
 // ─── /metrics router ──────────────────────────────────────────────────────────
 
+/**
+ * #1590: Redis failures and timeouts per feature (rate_limit, wallet_challenge,
+ * idempotency, market_cache, leaderboard_cache, sse, lifecycle_lock, readiness).
+ */
+export const redisErrorsTotal = new client.Counter({
+  name: "redis_errors_total",
+  help: "Redis operations that failed or timed out, by feature",
+  labelNames: ["feature"] as const,
+  registers: [metricsRegistry],
+});
+
 export const metricsRouter = Router();
 
 /**
