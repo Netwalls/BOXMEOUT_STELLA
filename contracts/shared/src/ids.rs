@@ -20,6 +20,9 @@ use soroban_sdk::Bytes;
 /// # Panics
 ///
 /// Panics if `market_id` is shorter than 8 bytes.
+// The panic is the documented contract for a malformed id (see `# Panics`); every
+// caller passes ids produced by the factory, which are always 32 bytes.
+#[allow(clippy::panic)]
 pub fn market_id_to_u64(market_id: &Bytes) -> u64 {
     if market_id.len() < 8 {
         panic!("market_id must be at least 8 bytes");

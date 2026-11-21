@@ -1,0 +1,32 @@
+{
+  "name": "boxmeout-workspace-tooling",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repo-level git hook tooling (husky + lint-staged). Frontend and backend keep their own dependencies.",
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "scripts": {
+    "prepare": "node scripts/prepare-hooks.mjs"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx,js,jsx,mjs,cjs}": [
+      "npm --prefix frontend exec -- eslint --fix",
+      "npm --prefix frontend exec -- prettier --write"
+    ],
+    "backend/**/*.ts": [
+      "npm --prefix backend exec -- eslint --fix",
+      "npm --prefix backend exec -- prettier --write"
+    ],
+    "frontend/**/*.{json,css}": [
+      "npm --prefix frontend exec -- prettier --write"
+    ],
+    "backend/**/*.json": [
+      "npm --prefix backend exec -- prettier --write"
+    ]
+  }
+}

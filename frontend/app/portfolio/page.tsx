@@ -20,8 +20,7 @@ function getClaimableBets(bets: Bet[], markets: Record<string, Market>): Bet[] {
     const market = markets[bet.marketId];
     if (!market) return false;
     const isWinner = market.status === "Resolved" && market.outcome === bet.side;
-    const isRefundable =
-      market.status === "Cancelled" || market.outcome === "NoContest";
+    const isRefundable = market.status === "Cancelled" || market.outcome === "NoContest";
     return isWinner || isRefundable;
   });
 }
@@ -51,7 +50,15 @@ function winRate(bets: Bet[]): number {
 // ─── CSV export ──────────────────────────────────────────────────────────────
 
 function exportCSV(bets: Bet[]): void {
-  const header = ["Bet ID", "Market ID", "Side", "Amount (XLM)", "Status", "Payout (XLM)", "Placed At"];
+  const header = [
+    "Bet ID",
+    "Market ID",
+    "Side",
+    "Amount (XLM)",
+    "Status",
+    "Payout (XLM)",
+    "Placed At",
+  ];
   const rows = bets.map((b) => [
     b.id,
     b.marketId,
@@ -119,10 +126,7 @@ export default function PortfolioPage() {
     [marketList]
   );
 
-  const claimableBets = useMemo(
-    () => getClaimableBets(bets, marketsMap),
-    [bets, marketsMap]
-  );
+  const claimableBets = useMemo(() => getClaimableBets(bets, marketsMap), [bets, marketsMap]);
 
   const isClaimingAll = claimAllProgress !== null;
 
@@ -138,11 +142,15 @@ export default function PortfolioPage() {
     for (let i = 0; i < claimableBets.length; i++) {
       setClaimAllProgress({ current: i + 1, total });
       const bet = claimableBets[i];
+      if (!bet) continue;
       const market = marketsMap[bet.marketId];
+      if (!market) {
+        failCount++;
+        continue;
+      }
 
       try {
-        const isRefundable =
-          market.status === "Cancelled" || market.outcome === "NoContest";
+        const isRefundable = market.status === "Cancelled" || market.outcome === "NoContest";
         if (isRefundable) {
           await claimRefund(bet.id, market.id);
         } else {
@@ -160,10 +168,7 @@ export default function PortfolioPage() {
     if (failCount === 0) {
       showToast(`All ${successCount} claims successful!`, "success");
     } else if (successCount > 0) {
-      showToast(
-        `${successCount} claimed, ${failCount} failed. Check individual rows.`,
-        "success"
-      );
+      showToast(`${successCount} claimed, ${failCount} failed. Check individual rows.`, "success");
     } else {
       showToast("All claims failed. Please try again.", "error");
     }
@@ -210,7 +215,11 @@ export default function PortfolioPage() {
                 strokeWidth={2}
                 aria-hidden="true"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
               </svg>
               Export CSV
             </button>
@@ -262,23 +271,10 @@ export default function PortfolioPage() {
         <>
           {summary && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <StatTile
-                label="Total Staked"
-                value={`${xlm(summary.totalStaked)} XLM`}
-              />
-              <StatTile
-                label="Total Won"
-                value={`${xlm(summary.totalWinnings)} XLM`}
-              />
-              <StatTile
-                label="Pending Claims"
-                value={`${xlm(summary.pendingClaims)} XLM`}
-              />
-              <StatTile
-                label="Net PnL"
-                value={pnlLabel}
-                valueClass={pnlClass}
-              />
+              <StatTile label="Total Staked" value={`${xlm(summary.totalStaked)} XLM`} />
+              <StatTile label="Total Won" value={`${xlm(summary.totalWinnings)} XLM`} />
+              <StatTile label="Pending Claims" value={`${xlm(summary.pendingClaims)} XLM`} />
+              <StatTile label="Net PnL" value={pnlLabel} valueClass={pnlClass} />
               <StatTile
                 label="ROI"
                 value={`${(summary.roi * 100).toFixed(1)}%`}
@@ -292,11 +288,7 @@ export default function PortfolioPage() {
             </div>
           )}
 
-          <PortfolioTable
-            bets={bets}
-            markets={marketsMap}
-            onClaimSuccess={refetch}
-          />
+          <PortfolioTable bets={bets} markets={marketsMap} onClaimSuccess={refetch} />
 
           <section aria-labelledby="activity-heading" className="space-y-3">
             <h2 id="activity-heading" className="text-lg font-semibold text-white">

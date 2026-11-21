@@ -294,6 +294,10 @@ Validate them with `promtool check rules docs/prometheus/indexer-alerts.yml`.
 They cover a stalled indexer, lag, RPC failures and latency, and market lifecycle
 jobs that fail or stop completing.
 
+When an alert fires, follow the procedure in the [operations runbook](runbook.md).
+It covers starting and stopping the indexer, reading lag, retention gaps, replaying
+`EventLog`, retrying failed oracle submissions, rotating keys, and restoring the database.
+
 ---
 
 ## Running tests
@@ -319,3 +323,7 @@ The contract has not been deployed yet. Follow Step 3 above.
 
 **Friendbot rate-limited**
 Friendbot is a public Testnet faucet and may rate-limit requests. Wait a minute and retry.
+
+## Rate limiting (#1583)
+
+`RATE_LIMIT_FAIL_MODE` sets what the Redis-backed rate limiter does when Redis is unreachable. `open` (default) lets requests through and logs a warning; `closed` answers `503` with code `RATE_LIMIT_UNAVAILABLE`. Admin write routes always fail closed. Each Redis failure increments `rate_limit_redis_errors_total`.

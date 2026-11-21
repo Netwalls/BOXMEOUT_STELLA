@@ -46,6 +46,6 @@ export function isValidStellarPublicKey(address: string): boolean {
   if (bytes[0] !== ED25519_PUBLIC_KEY_VERSION) return false;
 
   const payload = bytes.subarray(0, PUBLIC_KEY_BYTES - 2);
-  const checksum = bytes[PUBLIC_KEY_BYTES - 2] | (bytes[PUBLIC_KEY_BYTES - 1] << 8);
+  const checksum = (bytes[PUBLIC_KEY_BYTES - 2] ?? 0) | ((bytes[PUBLIC_KEY_BYTES - 1] ?? 0) << 8);
   return crc16XModem(payload) === checksum;
 }

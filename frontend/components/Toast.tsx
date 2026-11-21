@@ -4,9 +4,6 @@ import { CheckCircle, XCircle, AlertCircle, X } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
-/** How long a toast stays visible before auto-dismissing. */
-export const TOAST_DISMISS_MS = 5000;
-
 export type ToastType = "success" | "error" | "info";
 
 export interface Toast {
