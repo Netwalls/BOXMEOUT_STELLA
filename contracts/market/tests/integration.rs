@@ -129,7 +129,6 @@ fn setup() -> World {
         admin,
         oracle,
         fee_collector,
-        token_id,
         treasury_id,
         token,
         token_admin,

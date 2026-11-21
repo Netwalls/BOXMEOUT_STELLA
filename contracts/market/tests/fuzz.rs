@@ -52,7 +52,7 @@ impl MockFactory {
             .unwrap();
         ProtocolConfig {
             admin: admin.clone(),
-            fee_collector: admin,
+            fee_collector: admin.clone(),
             default_fee_bp: 200,
             min_bet_amount: 1,
             max_bet_amount: 100_000_000_000,

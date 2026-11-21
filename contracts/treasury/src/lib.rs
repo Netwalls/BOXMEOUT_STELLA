@@ -150,6 +150,7 @@ impl Treasury {
     /// - The treasury has already been initialized.
     /// - `fee_bps` exceeds 1000 (10%).
     /// - `daily_limit` is not positive.
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -160,12 +161,12 @@ impl Treasury {
         daily_limit: i128,
     ) -> Result<(), ContractError> {
         if env.storage().persistent().has(&key_admin(&env)) {
-            return Err(ContractError::AlreadyInitialized);
+            panic!("already initialized");
         }
 
         // Validate fee_bps does not exceed 10% (1000 basis points)
         if fee_bps > 1000 {
-            return Err(ContractError::Unauthorized);
+            panic!("fee_bps exceeds maximum of 1000 (10%)");
         }
         if daily_limit <= 0 {
             panic!("daily_limit must be positive");
@@ -251,7 +252,7 @@ impl Treasury {
         market_id: Bytes,
         bettor: Address,
         amount: i128,
-    ) -> Result<(), ContractError> {
+    ) {
         from_market.require_auth();
 
         let factory: Address = env
@@ -266,7 +267,7 @@ impl Treasury {
             soroban_sdk::vec![&env, market_id.to_val()],
         );
         if registered != Some(from_market.clone()) {
-            return Err(ContractError::MarketNotApproved);
+            panic!("unauthorized: caller is not a registered market");
         }
 
         let token_addr: Address = env
@@ -276,7 +277,7 @@ impl Treasury {
             .expect("token not set");
         token::Client::new(&env, &token_addr).transfer(
             &bettor,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &amount,
         );
 
@@ -309,7 +310,7 @@ impl Treasury {
     ///
     /// Panics if:
     /// - The invoking contract address does not match the address registered for `market_id` in the factory.
-    pub fn deposit_fees(env: Env, market_id: Bytes, amount: i128) -> Result<(), ContractError> {
+    pub fn deposit_fees(env: Env, market_id: Bytes, amount: i128) {
         let factory: Address = env
             .storage()
             .persistent()
@@ -324,7 +325,7 @@ impl Treasury {
             soroban_sdk::vec![&env, market_id.to_val()],
         );
         if registered != Some(caller.clone()) {
-            return Err(ContractError::MarketNotApproved);
+            panic!("unauthorized: caller is not a registered market");
         }
 
         let balance: i128 = env
@@ -406,7 +407,6 @@ impl Treasury {
             (Symbol::new(&env, "DustSwept"),),
             (from_market, market_id, amount, env.ledger().timestamp()),
         );
-        Ok(())
     }
 
     /// Transfers collected fees from the treasury to a recipient address.
@@ -468,7 +468,7 @@ impl Treasury {
             .get(&key_balance(&env))
             .unwrap_or(0);
         if amount > balance {
-            return Err(ContractError::InsufficientBalance);
+            panic!("amount exceeds balance");
         }
         env.storage()
             .persistent()
@@ -531,7 +531,6 @@ impl Treasury {
             (Symbol::new(&env, "WinningsReleased"),),
             (from_market, market_id, recipient, amount),
         );
-        Ok(())
     }
 
     /// Drains all treasury funds to `recipient` in an emergency.

@@ -55,7 +55,7 @@ impl MockFactory {
             .unwrap();
         ProtocolConfig {
             admin: admin.clone(),
-            fee_collector: admin,
+            fee_collector: admin.clone(),
             default_fee_bp: 200,
             min_bet_amount: 100,
             max_bet_amount: 100_000_000_000,
@@ -65,6 +65,38 @@ impl MockFactory {
             resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
+}
+
+// ─── Mock Treasury ────────────────────────────────────────────────────────────
+
+/// Accepts escrow calls without moving tokens, so the market's payout and
+/// deposit paths can run inside the test environment.
+#[contract]
+struct MockTreasury;
+
+#[contractimpl]
+impl MockTreasury {
+    pub fn deposit(
+        _env: Env,
+        _from_market: Address,
+        _market_id: Bytes,
+        _bettor: Address,
+        _amount: i128,
+    ) {
+    }
+
+    pub fn deposit_fees(_env: Env, _market_id: Bytes, _amount: i128) {}
+
+    pub fn release_winnings(
+        _env: Env,
+        _from_market: Address,
+        _market_id: Bytes,
+        _recipient: Address,
+        _amount: i128,
+    ) {
+    }
+
+    pub fn sweep_dust(_env: Env, _from_market: Address, _market_id: Bytes, _amount: i128) {}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,6 +142,8 @@ fn e2e_create_bet_lock_resolve_claim() {
 
     let oracle = Address::generate(&env);
     let fee_collector = Address::generate(&env);
+    let treasury_id = env.register(MockTreasury, ());
+    let bet_token = Address::generate(&env);
     let market_cid = env.register(MarketContract, ());
     let client = MarketContractClient::new(&env, &market_cid);
 
@@ -249,6 +283,8 @@ fn e2e_draw_both_sides_refunded() {
 
     let oracle = Address::generate(&env);
     let fee_collector = Address::generate(&env);
+    let treasury_id = env.register(MockTreasury, ());
+    let bet_token = Address::generate(&env);
     let market_cid = env.register(MarketContract, ());
     let client = MarketContractClient::new(&env, &market_cid);
 
@@ -321,6 +357,8 @@ fn e2e_cancelled_market_full_refund() {
 
     let oracle = Address::generate(&env);
     let fee_collector = Address::generate(&env);
+    let treasury_id = env.register(MockTreasury, ());
+    let bet_token = Address::generate(&env);
     let market_cid = env.register(MarketContract, ());
     let client = MarketContractClient::new(&env, &market_cid);
 

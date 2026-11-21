@@ -125,6 +125,22 @@ pub struct WinningsClaimed {
     pub claimed_at: u64,
 }
 
+impl SettledOutcome {
+    /// Returns the settled result as a shared `Outcome`.
+    ///
+    /// Callers must have already checked that the market is `Resolved`, so a
+    /// `Pending` outcome here is a broken invariant and panics.
+    pub fn require_resolved(&self) -> shared::types::Outcome {
+        match self {
+            SettledOutcome::FighterA => shared::types::Outcome::FighterA,
+            SettledOutcome::FighterB => shared::types::Outcome::FighterB,
+            SettledOutcome::Draw => shared::types::Outcome::Draw,
+            SettledOutcome::NoContest => shared::types::Outcome::NoContest,
+            SettledOutcome::Pending => panic!("market outcome not resolved"),
+        }
+    }
+}
+
 // ─── Conversions ──────────────────────────────────────────────────────────────
 // The Market contract stores a `SettledOutcome` (symbol-encoded, with a
 // `Pending` state), while `shared::types::Outcome` uses integer discriminants
