@@ -12,7 +12,7 @@
 //! - `SettledOutcome`, `MarketResolved`, `WinningsClaimed`: market-local
 //!   settlement / event payloads.
 
-use soroban_sdk::{contracttype, Address, Bytes};
+use soroban_sdk::{contracttype, Address, Bytes, Vec};
 
 pub use shared::types::{
     Bet, BetSide, ClaimReceipt, Fighter, MarketStatus, Outcome, ProtocolConfig,
@@ -98,6 +98,17 @@ pub struct Market {
     pub bet_count: u32,
     /// Number of distinct bettor addresses that have placed a bet (C-152).
     pub unique_bettors: u32,
+}
+
+/// M-of-N oracle quorum for a market (#1609).
+///
+/// `threshold` distinct oracles from `oracles` must report the same outcome
+/// before the market resolves. Absent quorum means single-oracle mode.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleQuorum {
+    pub oracles: Vec<Address>,
+    pub threshold: u32,
 }
 
 #[contracttype]
