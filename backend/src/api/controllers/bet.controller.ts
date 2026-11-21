@@ -141,15 +141,24 @@ export async function getPayoutEstimateHandler(req: Request, res: Response): Pro
   }
 }
 
+const leaderboardWindowSchema = z.enum(["7d", "30d", "all"]);
+
 const leaderboardQuerySchema = z.object({
-  period: z.enum(["7d", "30d", "all"]).default("all"),
+  // `window` is the canonical name; `period` is kept for existing clients.
+  window: leaderboardWindowSchema.optional(),
+  period: leaderboardWindowSchema.optional(),
   limit: z.coerce.number().int().positive().optional(),
+  // Omitted means the service default (LEADERBOARD_DEFAULT_MIN_BETS).
+  minBets: z.coerce.number().int().min(1).max(betService.LEADERBOARD_MAX_MIN_BETS).optional(),
+  sort: z.enum(["profit", "roi", "winRate"]).default("profit"),
+  cursor: z.string().max(256).optional(),
 });
 
 /**
- * GET /api/leaderboard?period=7d|30d|all&limit=
- * Ranks bettors by realised profit for the requested period.
- * Responds with the ranked entries array (see frontend/lib/api.ts fetchLeaderboard).
+ * GET /api/leaderboard?window=7d|30d|all&sort=profit|roi|winRate&minBets=3&limit=&cursor=
+ * Ranks bettors for the requested window. Responds with the ranked entries array
+ * (see frontend/lib/api.ts fetchLeaderboard). When another page exists the
+ * `X-Next-Cursor` response header carries the cursor to pass back as `cursor`.
  */
 export async function getLeaderboardHandler(req: Request, res: Response): Promise<void> {
   const parsed = leaderboardQuerySchema.safeParse(req.query);
@@ -162,9 +171,27 @@ export async function getLeaderboardHandler(req: Request, res: Response): Promis
     return;
   }
 
+  const offset = betService.decodeLeaderboardCursor(parsed.data.cursor);
+  if (offset === null) {
+    res.status(400).json({
+      error: "Invalid cursor",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+
   try {
-    const { period, limit } = parsed.data;
-    const result = await betService.getLeaderboard(period, limit);
+    const { window, period, limit, minBets, sort } = parsed.data;
+    const result = await betService.getLeaderboard({
+      period: window ?? period ?? "all",
+      limit,
+      minBets,
+      sort,
+      offset,
+    });
+    if (result.nextCursor) {
+      res.setHeader("X-Next-Cursor", result.nextCursor);
+    }
     res.status(200).json(result.entries);
   } catch (err) {
     logger.error({ err }, "getLeaderboardHandler failed");

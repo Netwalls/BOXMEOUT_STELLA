@@ -34,18 +34,26 @@ export function useMarket(market_id: string): UseMarketResult {
     idRef.current = market_id;
   });
 
+  const controllerRef = useRef<AbortController | null>(null);
+
   const doFetch = useCallback(async () => {
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchMarketById(idRef.current);
+      const data = await fetchMarketById(idRef.current, controller.signal);
+      if (controller.signal.aborted) return;
       setMarket(data);
     } catch (err) {
+      // An aborted request was superseded or unmounted; it is not an error.
+      if (controller.signal.aborted) return;
       // On any error (including 404) reset market to null and surface the error.
       setMarket(null);
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) setIsLoading(false);
     }
   }, []); // stable: reads id via ref
 
@@ -66,7 +74,10 @@ export function useMarket(market_id: string): UseMarketResult {
       doFetch();
     }, 10_000);
 
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      controllerRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [market_id]);
 

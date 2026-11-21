@@ -4,7 +4,7 @@ const mockSendTransaction = jest.fn();
 const mockGetTransaction = jest.fn();
 
 jest.mock("@stellar/stellar-sdk", () => ({
-  SorobanRpc: {
+  rpc: {
     Server: jest.fn(() => ({
       sendTransaction: (...args: unknown[]) => mockSendTransaction(...args),
       getTransaction: (...args: unknown[]) => mockGetTransaction(...args),

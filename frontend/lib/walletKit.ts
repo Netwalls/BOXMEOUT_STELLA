@@ -1,28 +1,31 @@
 "use client";
 
-import { StellarWalletsKit, WalletNetwork, allowAllModules } from "@creit.tech/stellar-wallets-kit";
+import { StellarWalletsKit, Networks } from "@creit.tech/stellar-wallets-kit";
+import { defaultModules } from "@creit.tech/stellar-wallets-kit/modules/utils";
 import { NETWORK } from "@/lib/stellar";
 
 // The only module that talks to Stellar Wallets Kit. The Kit's picker lists Freighter, xBull,
 // Albedo, Lobstr and Hana, so the rest of the app never names a specific wallet.
+// Stellar Wallets Kit v2 exposes a static API, so the Kit class itself is the shared handle.
 
 const LAST_WALLET_KEY = "wallet:lastId";
 
 const KIT_NETWORK =
-  NETWORK === "public" || NETWORK === "mainnet" ? WalletNetwork.PUBLIC : WalletNetwork.TESTNET;
+  NETWORK === "public" || NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 
-let kit: StellarWalletsKit | null = null;
+let initialised = false;
 
-/** Returns the shared Kit instance, created on first use. */
-export function getWalletKit(): StellarWalletsKit {
-  if (!kit) {
-    kit = new StellarWalletsKit({
+/** Returns the Kit, initialising it on first use. */
+export function getWalletKit(): typeof StellarWalletsKit {
+  if (!initialised) {
+    StellarWalletsKit.init({
       network: KIT_NETWORK,
       selectedWalletId: readLastWalletId() ?? undefined,
-      modules: allowAllModules(),
+      modules: defaultModules(),
     });
+    initialised = true;
   }
-  return kit;
+  return StellarWalletsKit;
 }
 
 /** The wallet the user last connected with, so it can be restored without the picker. */

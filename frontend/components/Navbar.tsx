@@ -4,18 +4,25 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { useTheme } from "@/hooks/useTheme";
+import { THEME_PREFERENCES, ThemePreference } from "@/lib/theme";
+
+const THEME_LABELS: Record<ThemePreference, string> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
 
 const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/create", label: "Create" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/", label: t("nav.home") },
+  { href: "/create", label: t("nav.create") },
+  { href: "/portfolio", label: t("nav.portfolio") },
+  { href: "/leaderboard", label: t("nav.leaderboard") },
 ];
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [, setWalletAddress] = useState<string | null>(null);
-  const { theme, toggleTheme } = useTheme();
+  const { preference, setPreference } = useTheme();
 
   const handleWalletConnected = useCallback((address: string) => {
     setWalletAddress(address);
@@ -45,13 +52,25 @@ export function Navbar() {
             </li>
           ))}
           <li>
-            <button
-              onClick={toggleTheme}
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="w-9 h-9 flex items-center justify-center rounded-md text-gray-300 hover:text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
+            <div role="radiogroup" aria-label="Colour theme" className="flex items-center rounded-md border border-gray-700 p-0.5">
+              {THEME_PREFERENCES.map((option) => {
+                const selected = preference === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setPreference(option)}
+                    className={`px-2 py-1 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+                      selected ? "bg-gray-700 text-white" : "text-gray-300 hover:text-white hover:bg-gray-800"
+                    }`}
+                  >
+                    {THEME_LABELS[option]}
+                  </button>
+                );
+              })}
+            </div>
           </li>
         </ul>
 
@@ -64,7 +83,7 @@ export function Navbar() {
         <button
           className="md:hidden flex items-center justify-center w-11 h-11 text-gray-300 hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
           onClick={() => setOpen((o) => !o)}
-          aria-label={open ? "Close menu" : "Open menu"}
+          aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
           aria-expanded={open}
           aria-controls="mobile-menu"
         >

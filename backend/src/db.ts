@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import { config } from "./config";
 import { logger } from "./logger";
 import { withTimeout } from "./lib/timeout";
+import { timeQuery, type QueryTimingDeps } from "./lib/query-timing";
+import { dbQueryDuration } from "./metrics";
 
 // Singleton guard: in development, ts-node-dev hot-reloads modules which would
 // create a new PrismaClient on every reload, exhausting the connection pool.
@@ -39,13 +41,25 @@ function createPrismaClient(): PrismaClient {
   // B-102: every query gets an upper bound so a stuck database call cannot hold
   // a request open indefinitely. The query itself keeps running in the engine;
   // only the caller stops waiting for it.
+  // B-140: every query is timed; slow ones are logged with model and action only.
+  const timing: QueryTimingDeps = {
+    slowMs: config.SLOW_QUERY_MS,
+    observe: (labels, seconds) => dbQueryDuration.observe(labels, seconds),
+    warn: (fields, message) => logger.warn(fields, message),
+  };
+
   const timed = client.$extends({
     query: {
       $allOperations({ model, operation, args, query }) {
-        return withTimeout(
-          query(args),
-          config.DB_QUERY_TIMEOUT_MS,
-          `prisma ${model ?? "raw"}.${operation}`,
+        return timeQuery(
+          { model, action: operation },
+          () =>
+            withTimeout(
+              query(args),
+              config.DB_QUERY_TIMEOUT_MS,
+              `prisma ${model ?? "raw"}.${operation}`,
+            ),
+          timing,
         );
       },
     },

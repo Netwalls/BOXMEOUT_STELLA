@@ -1,21 +1,23 @@
-import { Router, type NextFunction, type Request, type Response } from "express";
-import { searchMarketsHandler } from "../controllers/marketSearch.controller";
+import { Router, type Request, type Response } from "express";
+import { searchMarketsHandler, suggestMarketsHandler } from "../controllers/marketSearch.controller";
 import {
   getMarketsHandler,
   getMarketByIdHandler,
   getMarketStatsHandler,
   getMarketBetsHandler,
   getMarketOddsHistoryHandler,
+  getMarketDisputesHandler,
   createMarketHandler,
 } from "../controllers/market.controller";
 import { createMarketSchema } from "../schemas/market.schema";
 import { walletAuthMiddleware } from "../middleware/walletAuth.middleware";
+import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
+import { enforceCreatorBinding } from "../middleware/creatorBinding.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { validate } from "../middleware/validate";
-import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
-import { fail } from "../response";
-import { getTrendingMarketsHandler } from "../controllers/trending.controller";
+import { cacheControl } from "../middleware/cacheControl.middleware";
 import { subscribeToMarket, type MarketEventPayload } from "../../events/marketEvents";
+import { sseConnections } from "../../metrics";
 
 // B-99 (#1397): search is unauthenticated and runs a full-text query per call,
 // so it gets the shared Redis sliding-window limiter.
@@ -43,10 +45,19 @@ const router = Router();
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
 // GET /api/markets/search?q=...  — must come before /:id (#1405 B-107)
-router.get("/search", searchRateLimiter, searchMarketsHandler);
+router.get("/search", searchRateLimiter, cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), searchMarketsHandler);
+
+// B-158 (#1594): autocomplete suggestions. Cheap, but still rate limited.
+// Must stay above "/:id" so "suggest" is not read as a market id.
+const suggestRateLimiter = rateLimitMiddleware({
+  windowMs: 60 * 1000,
+  max: 120,
+  keyPrefix: "markets:suggest",
+});
+router.get("/suggest", suggestRateLimiter, suggestMarketsHandler);
 
 // GET  /api/markets
-router.get("/", getMarketsHandler);
+router.get("/", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketsHandler);
 
 // POST /api/markets
 // Creator must prove wallet ownership via challenge/response (#1225 B-47).
@@ -89,7 +100,13 @@ router.get("/:id/stream", (req: Request, res: Response) => {
     res.write(": heartbeat\n\n");
   }, HEARTBEAT_INTERVAL_MS);
 
+  sseConnections.inc();
+  let closed = false;
+  // Both req and res emit "close"; the guard keeps the gauge decrement single.
   const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    sseConnections.dec();
     clearInterval(heartbeat);
     unsubscribe();
   };
@@ -103,15 +120,18 @@ router.get("/:id/stream", (req: Request, res: Response) => {
 router.get("/trending", getTrendingMarketsHandler);
 
 // GET /api/markets/:id
-router.get("/:id", getMarketByIdHandler);
+router.get("/:id", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketByIdHandler);
 
 // GET /api/markets/:id/stats
-router.get("/:id/stats", getMarketStatsHandler);
+router.get("/:id/stats", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketStatsHandler);
 
 // GET /api/markets/:id/bets
-router.get("/:id/bets", getMarketBetsHandler);
+router.get("/:id/bets", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketBetsHandler);
 
 // GET /api/markets/:id/odds-history?interval=5m|1h
-router.get("/:id/odds-history", getMarketOddsHistoryHandler);
+router.get("/:id/odds-history", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketOddsHistoryHandler);
+
+// GET /api/markets/:id/disputes?page=&limit=  (B-144 #1580)
+router.get("/:id/disputes", getMarketDisputesHandler);
 
 export default router;

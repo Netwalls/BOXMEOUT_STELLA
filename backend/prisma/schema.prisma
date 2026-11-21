@@ -65,6 +65,9 @@ model Market {
 
   @@index([createdBy])
   @@index([status, scheduledAt])
+  @@index([scheduledAt])
+  @@index([createdAt])
+  @@index([totalPool])
   outcome         Outcome?
   resolvedAt      DateTime?
   poolA           BigInt       @default(0)
@@ -74,15 +77,38 @@ model Market {
   txHash          String?
   categoryId      String?
   category        Category?    @relation(fields: [categoryId], references: [id])
+  fighterAId      String?
+  fighterBId      String?
+  fighterAProfile Fighter?     @relation("FighterA", fields: [fighterAId], references: [id])
+  fighterBProfile Fighter?     @relation("FighterB", fields: [fighterBId], references: [id])
   bets            Bet[]
   disputes        Dispute[]
   watchedBy       WatchedMarket[]
   oracleResult    OracleResult?
+  oracleReports   OracleReport[]
   /// @db.Unsupported("tsvector")
   tsVector        Unsupported("tsvector")?
 
   @@index([categoryId])
+  @@index([fighterAId])
+  @@index([fighterBId])
   @@index([tsVector(ops: raw("tsvector_ops"))], type: Gin)
+}
+
+model Fighter {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  record      String   @default("")
+  nationality String   @default("")
+  weightClass String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  marketsAsA  Market[] @relation("FighterA")
+  marketsAsB  Market[] @relation("FighterB")
+
+  @@index([weightClass])
+  @@index([name])
 }
 
 model Bet {
@@ -100,7 +126,7 @@ model Bet {
 
   @@index([marketId, bettor])
   @@index([bettor, placedAt])
-  @@index([placedAt])
+  @@index([bettor, claimedAt])
 }
 
 model Dispute {
@@ -112,6 +138,8 @@ model Dispute {
   raisedAt   DateTime  @default(now())
   resolvedAt DateTime?
   resolution String?
+
+  @@index([raisedBy, raisedAt])
 }
 
 model OracleResult {
@@ -123,6 +151,21 @@ model OracleResult {
   source      String
   reportedAt  DateTime @default(now())
   confirmed   Boolean  @default(false)
+}
+
+// B-143 (#1579): every individual oracle report. OracleResult stays the single
+// decision row per market; OracleReport holds the reports it is decided from.
+model OracleReport {
+  id         String   @id @default(uuid())
+  marketId   String
+  market     Market   @relation(fields: [marketId], references: [id])
+  reportedBy String
+  outcome    Outcome
+  source     String
+  reportedAt DateTime @default(now())
+
+  @@unique([marketId, reportedBy])
+  @@index([marketId])
 }
 
 model IndexerState {
@@ -162,9 +205,11 @@ model AuditLog {
 }
 
 model User {
-  address   String   @id
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  address     String   @id
+  displayName String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 /// B-133 (#1569): one row per bettor per market event, written by the indexer
@@ -206,4 +251,43 @@ model EventLog {
 
   @@unique([txHash, eventType])
   @@index([processedAt])
+}
+
+/// #1581: admin-managed outbound webhook endpoints for market events.
+model WebhookEndpoint {
+  id         String            @id @default(uuid())
+  url        String
+  /// HMAC-SHA256 signing secret, returned to the admin once on creation.
+  secret     String
+  eventTypes String[]
+  active     Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  deliveries WebhookDelivery[]
+}
+
+enum WebhookDeliveryStatus {
+  Pending
+  Delivered
+  Failed
+}
+
+/// #1581: delivery log. (endpointId, eventId) is unique so one event is
+/// recorded at most once per endpoint, even if it is enqueued twice.
+model WebhookDelivery {
+  id             String                @id @default(uuid())
+  endpointId     String
+  endpoint       WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  eventId        String
+  eventType      String
+  payload        Json
+  status         WebhookDeliveryStatus @default(Pending)
+  attempts       Int                   @default(0)
+  responseStatus Int?
+  lastError      String?
+  createdAt      DateTime              @default(now())
+  deliveredAt    DateTime?
+
+  @@unique([endpointId, eventId])
+  @@index([status])
 }

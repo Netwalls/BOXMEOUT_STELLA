@@ -1,4 +1,4 @@
-import { Market, MarketStatus, Outcome } from "@prisma/client";
+import { Dispute, Market, MarketStatus, Outcome, Prisma } from "@prisma/client";
 import {
   SorobanRpc,
   TransactionBuilder,
@@ -11,16 +11,33 @@ import {
 import { db } from "../db";
 import { logger } from "../logger";
 import { redis } from "../redis";
+import { dispatchWebhookEvent } from "./webhook.service";
 
-export interface MarketFilters {
-  status?: MarketStatus;
-  weightClass?: string;
-}
+export {
+  MARKET_SORTS,
+  buildMarketOrderBy,
+  type MarketSort,
+  type SortOrder,
+} from "./market-sort";
+import { buildMarketOrderBy, type MarketSort, type SortOrder } from "./market-sort";
 
-export interface Pagination {
-  page: number;
-  pageSize: number;
-}
+import {
+  MAX_PAGE_SIZE,
+  MARKET_CACHE_TTL_SECONDS,
+  MARKET_LIST_CACHE_PREFIX,
+  getAllMarkets,
+  type MarketFilters,
+  type MarketPage,
+  type Pagination,
+} from "./market-list.service";
+export {
+  MAX_PAGE_SIZE,
+  MARKET_CACHE_TTL_SECONDS,
+  getAllMarkets,
+  type MarketFilters,
+  type MarketPage,
+  type Pagination,
+} from "./market-list.service";
 
 export interface PaginatedResult<T> {
   data: T[];
@@ -29,52 +46,7 @@ export interface PaginatedResult<T> {
   pageSize: number;
 }
 
-export const MAX_PAGE_SIZE = 100;
-
-/**
- * Short TTL (seconds) for cached market list and stats responses.
- * Kept small so the 4s frontend poll still sees fresh data while
- * absorbing bursts of concurrent viewers.
- */
-export const MARKET_CACHE_TTL_SECONDS = 5;
-
-const MARKET_LIST_CACHE_PREFIX = "market:list:";
 const MARKET_STATS_CACHE_PREFIX = "market:stats:";
-
-// Cache hit/miss counters used to log the hit ratio.
-let cacheHits = 0;
-let cacheMisses = 0;
-
-function logCacheHitRatio(): void {
-  const total = cacheHits + cacheMisses;
-  if (total === 0) return;
-  logger.info(
-    {
-      cacheHits,
-      cacheMisses,
-      hitRatio: Number((cacheHits / total).toFixed(4)),
-    },
-    "Market cache hit ratio"
-  );
-}
-
-function recordCacheHit(): void {
-  cacheHits += 1;
-  logCacheHitRatio();
-}
-
-function recordCacheMiss(): void {
-  cacheMisses += 1;
-  logCacheHitRatio();
-}
-
-function listCacheKey(filters?: MarketFilters, pagination?: Pagination): string {
-  const status = filters?.status ?? "all";
-  const weightClass = filters?.weightClass ?? "all";
-  const page = pagination?.page ?? 1;
-  const pageSize = Math.min(pagination?.pageSize ?? 20, MAX_PAGE_SIZE);
-  return `${MARKET_LIST_CACHE_PREFIX}${status}:${weightClass}:${page}:${pageSize}`;
-}
 
 function statsCacheKey(marketId: string): string {
   return `${MARKET_STATS_CACHE_PREFIX}${marketId}`;
@@ -86,22 +58,25 @@ function statsCacheKey(marketId: string): string {
  * next poll re-reads fresh data from Postgres.
  */
 export async function invalidateMarketCache(marketId?: string): Promise<void> {
-  try {
-    const keys: string[] = [];
-    if (marketId) {
-      keys.push(statsCacheKey(marketId));
-    }
+  // Best-effort: a missed invalidation is bounded by the cache TTL (#1590).
+  await guardRedis(
+    "market_cache",
+    async () => {
+      const keys: string[] = [];
+      if (marketId) {
+        keys.push(statsCacheKey(marketId));
+      }
 
-    // Invalidate all list variants (status/weightClass/page/pageSize combos).
-    const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
-    keys.push(...listKeys);
+      // Invalidate all list variants (status/weightClass/page/pageSize combos).
+      const listKeys = await redis.keys(`${MARKET_LIST_CACHE_PREFIX}*`);
+      keys.push(...listKeys);
 
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
-  } catch (err) {
-    logger.warn({ err, marketId }, "Failed to invalidate market cache");
-  }
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    },
+    undefined
+  );
 }
 
 export interface MarketStats {
@@ -180,14 +155,11 @@ export async function getAllMarkets(
 ): Promise<MarketPage> {
   const cacheKey = listCacheKey(filters, pagination);
 
-  try {
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      recordCacheHit();
-      return JSON.parse(cached) as MarketPage;
-    }
-  } catch (err) {
-    logger.warn({ err, cacheKey }, "Market list cache read failed");
+  // Cache reads fall back to Postgres when Redis is unavailable (#1590).
+  const cached = await guardRedis<string | null>("market_cache", () => redis.get(cacheKey), null);
+  if (cached) {
+    recordCacheHit();
+    return JSON.parse(cached) as MarketPage;
   }
 
   recordCacheMiss();
@@ -198,7 +170,11 @@ export async function getAllMarkets(
     where.status = filters.status;
   }
   if (filters?.weightClass) {
-    where.weightClass = filters.weightClass;
+    // B-142 (#1578): weight class lives on Fighter, so match either side of the bout.
+    where.OR = [
+      { fighterAProfile: { weightClass: filters.weightClass } },
+      { fighterBProfile: { weightClass: filters.weightClass } },
+    ];
   }
 
   const page = pagination?.page ?? 1;
@@ -216,18 +192,49 @@ export async function getAllMarkets(
 
   const result: MarketPage = { data: markets, total };
 
-  try {
-    await redis.set(
-      cacheKey,
-      JSON.stringify(result),
-      "EX",
-      MARKET_CACHE_TTL_SECONDS
-    );
-  } catch (err) {
-    logger.warn({ err, cacheKey }, "Market list cache write failed");
-  }
+  await guardRedis(
+    "market_cache",
+    () => redis.set(cacheKey, JSON.stringify(result), "EX", MARKET_CACHE_TTL_SECONDS),
+    undefined
+  );
 
   return result;
+}
+
+/** B-144 (#1580): same default and env var as resolution.service.ts (24 h). */
+const DISPUTE_WINDOW_MS = parseInt(process.env.DISPUTE_WINDOW_MS ?? "86400000", 10);
+
+/**
+ * B-144 (#1580): end of the dispute window, measured from bettingEndsAt the
+ * same way resolution.service.ts decides when a market auto-finalises.
+ */
+export function disputeWindowEndsAt(market: Pick<Market, "bettingEndsAt">): Date {
+  return new Date(market.bettingEndsAt.getTime() + DISPUTE_WINDOW_MS);
+}
+
+/**
+ * B-144 (#1580): paginated disputes for one market, newest first.
+ * Returns null for unknown market ids so the route can 404.
+ */
+export async function getMarketDisputes(
+  marketId: string,
+  pagination: Pagination
+): Promise<PaginatedResult<Dispute> | null> {
+  const market = await db.market.findUnique({ where: { id: marketId }, select: { id: true } });
+  if (!market) return null;
+
+  const skip = (pagination.page - 1) * pagination.pageSize;
+  const [data, total] = await Promise.all([
+    db.dispute.findMany({
+      where: { marketId },
+      orderBy: { raisedAt: "desc" },
+      skip,
+      take: pagination.pageSize,
+    }),
+    db.dispute.count({ where: { marketId } }),
+  ]);
+
+  return { data, total, page: pagination.page, pageSize: pagination.pageSize };
 }
 
 /**
@@ -300,6 +307,51 @@ export async function getOddsHistory(
   return Array.from(bucketed.values());
 }
 
+/** B-142 (#1578): fighter fields written to the Fighter table. */
+export interface FighterInput {
+  name: string;
+  record: string;
+  nationality: string;
+  weightClass: string;
+}
+
+/** B-142 (#1578): stable identity for a fighter, derived from the name. */
+export function fighterSlug(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/**
+ * B-142 (#1578): reads a fighter from the market's Json payload. Accepts
+ * `weightClass` or the legacy `weight` key that market-verification uses.
+ */
+export function toFighterInput(raw: object): FighterInput {
+  const f = raw as Record<string, unknown>;
+  const name = typeof f.name === "string" ? f.name.trim() : "";
+  const weightClass =
+    typeof f.weightClass === "string" ? f.weightClass : typeof f.weight === "string" ? f.weight : "";
+  if (!name || !weightClass) {
+    throw new Error("fighter requires a name and a weight class");
+  }
+  return {
+    name,
+    record: typeof f.record === "string" ? f.record : "",
+    nationality: typeof f.nationality === "string" ? f.nationality : "",
+    weightClass,
+  };
+}
+
+/** B-142 (#1578): upserts a Fighter by slug and returns its id. */
+async function upsertFighter(tx: Prisma.TransactionClient, input: FighterInput): Promise<string> {
+  const slug = fighterSlug(input.name);
+  const fighter = await tx.fighter.upsert({
+    where: { slug },
+    update: { record: input.record, nationality: input.nationality, weightClass: input.weightClass },
+    create: { slug, ...input },
+    select: { id: true },
+  });
+  return fighter.id;
+}
+
 /**
  * Creates or updates a market record from an indexed MarketCreated event.
  *
@@ -313,7 +365,28 @@ export async function getOddsHistory(
 export async function createMarketRecord(
   marketData: CreateMarketDTO
 ): Promise<Market> {
+  const market = await persistMarketRecord(marketData);
+  // #1581: keyed by market id so a re-indexed MarketCreated event is not re-sent.
+  await dispatchWebhookEvent(
+    "market.created",
+    {
+      marketId: market.id,
+      contractAddress: market.contractAddress,
+      scheduledAt: market.scheduledAt.toISOString(),
+      bettingEndsAt: market.bettingEndsAt.toISOString(),
+    },
+    `market.created:${market.id}`,
+  );
+  return market;
+}
+
+async function persistMarketRecord(
+  marketData: CreateMarketDTO
+): Promise<Market> {
   return db.$transaction(async (tx) => {
+    const fighterAId = await upsertFighter(tx, toFighterInput(marketData.fighterA));
+    const fighterBId = await upsertFighter(tx, toFighterInput(marketData.fighterB));
+
     // Check for an existing optimistic row matched by txHash (inside txn)
     if (marketData.txHash) {
       const optimistic = await tx.market.findUnique({
@@ -329,6 +402,8 @@ export async function createMarketRecord(
             contractAddress: marketData.contractAddress,
             fighterA: marketData.fighterA,
             fighterB: marketData.fighterB,
+            fighterAId,
+            fighterBId,
             scheduledAt: marketData.scheduledAt,
             bettingEndsAt: marketData.bettingEndsAt,
             createdAt: marketData.createdAt,
@@ -358,6 +433,8 @@ export async function createMarketRecord(
         contractAddress: marketData.contractAddress,
         fighterA: marketData.fighterA,
         fighterB: marketData.fighterB,
+        fighterAId,
+        fighterBId,
         scheduledAt: marketData.scheduledAt,
         bettingEndsAt: marketData.bettingEndsAt,
         createdAt: marketData.createdAt,
@@ -388,12 +465,7 @@ export async function reconcileMarketFromChain(
     });
   }
 
-  const rpcUrl = process.env.STELLAR_RPC_URL;
-  if (!rpcUrl) {
-    throw new Error("STELLAR_RPC_URL environment variable is not set");
-  }
-
-  const server = new SorobanRpc.Server(rpcUrl);
+  const server = getRpcServer();
   const contract = new Contract(market.contractAddress);
 
   // Use a throwaway keypair as the source account for read-only simulation.
@@ -406,7 +478,11 @@ export async function reconcileMarketFromChain(
       : Networks.TESTNET;
 
   // Build a minimal transaction for simulating the get_market_info() call
-  const account = await server.getAccount(throwawayKeypair.publicKey());
+  // Read-only: both calls are idempotent, so transient RPC errors are retried.
+  const account = await withRpcRetry(
+    () => server.getAccount(throwawayKeypair.publicKey()),
+    { method: "getAccount", idempotent: true },
+  );
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase,
@@ -415,7 +491,10 @@ export async function reconcileMarketFromChain(
     .setTimeout(30)
     .build();
 
-  const simResult = await server.simulateTransaction(tx);
+  const simResult = await withRpcRetry(
+    () => server.simulateTransaction(tx),
+    { method: "simulateTransaction", idempotent: true },
+  );
 
   if (SorobanRpc.Api.isSimulationError(simResult)) {
     throw new Error(

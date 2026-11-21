@@ -28,13 +28,13 @@ jest.mock("@stellar/stellar-sdk", () => {
 
   return {
     ...actual,
-    SorobanRpc: {
-      ...actual.SorobanRpc,
+    rpc: {
+      ...actual.rpc,
       Server: jest.fn(() => mockServer),
       assembleTransaction: (tx: { toEnvelope: () => any }) => ({
         operations: tx.toEnvelope().v1().tx().operations(),
       }),
-      Api: { ...actual.SorobanRpc.Api, isSimulationSuccess: () => true },
+      Api: { ...actual.rpc.Api, isSimulationSuccess: () => true },
     },
   };
 });

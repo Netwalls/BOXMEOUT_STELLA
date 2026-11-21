@@ -52,7 +52,7 @@ describe("useMarketBets", () => {
       const { result } = renderHook(() => useMarketBets("mkt-1"));
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
-      expect(mockFetchMarketBets).toHaveBeenCalledWith("mkt-1");
+      expect(mockFetchMarketBets).toHaveBeenCalledWith("mkt-1", undefined, expect.anything());
     });
 
     it("sorts bets most-recent-first", async () => {

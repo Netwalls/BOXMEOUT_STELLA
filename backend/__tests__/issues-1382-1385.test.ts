@@ -13,7 +13,9 @@ import leaderboardRoutes from "../src/api/routes/leaderboard.routes";
 import oracleRoutes from "../src/api/routes/oracle.routes";
 import { securityHeadersMiddleware } from "../src/api/middleware/securityHeaders.middleware";
 
+// Keep the pure cursor/constant helpers real; only the database-backed query is mocked.
 jest.mock("../src/services/bet.service", () => ({
+  ...jest.requireActual("../src/services/bet.service"),
   getLeaderboard: jest.fn(),
 }));
 
@@ -60,15 +62,19 @@ describe("#1382 — GET /api/leaderboard", () => {
       settledBets: 4,
       wonBets: 3,
       winRate: 0.75,
+      roi: 12.5,
     },
   ];
 
   beforeEach(() => {
     mockedGetLeaderboard.mockResolvedValue({
       period: "all",
+      sort: "profit",
+      minBets: 3,
       limit: 50,
       generatedAt: new Date(),
       entries,
+      nextCursor: null,
     });
   });
 
@@ -76,7 +82,9 @@ describe("#1382 — GET /api/leaderboard", () => {
     const res = await request(app).get("/api/leaderboard").query({ period });
 
     expect(res.status).toBe(200);
-    expect(mockedGetLeaderboard).toHaveBeenCalledWith(period, undefined);
+    expect(mockedGetLeaderboard).toHaveBeenCalledWith(
+      expect.objectContaining({ period, limit: undefined, minBets: undefined, sort: "profit", offset: 0 })
+    );
     expect(res.body).toHaveLength(1);
     expect(res.body[0]).toMatchObject({ rank: 1, settledBets: 4, wonBets: 3 });
   });
@@ -85,14 +93,66 @@ describe("#1382 — GET /api/leaderboard", () => {
     const res = await request(app).get("/api/leaderboard");
 
     expect(res.status).toBe(200);
-    expect(mockedGetLeaderboard).toHaveBeenCalledWith("all", undefined);
+    expect(mockedGetLeaderboard).toHaveBeenCalledWith(
+      expect.objectContaining({ period: "all", limit: undefined, minBets: undefined })
+    );
   });
 
   it("forwards a valid limit to the service", async () => {
     const res = await request(app).get("/api/leaderboard").query({ period: "7d", limit: "10" });
 
     expect(res.status).toBe(200);
-    expect(mockedGetLeaderboard).toHaveBeenCalledWith("7d", 10);
+    expect(mockedGetLeaderboard).toHaveBeenCalledWith(expect.objectContaining({ period: "7d", limit: 10 }));
+  });
+
+  it("accepts window as the canonical name and prefers it over period", async () => {
+    const res = await request(app).get("/api/leaderboard").query({ window: "30d", period: "7d" });
+
+    expect(res.status).toBe(200);
+    expect(mockedGetLeaderboard).toHaveBeenCalledWith(expect.objectContaining({ period: "30d" }));
+  });
+
+  it("forwards minBets, sort and a decoded cursor offset", async () => {
+    const cursor = Buffer.from(JSON.stringify({ o: 20 })).toString("base64url");
+    const res = await request(app)
+      .get("/api/leaderboard")
+      .query({ window: "all", minBets: "5", sort: "roi", cursor });
+
+    expect(res.status).toBe(200);
+    expect(mockedGetLeaderboard).toHaveBeenCalledWith(
+      expect.objectContaining({ period: "all", minBets: 5, sort: "roi", offset: 20 })
+    );
+  });
+
+  it("sets X-Next-Cursor when another page exists", async () => {
+    mockedGetLeaderboard.mockResolvedValueOnce({
+      period: "all",
+      sort: "profit",
+      minBets: 3,
+      limit: 1,
+      generatedAt: new Date(),
+      entries,
+      nextCursor: "abc",
+    });
+
+    const res = await request(app).get("/api/leaderboard").query({ limit: "1" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["x-next-cursor"]).toBe("abc");
+  });
+
+  it("rejects a malformed cursor with 400 and does not query the service", async () => {
+    const res = await request(app).get("/api/leaderboard").query({ cursor: "!!!" });
+
+    expect(res.status).toBe(400);
+    expect(mockedGetLeaderboard).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown sort key with 400", async () => {
+    const res = await request(app).get("/api/leaderboard").query({ sort: "random" });
+
+    expect(res.status).toBe(400);
+    expect(mockedGetLeaderboard).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown period with 400 and does not query the service", async () => {

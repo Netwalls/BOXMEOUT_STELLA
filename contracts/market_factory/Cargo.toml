@@ -11,3 +11,6 @@ shared = { path = "../shared" }
 soroban-sdk = { version = "27.0.0-rc.1", features = ["testutils"] }
 shared = { path = "../shared", features = ["testutils"] }
 treasury = { path = "../treasury" }
+
+[lints]
+workspace = true

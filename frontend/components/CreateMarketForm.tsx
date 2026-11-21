@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StrKey } from "@stellar/stellar-sdk";
+import { isValidStellarPublicKey } from "@/lib/strkey";
 
 export interface CreateMarketFormData {
   fighterAName: string;
@@ -110,7 +110,7 @@ function validate(data: CreateMarketFormData): FormErrors {
     errors.oracleAddress = "Required";
   } else {
     const trimmed = data.oracleAddress.trim();
-    if (!StrKey.isValidEd25519PublicKey(trimmed)) {
+    if (!isValidStellarPublicKey(trimmed)) {
       errors.oracleAddress = "Must be a valid G... Stellar address";
     }
   }
@@ -124,15 +124,13 @@ function hasErrors(errors: FormErrors): boolean {
 
 function Label({ htmlFor, children }: { htmlFor: string; children: string }) {
   return (
-    <label htmlFor={htmlFor} className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+    <label
+      htmlFor={htmlFor}
+      className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1"
+    >
       {children}
     </label>
   );
-}
-
-function UtcPreview({ value }: { value: string }) {
-  const text = utcPreview(value);
-  return text ? <p className="mt-1 text-xs text-gray-500">{text}</p> : null;
 }
 
 function Field({
@@ -192,26 +190,53 @@ export function CreateMarketForm({ onSubmit }: CreateMarketFormProps): JSX.Eleme
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-sm">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-sm"
+    >
       {/* Fighter A */}
       <fieldset>
         <legend className="text-base font-semibold text-white mb-3">Fighter A</legend>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="fighterAName">Name</Label>
-            <Field id="fighterAName" value={formData.fighterAName} error={touched.fighterAName ? errors.fighterAName : undefined} placeholder="e.g. Muhammad Ali" onChange={(v) => set("fighterAName", v)} />
+            <Field
+              id="fighterAName"
+              value={formData.fighterAName}
+              error={touched.fighterAName ? errors.fighterAName : undefined}
+              placeholder="e.g. Muhammad Ali"
+              onChange={(v) => set("fighterAName", v)}
+            />
           </div>
           <div>
             <Label htmlFor="fighterARecord">Record</Label>
-            <Field id="fighterARecord" value={formData.fighterARecord} error={touched.fighterARecord ? errors.fighterARecord : undefined} placeholder="e.g. 56-5" onChange={(v) => set("fighterARecord", v)} />
+            <Field
+              id="fighterARecord"
+              value={formData.fighterARecord}
+              error={touched.fighterARecord ? errors.fighterARecord : undefined}
+              placeholder="e.g. 56-5"
+              onChange={(v) => set("fighterARecord", v)}
+            />
           </div>
           <div>
             <Label htmlFor="fighterANationality">Nationality</Label>
-            <Field id="fighterANationality" value={formData.fighterANationality} error={touched.fighterANationality ? errors.fighterANationality : undefined} placeholder="e.g. USA" onChange={(v) => set("fighterANationality", v)} />
+            <Field
+              id="fighterANationality"
+              value={formData.fighterANationality}
+              error={touched.fighterANationality ? errors.fighterANationality : undefined}
+              placeholder="e.g. USA"
+              onChange={(v) => set("fighterANationality", v)}
+            />
           </div>
           <div>
             <Label htmlFor="fighterAWeightClass">Weight Class</Label>
-            <Field id="fighterAWeightClass" value={formData.fighterAWeightClass} error={touched.fighterAWeightClass ? errors.fighterAWeightClass : undefined} placeholder="e.g. Heavyweight" onChange={(v) => set("fighterAWeightClass", v)} />
+            <Field
+              id="fighterAWeightClass"
+              value={formData.fighterAWeightClass}
+              error={touched.fighterAWeightClass ? errors.fighterAWeightClass : undefined}
+              placeholder="e.g. Heavyweight"
+              onChange={(v) => set("fighterAWeightClass", v)}
+            />
           </div>
         </div>
       </fieldset>
@@ -222,19 +247,43 @@ export function CreateMarketForm({ onSubmit }: CreateMarketFormProps): JSX.Eleme
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="fighterBName">Name</Label>
-            <Field id="fighterBName" value={formData.fighterBName} error={touched.fighterBName ? errors.fighterBName : undefined} placeholder="e.g. Joe Frazier" onChange={(v) => set("fighterBName", v)} />
+            <Field
+              id="fighterBName"
+              value={formData.fighterBName}
+              error={touched.fighterBName ? errors.fighterBName : undefined}
+              placeholder="e.g. Joe Frazier"
+              onChange={(v) => set("fighterBName", v)}
+            />
           </div>
           <div>
             <Label htmlFor="fighterBRecord">Record</Label>
-            <Field id="fighterBRecord" value={formData.fighterBRecord} error={touched.fighterBRecord ? errors.fighterBRecord : undefined} placeholder="e.g. 32-4" onChange={(v) => set("fighterBRecord", v)} />
+            <Field
+              id="fighterBRecord"
+              value={formData.fighterBRecord}
+              error={touched.fighterBRecord ? errors.fighterBRecord : undefined}
+              placeholder="e.g. 32-4"
+              onChange={(v) => set("fighterBRecord", v)}
+            />
           </div>
           <div>
             <Label htmlFor="fighterBNationality">Nationality</Label>
-            <Field id="fighterBNationality" value={formData.fighterBNationality} error={touched.fighterBNationality ? errors.fighterBNationality : undefined} placeholder="e.g. USA" onChange={(v) => set("fighterBNationality", v)} />
+            <Field
+              id="fighterBNationality"
+              value={formData.fighterBNationality}
+              error={touched.fighterBNationality ? errors.fighterBNationality : undefined}
+              placeholder="e.g. USA"
+              onChange={(v) => set("fighterBNationality", v)}
+            />
           </div>
           <div>
             <Label htmlFor="fighterBWeightClass">Weight Class</Label>
-            <Field id="fighterBWeightClass" value={formData.fighterBWeightClass} error={touched.fighterBWeightClass ? errors.fighterBWeightClass : undefined} placeholder="e.g. Heavyweight" onChange={(v) => set("fighterBWeightClass", v)} />
+            <Field
+              id="fighterBWeightClass"
+              value={formData.fighterBWeightClass}
+              error={touched.fighterBWeightClass ? errors.fighterBWeightClass : undefined}
+              placeholder="e.g. Heavyweight"
+              onChange={(v) => set("fighterBWeightClass", v)}
+            />
           </div>
         </div>
       </fieldset>
@@ -245,25 +294,51 @@ export function CreateMarketForm({ onSubmit }: CreateMarketFormProps): JSX.Eleme
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="scheduledAt">Fight Date / Time</Label>
-            <Field id="scheduledAt" type="datetime-local" value={formData.scheduledAt} error={touched.scheduledAt ? errors.scheduledAt : undefined} placeholder="" onChange={(v) => set("scheduledAt", v)} />
+            <Field
+              id="scheduledAt"
+              type="datetime-local"
+              value={formData.scheduledAt}
+              error={touched.scheduledAt ? errors.scheduledAt : undefined}
+              placeholder=""
+              onChange={(v) => set("scheduledAt", v)}
+            />
             {formData.scheduledAt && formatUtcPreview(formData.scheduledAt) && (
               <p className="mt-1 text-xs text-gray-400">
-                UTC: <span className="font-mono text-gray-300">{formatUtcPreview(formData.scheduledAt)}</span>
+                UTC:{" "}
+                <span className="font-mono text-gray-300">
+                  {formatUtcPreview(formData.scheduledAt)}
+                </span>
               </p>
             )}
           </div>
           <div>
             <Label htmlFor="bettingEndsAt">Betting Closes At</Label>
-            <Field id="bettingEndsAt" type="datetime-local" value={formData.bettingEndsAt} error={touched.bettingEndsAt ? errors.bettingEndsAt : undefined} placeholder="" onChange={(v) => set("bettingEndsAt", v)} />
+            <Field
+              id="bettingEndsAt"
+              type="datetime-local"
+              value={formData.bettingEndsAt}
+              error={touched.bettingEndsAt ? errors.bettingEndsAt : undefined}
+              placeholder=""
+              onChange={(v) => set("bettingEndsAt", v)}
+            />
             {formData.bettingEndsAt && formatUtcPreview(formData.bettingEndsAt) && (
               <p className="mt-1 text-xs text-gray-400">
-                UTC: <span className="font-mono text-gray-300">{formatUtcPreview(formData.bettingEndsAt)}</span>
+                UTC:{" "}
+                <span className="font-mono text-gray-300">
+                  {formatUtcPreview(formData.bettingEndsAt)}
+                </span>
               </p>
             )}
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="oracleAddress">Oracle Address</Label>
-            <Field id="oracleAddress" value={formData.oracleAddress} error={touched.oracleAddress ? errors.oracleAddress : undefined} placeholder="G..." onChange={(v) => set("oracleAddress", v)} />
+            <Field
+              id="oracleAddress"
+              value={formData.oracleAddress}
+              error={touched.oracleAddress ? errors.oracleAddress : undefined}
+              placeholder="G..."
+              onChange={(v) => set("oracleAddress", v)}
+            />
           </div>
         </div>
       </fieldset>

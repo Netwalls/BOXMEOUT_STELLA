@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMarketBets } from '@/lib/api';
 import type { Bet } from '@/lib/api';
 
@@ -24,21 +24,27 @@ export function useMarketBets(market_id: string): UseMarketBetsResult {
   const [bets, setBets] = useState<Bet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const doFetch = useCallback(async () => {
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchMarketBets(market_id);
+      const data = await fetchMarketBets(market_id, undefined, controller.signal);
+      if (controller.signal.aborted) return;
       // Sort descending by placedAt so the most-recent bet appears first.
       const sorted = [...data].sort(
         (a, b) => new Date(b.placedAt).getTime() - new Date(a.placedAt).getTime(),
       );
       setBets(sorted);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) setIsLoading(false);
     }
   }, [market_id]);
 
@@ -48,6 +54,9 @@ export function useMarketBets(market_id: string): UseMarketBetsResult {
 
   useEffect(() => {
     doFetch();
+    return () => {
+      controllerRef.current?.abort();
+    };
   }, [doFetch]);
 
   return { bets, isLoading, error, refetch };
