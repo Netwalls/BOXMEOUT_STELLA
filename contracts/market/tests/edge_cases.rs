@@ -160,6 +160,7 @@ fn edge_zero_losing_pool_all_on_winner() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let p1 = client.claim_winnings(&b1, &bet1);
@@ -191,6 +192,7 @@ fn edge_single_bettor_wins() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let payout = client.claim_winnings(&bettor, &bet_id);
@@ -250,6 +252,7 @@ fn edge_max_i128_pool_totals() {
 
     env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
     lock_market_via_storage(&env, &market_cid);
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let payout = client.claim_winnings(&b1, &bet1);

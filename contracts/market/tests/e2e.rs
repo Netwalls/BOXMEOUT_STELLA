@@ -176,6 +176,7 @@ fn e2e_create_bet_lock_resolve_claim() {
     assert!(matches!(m.status, MarketStatus::Locked));
 
     // ── 4. Resolve market (FighterA wins) ─────────────────────────────────
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let m = client.get_market_info();
@@ -269,6 +270,7 @@ fn e2e_draw_both_sides_refunded() {
     });
 
     // Resolve with Draw → status becomes Cancelled
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::Draw);
 
     let m = client.get_market_info();

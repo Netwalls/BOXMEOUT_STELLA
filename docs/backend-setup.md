@@ -294,6 +294,10 @@ Validate them with `promtool check rules docs/prometheus/indexer-alerts.yml`.
 They cover a stalled indexer, lag, RPC failures and latency, and market lifecycle
 jobs that fail or stop completing.
 
+When an alert fires, follow the procedure in the [operations runbook](runbook.md).
+It covers starting and stopping the indexer, reading lag, retention gaps, replaying
+`EventLog`, retrying failed oracle submissions, rotating keys, and restoring the database.
+
 ---
 
 ## Running tests

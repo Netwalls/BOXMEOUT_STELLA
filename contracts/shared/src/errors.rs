@@ -58,6 +58,8 @@ pub enum ContractError {
     ResolutionWindowExpired = 31,
     /// A conflicting oracle report already exists
     ConflictingOracleReport = 32,
+    /// resolve_market was called before the fight's scheduled_at
+    ResolutionTooEarly = 33,
 
     // ── Treasury ───────────────────────────────────────────
     /// Caller is not an approved market contract

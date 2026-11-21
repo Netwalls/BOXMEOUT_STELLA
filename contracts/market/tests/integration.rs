@@ -215,6 +215,7 @@ fn full_lifecycle_two_sides_pays_winners_and_conserves_funds() {
     // ── Lock, resolve, finalise ──────────────────────────────────────────
     set_time(&w.env, LOCK_TIME);
     market.lock_market(&w.oracle);
+    set_time(&w.env, END_TIME);
     market.resolve_market(&w.oracle, &Outcome::FighterA);
 
     let resolved_at = market.get_market_info().resolved_at;
@@ -312,6 +313,7 @@ fn dispute_then_admin_override_pays_the_overridden_outcome() {
 
     set_time(&w.env, LOCK_TIME);
     market.lock_market(&w.oracle);
+    set_time(&w.env, END_TIME);
     market.resolve_market(&w.oracle, &Outcome::FighterA);
 
     // Bob disputes the oracle's result; the admin overrides it to FighterB.
