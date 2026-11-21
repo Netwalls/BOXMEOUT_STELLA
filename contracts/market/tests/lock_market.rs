@@ -6,6 +6,18 @@
 //!   - before `betting_ends_at`: only the market's oracle may lock (early lock)
 //!   - at or after `betting_ends_at`: anyone may lock, no auth required
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, MarketStatus, ProtocolConfig};
 use market::{MarketContract, MarketContractClient};
 use soroban_sdk::{
@@ -35,12 +47,14 @@ impl MockFactory {
             .unwrap();
         ProtocolConfig {
             admin: admin.clone(),
-            fee_collector: admin,
+            fee_collector: admin.clone(),
             default_fee_bp: 200,
             min_bet_amount: 100,
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
+            bet_token: env.current_contract_address(),
+            resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
 }
@@ -207,6 +221,69 @@ fn oracle_can_lock_after_deadline() {
     client.lock_market(&oracle);
 
     assert_eq!(client.get_market_info().status, MarketStatus::Locked);
+}
+
+// ─── Exact-boundary lock tests (C-157) ────────────────────────────────────────
+
+#[test]
+fn lock_without_auth_one_second_before_deadline_fails() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, _oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at - 1);
+
+    // No auths: early lock must be rejected for a non-oracle caller.
+    env.set_auths(&[]);
+
+    let stranger = Address::generate(&env);
+    let result = client.try_lock_market(&stranger);
+    assert!(result.is_err());
+    assert_eq!(client.get_market_info().status, MarketStatus::Open);
+}
+
+#[test]
+fn lock_without_auth_at_exact_deadline_succeeds() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, _oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at);
+    env.set_auths(&[]);
+
+    let stranger = Address::generate(&env);
+    assert!(client.try_lock_market(&stranger).is_ok());
+    assert_eq!(client.get_market_info().status, MarketStatus::Locked);
+}
+
+#[test]
+fn lock_without_auth_one_second_after_deadline_succeeds() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, _oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
+    env.set_auths(&[]);
+
+    let stranger = Address::generate(&env);
+    assert!(client.try_lock_market(&stranger).is_ok());
+    assert_eq!(client.get_market_info().status, MarketStatus::Locked);
+}
+
+#[test]
+fn oracle_early_lock_still_requires_auth() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at - 1);
+
+    // Drop all mocked auths: even the oracle must present a signature early.
+    env.set_auths(&[]);
+
+    let result = client.try_lock_market(&oracle);
+    assert!(result.is_err());
+    assert_eq!(client.get_market_info().status, MarketStatus::Open);
 }
 
 // ─── Double lock ──────────────────────────────────────────────────────────────

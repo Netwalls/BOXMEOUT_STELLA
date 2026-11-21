@@ -126,7 +126,8 @@ schema-engine-*
 .node_repl_history
 
 
-# proptest-generated soroban snapshots from event parser fuzz tests (one per case)
-contracts/shared/test_snapshots/arbitrary_topics_and_data_never_panic.*.json
-contracts/shared/test_snapshots/mutated_real_events_never_panic.*.json
-contracts/shared/test_snapshots/real_event_seeds_are_accepted_by_their_parsers.*.json
+# Load test output (#1585)
+backend/loadtest/results/
+
+# Dependency audit output (#1586)
+backend/sbom.cdx.json

@@ -31,10 +31,11 @@ mod error_discriminant_tests {
         ("BetTooLarge", 21),
         ("AlreadyClaimed", 22),
         ("NoBetsFound", 23),
-        // ── Oracle / Resolution (30-32) ──────────────────────────────
+        // ── Oracle / Resolution (30-33) ──────────────────────────────
         ("InvalidOracleSignature", 30),
         ("ResolutionWindowExpired", 31),
         ("ConflictingOracleReport", 32),
+        ("ResolutionTooEarly", 33),
         // ── Treasury (40-42) ─────────────────────────────────────────
         ("MarketNotApproved", 40),
         ("DailyWithdrawalLimitExceeded", 41),
@@ -70,6 +71,7 @@ mod error_discriminant_tests {
             (ContractError::InvalidOracleSignature, 30, "InvalidOracleSignature"),
             (ContractError::ResolutionWindowExpired, 31, "ResolutionWindowExpired"),
             (ContractError::ConflictingOracleReport, 32, "ConflictingOracleReport"),
+            (ContractError::ResolutionTooEarly, 33, "ResolutionTooEarly"),
             (ContractError::MarketNotApproved, 40, "MarketNotApproved"),
             (ContractError::DailyWithdrawalLimitExceeded, 41, "DailyWithdrawalLimitExceeded"),
             (ContractError::InsufficientBalance, 42, "InsufficientBalance"),
@@ -97,7 +99,7 @@ mod error_discriminant_tests {
     fn test_error_code_uniqueness() {
         // Verify no duplicate error codes
         let mut codes: Vec<u32> = vec![
-            1, 2, 3, 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 30, 31, 32, 40, 41, 42, 50, 51, 52, 60,
+            1, 2, 3, 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 30, 31, 32, 33, 40, 41, 42, 50, 51, 52, 60,
         ];
 
         codes.sort();
@@ -121,7 +123,7 @@ mod error_discriminant_tests {
         let auth_errors = [1, 2, 3];
         let market_state_errors = [10, 11, 12, 13, 14, 15];
         let bet_validation_errors = [20, 21, 22, 23];
-        let oracle_errors = [30, 31, 32];
+        let oracle_errors = [30, 31, 32, 33];
         let treasury_errors = [40, 41, 42];
         let factory_errors = [50, 51, 52];
         let reentrancy_errors = [60];

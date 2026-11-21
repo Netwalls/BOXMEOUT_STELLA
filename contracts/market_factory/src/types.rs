@@ -39,3 +39,17 @@ pub struct ProtocolConfig {
     pub dispute_window_sec: u64,
     pub paused: bool,
 }
+
+/// Storage keys for the per-creator market index (C-150).
+///
+/// Each creator's market ids are stored under separate keys so that no single
+/// ledger entry grows unbounded (consistent with C-53). The count is kept in
+/// its own key so pagination bounds can be validated without loading the list.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum CreatorIndexKey {
+    /// Number of markets created by a given creator.
+    Count(Address),
+    /// A single market id at a given position for a given creator.
+    Entry(Address, u32),
+}

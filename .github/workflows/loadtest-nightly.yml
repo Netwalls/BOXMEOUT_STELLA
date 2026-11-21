@@ -1,0 +1,96 @@
+name: Load tests (nightly)
+
+# #1585 B-149: runs the k6 scenarios in backend/loadtest against the compose
+# stack with deterministic seed data (backend/scripts/seed-loadtest.ts).
+# Thresholds in the k6 scripts fail the job when latency or error rate regress.
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  loadtest:
+    name: k6 smoke and soak
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      K6_IMAGE: grafana/k6:1.2.0
+      BASE_URL: http://localhost:3001
+      DATABASE_URL: postgresql://boxmeout:boxmeout@localhost:5432/boxmeout
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install seed script dependencies
+        working-directory: backend
+        run: |
+          npm ci --ignore-scripts
+          npx prisma generate
+
+      - name: Write placeholder backend env for compose
+        # The API validates these at boot but does not call Stellar on startup.
+        # Values are non-secret placeholders for CI only.
+        run: |
+          cat > backend/.env <<'EOF'
+          STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+          STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+          MARKET_FACTORY_CONTRACT_ID=CLOADTESTFACTORY
+          TREASURY_CONTRACT_ID=CLOADTESTTREASURY
+          ADMIN_SECRET_KEY=SLOADTESTPLACEHOLDER
+          ADMIN_API_KEY=ci-placeholder-admin-key
+          ORACLE_API_KEY=ci-placeholder-oracle-key
+          EOF
+
+      - name: Start compose stack (postgres, redis, migrate, api)
+        run: docker compose up -d --build --wait postgres redis migrate api
+
+      - name: Seed load-test data
+        working-directory: backend
+        run: npx ts-node --transpile-only scripts/seed-loadtest.ts
+
+      - name: Run REST scenario
+        run: |
+          mkdir -p backend/loadtest/results && chmod 777 backend/loadtest/results
+          docker run --rm --network host \
+            -e BASE_URL="$BASE_URL" \
+            -v "$PWD/backend/loadtest:/scripts" \
+            "$K6_IMAGE" run \
+            --summary-export=/scripts/results/api-summary.json \
+            /scripts/api.js
+
+      - name: Run SSE fan-out scenario
+        env:
+          SSE_CONNECTIONS: "200"
+          HOLD_MS: "60000"
+        run: |
+          mkdir -p backend/loadtest/results
+          node backend/loadtest/sse.mjs | tee backend/loadtest/results/sse-summary.json
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results-${{ github.run_id }}
+          path: backend/loadtest/results/
+          if-no-files-found: warn
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose logs api --tail 300
+
+      - name: Stop compose stack
+        if: always()
+        run: docker compose down -v
