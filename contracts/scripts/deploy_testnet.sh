@@ -1,35 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# BOXMEOUT — Deploy all contracts to Stellar Testnet
+# BOXMEOUT — Deploy to Stellar Testnet (thin wrapper)
 # ==============================================================================
 #
-# Deploys Market (WASM), Treasury and MarketFactory to Stellar Testnet in one
-# command and wires them together:
-#   - Treasury is initialised with the bet token (`token`) and the factory
-#     address, so the factory's ID is derived up front (see "SALTED IDS").
-#   - MarketFactory is initialised with the uploaded Market WASM hash and the
-#     real Treasury address as treasury / fee collector.
+# Kept so existing docs and commands keep working. All logic lives in deploy.sh:
 #
-# Requirements:
-#   - Rust with the wasm32-unknown-unknown target
-#   - Stellar CLI v28+ (`stellar`)
-#   - Node.js with backend dependencies installed (used to derive the admin
-#     public key from ADMIN_SECRET; run `npm ci` in backend/ first)
-#   - A funded Testnet account (friendbot: https://friendbot.stellar.org)
+#   contracts/scripts/deploy.sh --network testnet "$@"
 #
 # Usage:
-#   ADMIN_SECRET=SABC... ./deploy_testnet.sh
-#
-# Optional environment:
-#   BET_TOKEN_ID     Token contract (C...) used for bets. Defaults to the
-#                    native XLM Stellar Asset Contract, deployed if missing.
-#   DAILY_LIMIT      Treasury daily withdrawal limit in stroops
-#                    (default 100000000000).
-#
-# Outputs:
-#   - contracts/deployed.testnet.json   contract IDs and WASM hashes (machine readable)
-#   - contracts/.env.testnet            shell env file
-#   - .env lines for backend/ and frontend/ printed to stdout
+#   contracts/scripts/deploy_testnet.sh [--identity NAME] [--validate-only]
 # ==============================================================================
 
 set -euo pipefail
