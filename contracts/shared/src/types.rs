@@ -12,6 +12,24 @@ pub enum MarketStatus {
     Disputed = 4,  // Result under admin review — claims frozen
 }
 
+/// Clock-aware view of a market's status.
+///
+/// Mirrors `MarketStatus` but adds `BettingClosed` (stored `Open` past
+/// `betting_ends_at` but not yet locked) and `DisputeWindowOpen` (resolved but
+/// still inside the dispute window). Read-only callers use this so they never
+/// have to replicate the time logic themselves.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum EffectiveMarketStatus {
+    Open = 0,               // Bets are being accepted
+    BettingClosed = 1,      // Past betting_ends_at, awaiting lock_market
+    Locked = 2,             // Fight started — no more bets
+    DisputeWindowOpen = 3,  // Resolved, dispute window still open
+    Resolved = 4,           // Winner declared — claims open
+    Cancelled = 5,          // Fight cancelled — full refunds
+    Disputed = 6,           // Result under admin review — claims frozen
+}
+
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Outcome {
@@ -185,11 +203,50 @@ pub fn calculate_fee(amount: i128, fee_bp: u32) -> i128 {
         .expect("fee calculation division error")
 }
 
+/// Derive the clock-aware effective status of a market.
+///
+/// This is the single source of truth for time-based status transitions and is
+/// shared by the `get_effective_status` view and `place_bet` so the two can
+/// never disagree.
+///
+/// - Stored `Open` with `now >= betting_ends_at` → `BettingClosed`
+/// - Stored `Resolved` with `now < resolved_at + dispute_window_sec` → `DisputeWindowOpen`
+/// - All other stored statuses pass through unchanged.
+pub fn effective_status(
+    status: MarketStatus,
+    betting_ends_at: u64,
+    resolved_at: u64,
+    dispute_window_sec: u64,
+    now: u64,
+) -> EffectiveMarketStatus {
+    match status {
+        MarketStatus::Open => {
+            if now >= betting_ends_at {
+                EffectiveMarketStatus::BettingClosed
+            } else {
+                EffectiveMarketStatus::Open
+            }
+        }
+        MarketStatus::Locked => EffectiveMarketStatus::Locked,
+        MarketStatus::Resolved => {
+            if now < resolved_at.saturating_add(dispute_window_sec) {
+                EffectiveMarketStatus::DisputeWindowOpen
+            } else {
+                EffectiveMarketStatus::Resolved
+            }
+        }
+        MarketStatus::Cancelled => EffectiveMarketStatus::Cancelled,
+        MarketStatus::Disputed => EffectiveMarketStatus::Disputed,
+    }
+}
+
 // ─── TESTS ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
-    use super::calculate_fee;
+    use super::{
+        calculate_fee, effective_status, EffectiveMarketStatus, MarketStatus,
+    };
 
     // ── boundary values ───────────────────────────────────────────────────────
 
@@ -252,5 +309,56 @@ mod tests {
         let large = 100_000_000_000i128 * 10_000_000;
         let fee = calculate_fee(large, 200); // 2%
         assert_eq!(fee, large * 200 / 10_000);
+    }
+
+    // ── effective status boundaries ───────────────────────────────────────────
+
+    #[test]
+    fn effective_status_open_before_deadline() {
+        let s = effective_status(MarketStatus::Open, 1_000, 0, 0, 999);
+        assert_eq!(s, EffectiveMarketStatus::Open);
+    }
+
+    #[test]
+    fn effective_status_betting_closed_at_deadline() {
+        let s = effective_status(MarketStatus::Open, 1_000, 0, 0, 1_000);
+        assert_eq!(s, EffectiveMarketStatus::BettingClosed);
+    }
+
+    #[test]
+    fn effective_status_betting_closed_after_deadline() {
+        let s = effective_status(MarketStatus::Open, 1_000, 0, 0, 1_001);
+        assert_eq!(s, EffectiveMarketStatus::BettingClosed);
+    }
+
+    #[test]
+    fn effective_status_locked_passes_through() {
+        let s = effective_status(MarketStatus::Locked, 1_000, 0, 0, 5_000);
+        assert_eq!(s, EffectiveMarketStatus::Locked);
+    }
+
+    #[test]
+    fn effective_status_dispute_window_open() {
+        // resolved at 2_000, window 500 → open until 2_500
+        let s = effective_status(MarketStatus::Resolved, 1_000, 2_000, 500, 2_499);
+        assert_eq!(s, EffectiveMarketStatus::DisputeWindowOpen);
+    }
+
+    #[test]
+    fn effective_status_final_at_window_end() {
+        let s = effective_status(MarketStatus::Resolved, 1_000, 2_000, 500, 2_500);
+        assert_eq!(s, EffectiveMarketStatus::Resolved);
+    }
+
+    #[test]
+    fn effective_status_cancelled_and_disputed_pass_through() {
+        assert_eq!(
+            effective_status(MarketStatus::Cancelled, 1_000, 0, 0, 9_999),
+            EffectiveMarketStatus::Cancelled
+        );
+        assert_eq!(
+            effective_status(MarketStatus::Disputed, 1_000, 0, 0, 9_999),
+            EffectiveMarketStatus::Disputed
+        );
     }
 }
