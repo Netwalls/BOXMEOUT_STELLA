@@ -31,6 +31,36 @@ cargo llvm-cov --workspace --html --open                   # browsable HTML repo
 CI fails if any optimised `.wasm` exceeds `MAX_WASM_SIZE_BYTES` (65,536 bytes, the
 Soroban contract code size limit), configured in `.github/workflows/contracts-ci.yml`.
 
+### Reproducible wasm builds
+
+CI builds the contracts with `--locked` inside a pinned toolchain, builds them
+twice and fails if the two sets of hashes differ. On `main` the optimised
+`.wasm` files and a `SHA256SUMS` file are uploaded as the `contracts-wasm`
+workflow artifact; on a tagged release they are attached to the GitHub release.
+
+To rebuild locally and confirm a deployed contract matches the source at a
+given commit:
+
+```bash
+# 1. Check out the exact commit that was deployed
+git checkout <commit-sha>
+
+# 2. Build with the same pinned toolchain and locked dependencies
+cd contracts
+cargo build --locked --target wasm32-unknown-unknown --release
+
+# 3. Hash the optimised wasm and compare with the published SHA256SUMS
+sha256sum target/wasm32-unknown-unknown/release/*.wasm
+
+# 4. Compare against the on-chain wasm hash
+stellar contract fetch --id <CONTRACT_ID> --network <NETWORK> --out onchain.wasm
+sha256sum onchain.wasm
+```
+
+The hash from step 3 must match the entry in the release's `SHA256SUMS` file,
+and the hash from step 4 must match the same value. If they differ, the deployed
+contract was not built from that commit.
+
 ## Contracts
 
 ### Treasury
