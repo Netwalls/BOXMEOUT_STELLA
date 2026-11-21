@@ -12,7 +12,15 @@ export default defineConfig({
     baseURL: `http://localhost:${APP_PORT}`,
     trace: "on-first-retry",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Pull requests run chromium plus one mobile project (see frontend-ci.yml); main and the
+  // nightly schedule run the full matrix.
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+    { name: "Pixel 5", use: { ...devices["Pixel 5"] } },
+    { name: "iPhone 13", use: { ...devices["iPhone 13"] } },
+  ],
   webServer: [
     {
       command: "node e2e/mock-api.mjs",

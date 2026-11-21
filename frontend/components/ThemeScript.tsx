@@ -1,10 +1,19 @@
-const THEME_INIT = `
+/**
+ * Runs before first paint so the page never flashes the wrong theme.
+ * Mirrors lib/theme.ts: a stored light/dark choice wins, otherwise `system`
+ * (or any unknown/corrupt value) follows prefers-color-scheme.
+ */
+export const THEME_INIT = `
 (function () {
+  var dark = false;
+  try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) {}
+  var theme = 'system';
   try {
     var stored = localStorage.getItem('theme');
-    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    document.documentElement.classList.toggle('dark', theme === 'dark');
+    if (stored === 'light' || stored === 'dark' || stored === 'system') theme = stored;
   } catch (e) {}
+  var resolved = theme === 'system' ? (dark ? 'dark' : 'light') : theme;
+  document.documentElement.classList.toggle('dark', resolved === 'dark');
 })();
 `;
 

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  createElement,
   createContext,
   useCallback,
   useContext,
@@ -107,26 +106,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Opens the Kit's picker. The wallet the user chooses is remembered for the next visit.
   const connect = useCallback(async () => {
-    getWalletKit().openModal({
-      onWalletSelected: async (option) => {
-        try {
-          const wallets = getWalletKit();
-          wallets.setWallet(option.id);
-          const { address } = await wallets.getAddress();
-          persistLastWalletId(option.id);
-          setState((prev) => ({ ...prev, address, connected: true, walletNotInstalled: false }));
-          await refreshNetwork();
-        } catch {
-          setState((prev) => ({ ...prev, walletNotInstalled: true }));
-        }
-      },
-    });
+    try {
+      const kit = getWalletKit();
+      const { address } = await kit.authModal();
+      const chosenId = kit.selectedModule?.productId;
+      if (chosenId) persistLastWalletId(chosenId);
+      setState((prev) => ({ ...prev, address, connected: true, walletNotInstalled: false }));
+      await refreshNetwork();
+    } catch {
+      setState((prev) => ({ ...prev, walletNotInstalled: true }));
+    }
   }, [refreshNetwork]);
 
   const disconnect = useCallback(() => {
     persistLastWalletId(null);
     try {
-      getWalletKit().disconnect();
+      void getWalletKit()
+        .disconnect()
+        .catch(() => undefined);
     } catch {
       // Clearing local state below is enough for the app even if the wallet refuses.
     }
@@ -148,7 +145,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [state.address],
+    [state.address]
+  );
+
+  const signMessage = useCallback(
+    async (message: string): Promise<string> => {
+      if (!state.address) throw new Error("Wallet not connected");
+      try {
+        const result = await getWalletKit().signMessage(message, {
+          networkPassphrase: NETWORK_PASSPHRASE,
+          address: state.address,
+        });
+        return result.signedMessage;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (isUserRejection(message)) throw new UserRejectedError(message);
+        throw err;
+      }
+    },
+    [state.address]
   );
 
   // On mount, silently restore a previously-authorised wallet without prompting.
@@ -166,7 +181,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<UseWalletResult>(() => {
     const isNetworkMismatched =
-      state.connected && state.networkPassphrase !== null && state.networkPassphrase !== NETWORK_PASSPHRASE;
+      state.connected &&
+      state.networkPassphrase !== null &&
+      state.networkPassphrase !== NETWORK_PASSPHRASE;
 
     return {
       address: state.address,

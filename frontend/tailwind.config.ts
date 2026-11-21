@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import defaultTheme from 'tailwindcss/defaultTheme'
 
 const withOpacity = (variable: string) => `rgb(var(${variable}) / <alpha-value>)`;
 
@@ -10,6 +11,15 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', ...defaultTheme.fontFamily.sans],
+      },
+      // Type scale. `amount` uses tabular numerals so stakes and odds align in columns.
+      fontSize: {
+        label: ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.02em' }],
+        title: ['1.25rem', { lineHeight: '1.75rem', fontWeight: '700' }],
+        amount: ['0.875rem', { lineHeight: '1.25rem', fontVariantNumeric: 'tabular-nums' }],
+      },
       colors: {
         white: withOpacity('--color-fg'),
         gray: {

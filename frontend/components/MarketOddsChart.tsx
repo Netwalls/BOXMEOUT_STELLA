@@ -130,10 +130,16 @@ export function MarketOddsChart({ marketId, historicalOdds }: MarketOddsChartPro
   // For a single data point render dots; for multiple render lines without dots
   const isSinglePoint = data.length === 1;
 
-  const open = snapshots[0];
-  const latest = snapshots[snapshots.length - 1];
-  const sinceText = activeRange === "ALL" ? "open" : `the start of the last ${ODDS_RANGE_LABELS[activeRange]}`;
-  const prefix = activeRange === "ALL" ? "" : `Showing the last ${ODDS_RANGE_LABELS[activeRange]}. `;
+  const open = historicalOdds[0];
+  const latest = historicalOdds[historicalOdds.length - 1];
+  // Unreachable once the empty check above has run; kept so the indexed reads are narrowed.
+  if (!open || !latest) {
+    return (
+      <div className="flex items-center justify-center h-48 bg-gray-800 rounded-xl text-gray-500 text-sm">
+        No odds data yet
+      </div>
+    );
+  }
   const summary =
     `${prefix}Current odds: Fighter A ${latest.oddsA}%, Fighter B ${latest.oddsB}%. ` +
     `Change since ${sinceText}: Fighter A ${formatChange(latest.oddsA - open.oddsA)}, ` +
@@ -187,9 +193,15 @@ export function MarketOddsChart({ marketId, historicalOdds }: MarketOddsChartPro
           <caption className="sr-only">Odds history</caption>
           <thead>
             <tr>
-              <th scope="col" className="text-left">Time</th>
-              <th scope="col" className="text-right">Fighter A</th>
-              <th scope="col" className="text-right">Fighter B</th>
+              <th scope="col" className="text-left">
+                Time
+              </th>
+              <th scope="col" className="text-right">
+                Fighter A
+              </th>
+              <th scope="col" className="text-right">
+                Fighter B
+              </th>
             </tr>
           </thead>
           <tbody>

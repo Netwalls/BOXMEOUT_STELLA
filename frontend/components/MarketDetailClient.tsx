@@ -7,8 +7,6 @@ import { useMarketEvents } from "@/hooks/useMarketEvents";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/components/ToastProvider";
 import { Market, Bet } from "@/lib/api";
-import { copyToClipboard } from "@/lib/clipboard";
-import { CopyButton } from "@/components/CopyButton";
 import { FighterCard } from "@/components/FighterCard";
 import { BetForm } from "@/components/BetForm";
 import { MarketStatusBadge } from "@/components/MarketStatusBadge";
@@ -20,10 +18,13 @@ import { getResolutionStage } from "@/lib/resolution";
 import { truncateAddress, stellarExpertContractUrl } from "@/lib/stellar";
 
 // recharts is only needed on this page; keep it out of the shared bundle
-const OutcomeChart = dynamic(() => import("@/components/OutcomeChart").then((m) => m.OutcomeChart), {
-  ssr: false,
-  loading: () => <LoadingSkeleton variant="chart" />,
-});
+const OutcomeChart = dynamic(
+  () => import("@/components/OutcomeChart").then((m) => m.OutcomeChart),
+  {
+    ssr: false,
+    loading: () => <LoadingSkeleton variant="chart" />,
+  }
+);
 const MarketOddsChart = dynamic(
   () => import("@/components/MarketOddsChart").then((m) => m.MarketOddsChart),
   { ssr: false, loading: () => <LoadingSkeleton variant="chart" /> }
@@ -33,8 +34,12 @@ function BetHistoryRow({ bet }: { bet: Bet }): JSX.Element {
   const xlm = (Number(BigInt(bet.amount)) / 1e7).toFixed(2);
   return (
     <tr className="border-b border-gray-700 text-sm">
-      <td className="py-2 pr-4 text-gray-300 font-mono text-xs truncate max-w-[120px]">{bet.bettor}</td>
-      <td className={`py-2 pr-4 font-medium ${bet.side === "FighterA" ? "text-blue-400" : "text-red-400"}`}>
+      <td className="py-2 pr-4 text-gray-300 font-mono text-xs truncate max-w-[120px]">
+        {bet.bettor}
+      </td>
+      <td
+        className={`py-2 pr-4 font-medium ${bet.side === "FighterA" ? "text-blue-400" : "text-red-400"}`}
+      >
         {bet.side === "FighterA" ? "Fighter A" : "Fighter B"}
       </td>
       <td className="py-2 pr-4 text-white">{xlm} XLM</td>
@@ -70,7 +75,10 @@ export function MarketDetailClient({
 
   const polledBets = liveBets.length ? liveBets : initialBets;
   // Show a bet placed this session immediately, ahead of the next bet-list poll
-  const bets = [...justPlaced.filter((b) => !polledBets.some((pb) => pb.id === b.id)), ...polledBets];
+  const bets = [
+    ...justPlaced.filter((b) => !polledBets.some((pb) => pb.id === b.id)),
+    ...polledBets,
+  ];
   const hasPosition = Boolean(address && bets.some((b) => b.bettor === address));
 
   const { poolA: livePoolA, poolB: livePoolB } = useMarketEvents(marketId, {
@@ -106,14 +114,6 @@ export function MarketDetailClient({
     else addToast("Could not copy link.", "error");
   }, [m.fighterA.name, m.fighterB.name, addToast]);
 
-  const handleContractCopyResult = useCallback(
-    (copied: boolean) => {
-      if (copied) addToast("Contract address copied to clipboard!", "success");
-      else addToast("Could not copy contract address.", "error");
-    },
-    [addToast]
-  );
-
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -130,13 +130,12 @@ export function MarketDetailClient({
             <span className="font-mono text-gray-200" title={contractAddress}>
               {truncateAddress(contractAddress)}
             </span>
-            <CopyButton
-              value={contractAddress}
-              label="Copy contract address to clipboard"
-              copiedLabel="Contract address copied"
-              copiedMessage="Copied contract address to clipboard"
-              failedMessage="Could not copy contract address"
-              onResult={handleContractCopyResult}
+            <button
+              type="button"
+              onClick={handleCopyContract}
+              aria-label={
+                copiedContract ? "Contract address copied" : "Copy contract address to clipboard"
+              }
               className="p-1 text-gray-400 hover:text-white transition-colors rounded hover:bg-gray-800"
             />
             <a
@@ -179,7 +178,11 @@ export function MarketDetailClient({
             strokeWidth={2}
             aria-hidden="true"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+            />
           </svg>
           Share
         </button>
@@ -227,19 +230,11 @@ export function MarketDetailClient({
         <FighterCard fighter={m.fighterB} side="B" poolAmount={poolB} impliedOdds={oddsB} />
       </div>
 
-      <OutcomeChart
-        poolA={poolA}
-        poolB={poolB}
-        labelA={m.fighterA.name}
-        labelB={m.fighterB.name}
-      />
+      <OutcomeChart poolA={poolA} poolB={poolB} labelA={m.fighterA.name} labelB={m.fighterB.name} />
 
       <MarketOddsChart marketId={marketId} historicalOdds={oddsHistory} />
 
-      <BetForm
-        market={m}
-        onBetPlaced={(bet) => setJustPlaced((prev) => [bet, ...prev])}
-      />
+      <BetForm market={m} onBetPlaced={(bet) => setJustPlaced((prev) => [bet, ...prev])} />
 
       {/* Bet history */}
       {bets.length > 0 && (
@@ -256,7 +251,9 @@ export function MarketDetailClient({
                 </tr>
               </thead>
               <tbody>
-                {bets.map((bet) => <BetHistoryRow key={bet.id} bet={bet} />)}
+                {bets.map((bet) => (
+                  <BetHistoryRow key={bet.id} bet={bet} />
+                ))}
               </tbody>
             </table>
           </div>
@@ -276,7 +273,7 @@ export function MarketDetailClient({
       {showDispute && (
         <DisputeModal
           market={m}
-          userBets={userBets}
+          userBets={bets.filter((b) => b.bettor === address)}
           isOpen={showDispute}
           onDisputed={() => setShowDispute(false)}
           onClose={() => setShowDispute(false)}

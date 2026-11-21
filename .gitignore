@@ -28,6 +28,8 @@ frontend/.next/
 .env.*.local
 .env.testnet
 contracts/scripts/.env.testnet
+# Generated deploy output (contract IDs are in deployments/<network>.json, which IS tracked)
+contracts/deployments/*.env
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
@@ -53,6 +55,9 @@ lcov.info
 *.lcov
 
 # ─── Test snapshots & Jest cache ─────────────────────────────────────────────
+# Soroban rewrites contracts/**/test_snapshots/*.json on every `cargo test`.
+# They are generated, not committed (see contracts/README.md "Test snapshots").
+contracts/**/test_snapshots/
 **/__snapshots__/
 *.snap
 .jest-cache/
@@ -125,3 +130,9 @@ schema-engine-*
 *.seed
 .node_repl_history
 
+
+# Load test output (#1585)
+backend/loadtest/results/
+
+# Dependency audit output (#1586)
+backend/sbom.cdx.json

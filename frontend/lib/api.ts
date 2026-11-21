@@ -25,7 +25,7 @@ export interface Market {
   resolvedAt?: string | null;
   status: MarketStatus;
   outcome: Outcome | null;
-  poolA: string;  // BigInt serialized as string
+  poolA: string; // BigInt serialized as string
   poolB: string;
   totalPool: string;
   oracleAddress: string;
@@ -112,7 +112,10 @@ export interface CreateMarketMetaInput {
 // ─── ERRORS ───────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -120,7 +123,10 @@ export class ApiError extends Error {
 
 /** Thrown when a 2xx response does not match the schema for its endpoint. */
 export class ApiResponseError extends Error {
-  constructor(public path: string, public issues: z.ZodIssue[]) {
+  constructor(
+    public path: string,
+    public issues: z.ZodIssue[]
+  ) {
     const details = issues
       .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
       .join("; ");
@@ -327,7 +333,7 @@ const jsonHeaders = (adminKey: string) => ({
  * markets together with the page metadata returned by the backend.
  */
 export async function fetchMarkets(params?: MarketQueryParams): Promise<Paginated<Market[]>> {
-  const qs = toQueryString(params as Record<string, string | number | undefined> ?? {});
+  const qs = toQueryString((params as Record<string, string | number | undefined>) ?? {});
   return request(`/api/markets${qs}`, z.array(marketSchema));
 }
 
@@ -351,8 +357,11 @@ export async function fetchMarketStats(market_id: string): Promise<MarketStats> 
  * GET /api/markets/:id/bets
  * Fetches all bets for a market, optionally filtered by outcome.
  */
-export async function fetchMarketBets(market_id: string, filters?: MarketBetsFilters): Promise<Bet[]> {
-  const qs = toQueryString(filters as Record<string, string | number | undefined> ?? {});
+export async function fetchMarketBets(
+  market_id: string,
+  filters?: MarketBetsFilters
+): Promise<Bet[]> {
+  const qs = toQueryString((filters as Record<string, string | number | undefined>) ?? {});
   return apiFetch(`/api/markets/${market_id}/bets${qs}`, z.array(betSchema));
 }
 
@@ -366,7 +375,7 @@ export async function fetchMarketBets(market_id: string, filters?: MarketBetsFil
  */
 export async function fetchUserBets(address: string, page: number, limit: number): Promise<Bet[]> {
   const qs = toQueryString({ page, limit });
-  return apiFetch<Bet[]>(`/api/users/${address}/bets${qs}`);
+  return apiFetch(`/api/users/${address}/bets${qs}`, z.array(betSchema));
 }
 
 export async function fetchBetsByAddress(address: string): Promise<Bet[]> {
@@ -392,7 +401,10 @@ export async function fetchPayoutEstimate(
   amount: bigint
 ): Promise<bigint> {
   const qs = toQueryString({ market_id, side, amount: amount.toString() });
-  const { estimatedPayout } = await apiFetch(`/api/bets/payout-estimate${qs}`, payoutEstimateSchema);
+  const { estimatedPayout } = await apiFetch(
+    `/api/bets/payout-estimate${qs}`,
+    payoutEstimateSchema
+  );
   return BigInt(estimatedPayout);
 }
 
@@ -416,7 +428,9 @@ export async function fetchUserPositions(address: string): Promise<UserPosition[
  * POST /api/markets
  * Submits created market metadata to the backend for reconciliation.
  */
-export async function createMarketMeta(data: CreateMarketMetaInput): Promise<{ success: boolean; marketId?: string }> {
+export async function createMarketMeta(
+  data: CreateMarketMetaInput
+): Promise<{ success: boolean; marketId?: string }> {
   return apiFetch(`/api/markets`, createMarketMetaSchema, {
     method: "POST",
     body: JSON.stringify(data),
@@ -430,7 +444,7 @@ export type LeaderboardPeriod = "7d" | "30d" | "all";
 export interface LeaderboardEntry {
   rank: number;
   address: string;
-  totalWinnings: string;  // stroops as string
+  totalWinnings: string; // stroops as string
   totalBets: number;
   winCount: number;
   roi: number;
@@ -486,7 +500,7 @@ export async function fetchPendingResolutions(adminKey: string): Promise<AdminMa
 export async function resolveMarket(
   marketId: string,
   outcome: Outcome,
-  adminKey: string,
+  adminKey: string
 ): Promise<{ success: boolean }> {
   return apiFetch(`/api/admin/markets/resolve`, successSchema, {
     method: "POST",
@@ -511,7 +525,7 @@ export async function fetchOracles(adminKey: string): Promise<OracleConfig[]> {
  */
 export async function createOracle(
   data: { address: string; name: string },
-  adminKey: string,
+  adminKey: string
 ): Promise<OracleConfig> {
   return apiFetch(`/api/admin/oracles`, oracleConfigSchema, {
     method: "POST",
@@ -538,7 +552,7 @@ export async function deleteOracle(id: string, adminKey: string): Promise<{ succ
 export async function updateOracle(
   id: string,
   patch: Partial<Pick<OracleConfig, "name" | "active">>,
-  adminKey: string,
+  adminKey: string
 ): Promise<OracleConfig> {
   return apiFetch(`/api/admin/oracles/${id}`, oracleConfigSchema, {
     method: "PATCH",

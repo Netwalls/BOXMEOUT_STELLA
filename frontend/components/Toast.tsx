@@ -1,8 +1,7 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle, XCircle, AlertCircle, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-
+import { motion } from "framer-motion";
 import Link from "next/link";
 
 export type ToastType = "success" | "error" | "info";
@@ -19,6 +18,10 @@ export interface Toast {
     label: string;
     onClick: () => void;
   };
+  /** How many identical messages were collapsed into this toast. */
+  count?: number;
+  /** Changes whenever the toast is refreshed, restarting its dismiss timer. */
+  updatedAt?: number;
 }
 
 export interface ToastProps {
@@ -27,6 +30,30 @@ export interface ToastProps {
 }
 
 export function Toast({ toast, onDismiss }: ToastProps): JSX.Element {
+  // Pause auto-dismiss while the pointer is over the toast or focus is inside it.
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
+
+  const remainingMs = useRef(TOAST_DISMISS_MS);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
+  // A refreshed (deduplicated) toast gets the full display time again.
+  useEffect(() => {
+    remainingMs.current = TOAST_DISMISS_MS;
+  }, [toast.updatedAt]);
+
+  useEffect(() => {
+    if (paused) return;
+    const startedAt = Date.now();
+    const timer = setTimeout(() => onDismissRef.current(toast.id), remainingMs.current);
+    return () => {
+      clearTimeout(timer);
+      remainingMs.current = Math.max(0, remainingMs.current - (Date.now() - startedAt));
+    };
+  }, [toast.id, toast.updatedAt, paused]);
+
   const getTypeStyles = () => {
     switch (toast.type) {
       case "success":
@@ -55,16 +82,16 @@ export function Toast({ toast, onDismiss }: ToastProps): JSX.Element {
 
   const styles = getTypeStyles();
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onDismiss(toast.id);
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [toast.id, onDismiss]);
-
   return (
     <motion.div
+      role={toast.type === "error" ? "alert" : "status"}
+      aria-atomic="true"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+      }}
       layout
       initial={{ opacity: 0, y: 20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -77,7 +104,12 @@ export function Toast({ toast, onDismiss }: ToastProps): JSX.Element {
         {toast.title && (
           <h3 className={`text-sm font-semibold ${styles.textColor}`}>{toast.title}</h3>
         )}
-        <p className="text-sm text-gray-200 mt-1">{toast.message}</p>
+        <p className="text-sm text-gray-200 mt-1">
+          {toast.message}
+          {toast.count && toast.count > 1 && (
+            <span className="ml-2 text-xs font-semibold text-gray-400">×{toast.count}</span>
+          )}
+        </p>
         <div className="flex items-center gap-2 mt-2">
           {toast.href && (
             <Link

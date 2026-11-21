@@ -2,6 +2,10 @@
   "name": "boxmeout-frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20 <21",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,8 +13,11 @@
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "start": "next start",
     "lint": "next lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
     "test": "jest",
+    "test:coverage": "jest --ci --coverage",
     "test:e2e": "playwright test",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
@@ -31,7 +38,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "14.2.35",
+    "@axe-core/playwright": "^4.14.0",
+    "@lhci/cli": "^0.14.0",
+    "@next/bundle-analyzer": "14.2.0",
     "@playwright/test": "^1.55.0",
     "@storybook/addon-themes": "^8.0.0",
     "@storybook/nextjs": "^8.0.0",
@@ -55,6 +64,7 @@
     "jest-axe": "^9.0.0",
     "jest-environment-jsdom": "^29.0.0",
     "msw": "^2.0.0",
+    "prettier": "^3.9.10",
     "tailwindcss": "^3.4.0",
     "ts-jest": "^29.0.0",
     "typescript": "^5.0.0",

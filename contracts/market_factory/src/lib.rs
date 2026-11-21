@@ -33,6 +33,13 @@ fn market_by_index_key(index: u64) -> (&'static str, u64) {
 /// `list_active_markets` page, regardless of the caller-requested `limit`.
 const MAX_PAGE_SIZE: u32 = 50;
 
+// ─── CONTRACT METADATA ────────────────────────────────────────────────────────
+// Read by `stellar contract inspect` and by operators checking which build is
+// deployed (C-122). `version` is taken from the crate version at build time.
+soroban_sdk::contractmeta!(key = "name", val = "BOXMEOUT Factory");
+soroban_sdk::contractmeta!(key = "version", val = env!("CARGO_PKG_VERSION"));
+soroban_sdk::contractmeta!(key = "source", val = "https://github.com/Netwalls/BOXMEOUT_STELLA");
+
 #[contract]
 pub struct MarketFactory;
 
@@ -104,6 +111,14 @@ impl MarketFactory {
             .set(&MARKET_WASM_HASH, &new_wasm_hash);
         events::emit_contract_upgraded(&env, new_wasm_hash);
         Ok(())
+    }
+
+    /// Returns the crate version this factory contract was built from (C-122).
+    ///
+    /// Read-only. Lets operators, the indexer and the frontend confirm the
+    /// deployed build, including after `upgrade_market_wasm`.
+    pub fn version(env: Env) -> String {
+        String::from_str(&env, env!("CARGO_PKG_VERSION"))
     }
 
     /// Returns the current admin address.
@@ -518,6 +533,15 @@ mod tests {
         let treasury = Address::generate(&env);
 
         (env, client, admin, treasury)
+    }
+
+    #[test]
+    fn test_version_returns_crate_version() {
+        let (env, client, _, _) = setup();
+        assert_eq!(
+            client.version(),
+            String::from_str(&env, env!("CARGO_PKG_VERSION"))
+        );
     }
 
     fn init(env: &Env, client: &MarketFactoryClient<'static>, admin: &Address, treasury: &Address) {
