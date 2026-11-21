@@ -1,0 +1,16 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "create": "Crear",
+    "portfolio": "Portafolio",
+    "leaderboard": "Clasificación",
+    "openMenu": "Abrir menú",
+    "closeMenu": "Cerrar menú",
+    "switchToLight": "Cambiar a modo claro",
+    "switchToDark": "Cambiar a modo oscuro"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "notFound": "No pudimos encontrar esa página."
+  }
+}

@@ -13,10 +13,10 @@ const THEME_LABELS: Record<ThemePreference, string> = {
 };
 
 const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/create", label: "Create" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/", label: t("nav.home") },
+  { href: "/create", label: t("nav.create") },
+  { href: "/portfolio", label: t("nav.portfolio") },
+  { href: "/leaderboard", label: t("nav.leaderboard") },
 ];
 
 export function Navbar() {
@@ -83,7 +83,7 @@ export function Navbar() {
         <button
           className="md:hidden flex items-center justify-center w-11 h-11 text-gray-300 hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
           onClick={() => setOpen((o) => !o)}
-          aria-label={open ? "Close menu" : "Open menu"}
+          aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
           aria-expanded={open}
           aria-controls="mobile-menu"
         >

@@ -84,7 +84,7 @@ export function allowHttpForRpc(
   throw new Error(`Insecure Soroban RPC URL rejected (HTTPS required): ${url}`);
 }
 
-/** Options for `new SorobanRpc.Server`, validated against the configured RPC URL. */
+/** Options for `new rpc.Server`, validated against the configured RPC URL. */
 function rpcServerOptions(): { allowHttp: boolean } {
   return { allowHttp: allowHttpForRpc(SOROBAN_RPC_URL) };
 }
@@ -236,13 +236,13 @@ export async function toU64ScVal(value: bigint): Promise<xdr.ScVal> {
  */
 export async function buildSorobanInvocation(params: SorobanInvokeParams): Promise<string> {
   const sdk = await loadSdk();
-  const { Contract, SorobanRpc, StrKey, TransactionBuilder } = sdk;
+  const { Contract, rpc, TransactionBuilder } = sdk;
 
-  if (!StrKey.isValidContract(params.contractId)) {
+  if (!isValidContractAddress(params.contractId)) {
     throw new Error(`Invalid contract address: ${params.contractId}`);
   }
 
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
+  const server = new rpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const contract = new Contract(params.contractId);
   const operation = contract.call(params.method, ...params.args.map((arg) => toScVal(sdk, arg)));
@@ -304,8 +304,8 @@ export async function submitTransaction(
   signedXdr: string,
   onStatus?: (update: TransactionStatusUpdate) => void
 ): Promise<TransactionResult> {
-  const { SorobanRpc, TransactionBuilder } = await loadSdk();
-  const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
+  const { rpc, TransactionBuilder } = await loadSdk();
+  const server = new rpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
   const transaction = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE) as Transaction;
 

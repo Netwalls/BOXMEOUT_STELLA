@@ -56,8 +56,8 @@ describe("usePortfolio", () => {
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       expect(result.current.bets).toEqual([BET]);
       expect(result.current.summary).toEqual(SUMMARY);
-      expect(mockFetchBetsByAddress).toHaveBeenCalledWith("GADDR1");
-      expect(mockFetchPortfolioSummary).toHaveBeenCalledWith("GADDR1");
+      expect(mockFetchBetsByAddress).toHaveBeenCalledWith("GADDR1", expect.anything());
+      expect(mockFetchPortfolioSummary).toHaveBeenCalledWith("GADDR1", expect.anything());
     });
 
     it("refetches for the new address when the wallet changes", async () => {
@@ -71,7 +71,7 @@ describe("usePortfolio", () => {
 
       rerender({ address: "GADDR2" });
 
-      await waitFor(() => expect(mockFetchBetsByAddress).toHaveBeenLastCalledWith("GADDR2"));
+      await waitFor(() => expect(mockFetchBetsByAddress).toHaveBeenLastCalledWith("GADDR2", expect.anything()));
     });
 
     it("refetches on demand", async () => {

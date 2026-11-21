@@ -1,0 +1,16 @@
+{
+  "nav": {
+    "home": "Home",
+    "create": "Create",
+    "portfolio": "Portfolio",
+    "leaderboard": "Leaderboard",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "notFound": "We couldn't find that page."
+  }
+}

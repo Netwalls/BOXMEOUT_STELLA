@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StrKey } from "@stellar/stellar-sdk";
+import { isValidStellarPublicKey } from "@/lib/strkey";
 
 export interface CreateMarketFormData {
   fighterAName: string;
@@ -110,7 +110,7 @@ function validate(data: CreateMarketFormData): FormErrors {
     errors.oracleAddress = "Required";
   } else {
     const trimmed = data.oracleAddress.trim();
-    if (!StrKey.isValidEd25519PublicKey(trimmed)) {
+    if (!isValidStellarPublicKey(trimmed)) {
       errors.oracleAddress = "Must be a valid G... Stellar address";
     }
   }
