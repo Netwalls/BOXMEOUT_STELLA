@@ -10,6 +10,10 @@ import {
   stopResolutionService,
 } from "./services/resolution.service";
 import {
+  startWebhookWorker,
+  stopWebhookWorker,
+} from "./services/webhook.service";
+import {
   startRetentionService,
   stopRetentionService,
 } from "./services/retention.service";
@@ -25,6 +29,7 @@ const server = app.listen(PORT, () => {
   startResolutionService().catch((err) =>
     logger.error({ err }, "Failed to start resolution service")
   );
+  startWebhookWorker();
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
@@ -67,6 +72,10 @@ async function shutdown(signal: string): Promise<void> {
     // 2. Remove the repeatable lifecycle jobs and close their worker.
     await stopResolutionService();
     logger.info("Resolution service stopped");
+
+    // 2a. Stop the outbound webhook worker (in-flight deliveries finish first).
+    await stopWebhookWorker();
+    logger.info("Webhook worker stopped");
 
     // 2b. Stop the daily retention job (waits for an in-flight prune to finish).
     await stopRetentionService();

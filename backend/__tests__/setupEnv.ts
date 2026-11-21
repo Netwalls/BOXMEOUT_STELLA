@@ -5,12 +5,12 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? "postgresql://boxmeout:boxmeout@localhost:5432/boxmeout_test";
 process.env.REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 process.env.STELLAR_NETWORK = process.env.STELLAR_NETWORK ?? "testnet";
-// Required by src/config.ts when a module that imports the db client loads.
-// Placeholders only: no test may call these services.
-process.env.STELLAR_RPC_URL = process.env.STELLAR_RPC_URL ?? "https://soroban-testnet.stellar.org";
-process.env.STELLAR_HORIZON_URL = process.env.STELLAR_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
+// Required by src/config.ts so modules that import it load under test.
+// Placeholders only: nothing in the suite connects to these endpoints.
+process.env.STELLAR_RPC_URL = process.env.STELLAR_RPC_URL ?? "https://rpc.test.invalid";
+process.env.STELLAR_HORIZON_URL = process.env.STELLAR_HORIZON_URL ?? "https://horizon.test.invalid";
 process.env.MARKET_FACTORY_CONTRACT_ID = process.env.MARKET_FACTORY_CONTRACT_ID ?? "CTESTFACTORY";
 process.env.TREASURY_CONTRACT_ID = process.env.TREASURY_CONTRACT_ID ?? "CTESTTREASURY";
-process.env.ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY ?? "STESTPLACEHOLDER";
+process.env.ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY ?? "STESTSECRET";
 process.env.ADMIN_API_KEY = process.env.ADMIN_API_KEY ?? "test-admin-key";
 process.env.ORACLE_API_KEY = process.env.ORACLE_API_KEY ?? "test-oracle-key";

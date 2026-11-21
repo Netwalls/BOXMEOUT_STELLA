@@ -57,6 +57,10 @@ pub struct Market {
     pub bet_token: Address,
     pub stake_sum_a: i128,
     pub stake_sum_b: i128,
+    /// Total number of bets placed on this market (C-152).
+    pub bet_count: u32,
+    /// Number of distinct bettor addresses that have placed a bet (C-152).
+    pub unique_bettors: u32,
 }
 
 #[contracttype]

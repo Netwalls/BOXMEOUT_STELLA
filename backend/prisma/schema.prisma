@@ -175,3 +175,42 @@ model EventLog {
   @@unique([txHash, eventType])
   @@index([processedAt])
 }
+
+/// #1581: admin-managed outbound webhook endpoints for market events.
+model WebhookEndpoint {
+  id         String            @id @default(uuid())
+  url        String
+  /// HMAC-SHA256 signing secret, returned to the admin once on creation.
+  secret     String
+  eventTypes String[]
+  active     Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  deliveries WebhookDelivery[]
+}
+
+enum WebhookDeliveryStatus {
+  Pending
+  Delivered
+  Failed
+}
+
+/// #1581: delivery log. (endpointId, eventId) is unique so one event is
+/// recorded at most once per endpoint, even if it is enqueued twice.
+model WebhookDelivery {
+  id             String                @id @default(uuid())
+  endpointId     String
+  endpoint       WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  eventId        String
+  eventType      String
+  payload        Json
+  status         WebhookDeliveryStatus @default(Pending)
+  attempts       Int                   @default(0)
+  responseStatus Int?
+  lastError      String?
+  createdAt      DateTime              @default(now())
+  deliveredAt    DateTime?
+
+  @@unique([endpointId, eventId])
+  @@index([status])
+}

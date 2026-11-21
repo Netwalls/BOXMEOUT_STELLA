@@ -7,11 +7,13 @@ on:
     paths:
       - "backend/**"
       - "contracts/shared/test_snapshots/**"
+      - "contracts/shared/test_vectors/**"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/**"
       - "contracts/shared/test_snapshots/**"
+      - "contracts/shared/test_vectors/**"
       - ".github/workflows/backend-ci.yml"
   # #1586 B-150: nightly run executes only the dependency audit job (the
   # build job is gated off for schedule events below).

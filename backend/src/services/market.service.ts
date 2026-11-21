@@ -11,6 +11,7 @@ import {
 import { db } from "../db";
 import { logger } from "../logger";
 import { redis } from "../redis";
+import { dispatchWebhookEvent } from "./webhook.service";
 
 export interface MarketFilters {
   status?: MarketStatus;
@@ -311,6 +312,24 @@ export async function getOddsHistory(
  * to avoid race conditions with concurrent indexer or API calls.
  */
 export async function createMarketRecord(
+  marketData: CreateMarketDTO
+): Promise<Market> {
+  const market = await persistMarketRecord(marketData);
+  // #1581: keyed by market id so a re-indexed MarketCreated event is not re-sent.
+  await dispatchWebhookEvent(
+    "market.created",
+    {
+      marketId: market.id,
+      contractAddress: market.contractAddress,
+      scheduledAt: market.scheduledAt.toISOString(),
+      bettingEndsAt: market.bettingEndsAt.toISOString(),
+    },
+    `market.created:${market.id}`,
+  );
+  return market;
+}
+
+async function persistMarketRecord(
   marketData: CreateMarketDTO
 ): Promise<Market> {
   return db.$transaction(async (tx) => {
