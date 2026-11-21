@@ -7,6 +7,7 @@ import * as marketService from "../../services/market.service";
 import * as oracleService from "../../services/oracle.service";
 import { db } from "../../db";
 import { ok, fail } from "../response";
+import { createMarketSchema } from "../schemas/market.schema";
 
 /** Admin identity from the auth context, falling back to a generic label. */
 function adminIdFromRequest(req: Request): string {
@@ -29,17 +30,8 @@ const resolveMarketBodySchema = z.object({
   oracle_result_id: z.coerce.number().int().positive(),
 });
 
-export const createMarketSchema = z.object({
-  id: z.string().min(1),
-  contractAddress: z.string().min(1),
-  fighterA: z.record(z.unknown()),
-  fighterB: z.record(z.unknown()),
-  scheduledAt: z.string().datetime({ message: "scheduledAt must be a valid ISO 8601 datetime" }),
-  bettingEndsAt: z.string().datetime({ message: "bettingEndsAt must be a valid ISO 8601 datetime" }),
-  createdBy: z.string().min(1),
-  oracleAddress: z.string().min(1),
-  txHash: z.string().optional(),
-});
+// Single source of truth for the POST /api/markets body (#1587, B-151).
+export { createMarketSchema };
 
 export { getMarketsHandler } from "./marketList.controller";
 
@@ -74,7 +66,7 @@ export async function getMarketByIdHandler(req: Request, res: Response): Promise
       fail(res, 404, "NOT_FOUND", "Market not found");
       return;
     }
-    ok(res, market);
+    ok(res, { ...market, disputeWindowEndsAt: marketService.disputeWindowEndsAt(market) });
   } catch (err) {
     logger.error({ err }, "getMarketByIdHandler failed");
     fail(res, 500, "INTERNAL_ERROR", "Internal server error");
@@ -177,6 +169,31 @@ export async function getMarketBetsHandler(req: Request, res: Response): Promise
   } catch (err) {
     logger.error({ err }, "getMarketBetsHandler failed");
     res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * B-144 (#1580): GET /api/v1/markets/:id/disputes
+ * Query: page, limit (page rule). Returns { data: Dispute[], meta: { total, hasMore } }.
+ */
+export async function getMarketDisputesHandler(req: Request, res: Response): Promise<void> {
+  const parsed = pageQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    fail(res, 400, "VALIDATION_ERROR", "Validation failed", { details: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const { page, limit } = parsed.data;
+    const result = await marketService.getMarketDisputes(req.params.id, { page, pageSize: limit });
+    if (!result) {
+      fail(res, 404, "NOT_FOUND", "Market not found");
+      return;
+    }
+    ok(res, result.data, { meta: pageMeta(page, limit, result.total) });
+  } catch (err) {
+    logger.error({ err }, "getMarketDisputesHandler failed");
+    fail(res, 500, "INTERNAL_ERROR", "Internal server error");
   }
 }
 

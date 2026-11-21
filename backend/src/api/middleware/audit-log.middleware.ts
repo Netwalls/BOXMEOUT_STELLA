@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { logger } from "../../logger";
-
-const prisma = new PrismaClient();
+import { db as prisma } from "../../db";
 
 // Paths that should trigger audit logging
 const AUDIT_PATHS = [/^\/api\/admin/, /^\/api\/wallet\/withdraw/, /^\/api\/disputes/];

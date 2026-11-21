@@ -152,6 +152,21 @@ drop them only in a later release) so that rolling back the application stays sa
 
 ---
 
+## 5a — Seed sample data (B-139)
+
+For a local database with realistic data, run:
+
+```bash
+cd backend
+npm run db:seed
+```
+
+The seed creates two categories, one oracle, one market in each status (Open,
+Locked, Resolved, Cancelled, Disputed), bets on both sides, one resolved market
+with claimed payouts and one disputed market. It is idempotent, so running it
+twice is safe. It refuses to run when `NODE_ENV=production`. It is an optional
+step after migrations.
+
 ## 6 — Start the server
 
 ```bash
@@ -294,6 +309,10 @@ Validate them with `promtool check rules docs/prometheus/indexer-alerts.yml`.
 They cover a stalled indexer, lag, RPC failures and latency, and market lifecycle
 jobs that fail or stop completing.
 
+When an alert fires, follow the procedure in the [operations runbook](runbook.md).
+It covers starting and stopping the indexer, reading lag, retention gaps, replaying
+`EventLog`, retrying failed oracle submissions, rotating keys, and restoring the database.
+
 ---
 
 ## Running tests
@@ -319,3 +338,7 @@ The contract has not been deployed yet. Follow Step 3 above.
 
 **Friendbot rate-limited**
 Friendbot is a public Testnet faucet and may rate-limit requests. Wait a minute and retry.
+
+## Rate limiting (#1583)
+
+`RATE_LIMIT_FAIL_MODE` sets what the Redis-backed rate limiter does when Redis is unreachable. `open` (default) lets requests through and logs a warning; `closed` answers `503` with code `RATE_LIMIT_UNAVAILABLE`. Admin write routes always fail closed. Each Redis failure increments `rate_limit_redis_errors_total`.

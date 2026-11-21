@@ -1,35 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# BOXMEOUT — Deploy all contracts to Stellar Testnet
+# BOXMEOUT — Deploy to Stellar Testnet (thin wrapper)
 # ==============================================================================
 #
-# Deploys Market (WASM), Treasury and MarketFactory to Stellar Testnet in one
-# command and wires them together:
-#   - Treasury is initialised with the bet token (`token`) and the factory
-#     address, so the factory's ID is derived up front (see "SALTED IDS").
-#   - MarketFactory is initialised with the uploaded Market WASM hash and the
-#     real Treasury address as treasury / fee collector.
+# Kept so existing docs and commands keep working. All logic lives in deploy.sh:
 #
-# Requirements:
-#   - Rust with the wasm32-unknown-unknown target
-#   - Stellar CLI v28+ (`stellar`)
-#   - Node.js with backend dependencies installed (used to derive the admin
-#     public key from ADMIN_SECRET; run `npm ci` in backend/ first)
-#   - A funded Testnet account (friendbot: https://friendbot.stellar.org)
+#   contracts/scripts/deploy.sh --network testnet "$@"
 #
 # Usage:
-#   ADMIN_SECRET=SABC... ./deploy_testnet.sh
-#
-# Optional environment:
-#   BET_TOKEN_ID     Token contract (C...) used for bets. Defaults to the
-#                    native XLM Stellar Asset Contract, deployed if missing.
-#   DAILY_LIMIT      Treasury daily withdrawal limit in stroops
-#                    (default 100000000000).
-#
-# Outputs:
-#   - contracts/deployed.testnet.json   contract IDs and WASM hashes (machine readable)
-#   - contracts/.env.testnet            shell env file
-#   - .env lines for backend/ and frontend/ printed to stdout
+#   contracts/scripts/deploy_testnet.sh [--identity NAME] [--validate-only]
 # ==============================================================================
 
 set -euo pipefail
@@ -217,37 +196,26 @@ jq -n \
     rpcUrl: $rpcUrl,
     networkPassphrase: $passphrase,
     adminPublicKey: $admin,
-    betToken: $token,
-    deployedAt: $deployedAt,
-    contracts: {
-      treasury: $treasury,
-      marketFactory: $factory
-    },
-    wasmHashes: {
-      market: $marketWasmHash,
-      treasury: $treasuryWasmHash,
-      marketFactory: $factoryWasmHash
-    }
+    token: $token,
+    treasury: $treasury,
+    factory: $factory,
+    marketWasmHash: $marketWasmHash,
+    treasuryWasmHash: $treasuryWasmHash,
+    factoryWasmHash: $factoryWasmHash,
+    deployedAt: $deployedAt
   }' > "$DEPLOYED_JSON"
 
+echo "    Wrote $ENV_FILE"
+echo "    Wrote $DEPLOYED_JSON"
+
+# ─── SMOKE TEST ───────────────────────────────────────────────────────────────
+
 echo ""
-echo "============================================================"
-echo "  DEPLOYMENT COMPLETE"
-echo "============================================================"
-echo "  Treasury:         $TREASURY_ID"
-echo "  MarketFactory:    $FACTORY_ID"
-echo "  Market WASM hash: $MARKET_WASM_HASH"
-echo "  Bet token:        $BET_TOKEN_ID"
-echo "============================================================"
+echo "==> Running post-deploy smoke test..."
+if ! "$SCRIPT_DIR/smoke_test.sh"; then
+  echo "ERROR: Post-deploy smoke test failed. Contracts may be misconfigured." >&2
+  exit 1
+fi
+
 echo ""
-echo "  Machine-readable: $DEPLOYED_JSON"
-echo "  Shell env file:   $ENV_FILE"
-echo ""
-echo "Paste these into backend/.env:"
-echo "  MARKET_FACTORY_CONTRACT_ID=$FACTORY_ID"
-echo "  TREASURY_CONTRACT_ID=$TREASURY_ID"
-echo ""
-echo "Paste these into frontend/.env.local:"
-echo "  NEXT_PUBLIC_MARKET_FACTORY_CONTRACT_ID=$FACTORY_ID"
-echo "  NEXT_PUBLIC_TREASURY_CONTRACT_ID=$TREASURY_ID"
-echo "  NEXT_PUBLIC_BET_TOKEN_ID=$BET_TOKEN_ID"
+echo "==> Deployment complete."

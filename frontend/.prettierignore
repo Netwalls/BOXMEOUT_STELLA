@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+coverage
+dist
+build
+storybook-static
+playwright-report
+test-results
+package-lock.json

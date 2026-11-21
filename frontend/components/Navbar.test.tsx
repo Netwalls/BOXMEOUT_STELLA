@@ -10,19 +10,20 @@ jest.mock("./WalletConnectButton", () => ({
   WalletConnectButton: () => <div data-testid="wallet-connect-mock" />,
 }));
 
-const mockToggleTheme = jest.fn();
-let mockTheme = "dark";
+const mockSetPreference = jest.fn();
+let mockPreference = "system";
 jest.mock("@/hooks/useTheme", () => ({
   useTheme: () => ({
-    theme: mockTheme,
-    toggleTheme: mockToggleTheme,
+    preference: mockPreference,
+    theme: "light",
+    setPreference: mockSetPreference,
   }),
 }));
 
 describe("Navbar component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockTheme = "dark";
+    mockPreference = "system";
   });
 
   it("renders desktop navigation links and passes axe audit", async () => {
@@ -51,13 +52,16 @@ describe("Navbar component", () => {
     expect(mobileMenu).toBeInTheDocument();
   });
 
-  it("triggers theme toggle button with accessible label", async () => {
+  it("offers labelled Light, Dark and System theme choices (F-152)", async () => {
     const user = userEvent.setup();
     render(<Navbar />);
 
-    const themeBtn = screen.getByRole("button", { name: /switch to light mode/i });
-    await user.click(themeBtn);
+    const group = screen.getByRole("radiogroup", { name: /colour theme/i });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Light" })).toHaveAttribute("aria-checked", "false");
 
-    expect(mockToggleTheme).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("radio", { name: "Dark" }));
+    expect(mockSetPreference).toHaveBeenCalledWith("dark");
   });
 });

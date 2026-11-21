@@ -74,9 +74,7 @@ function BetFormBody({
       {/* Live status region */}
       <div role="status" aria-live="polite" className="empty:hidden">
         {marketClosed && !isLoading && (
-          <p className="text-sm text-yellow-400">
-            Betting is {market.status.toLowerCase()}.
-          </p>
+          <p className="text-sm text-yellow-400">Betting is {market.status.toLowerCase()}.</p>
         )}
         {isLoading && (
           <div className="flex items-center gap-2 text-sm text-amber-400">
@@ -87,8 +85,19 @@ function BetFormBody({
               viewBox="0 0 24 24"
               fill="none"
             >
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
             </svg>
             Confirming transaction...
           </div>
@@ -139,7 +148,7 @@ function BetFormBody({
         }}
         min={1}
         max={10000}
-        estimatedPayout={estimate ? estimate.payout : null}
+        estimatedPayout={estimate ? BigInt(Math.round(estimate.payout * 1e7)) : null}
         disabled={allDisabled}
       />
 
@@ -162,9 +171,7 @@ function BetFormBody({
         </div>
         <div className="flex justify-between">
           <span>Estimated payout</span>
-          <span className="text-white">
-            {estimate ? `${formatXlm(estimate.payout)} XLM` : "—"}
-          </span>
+          <span className="text-white">{estimate ? `${formatXlm(estimate.payout)} XLM` : "—"}</span>
         </div>
         <div className="flex justify-between border-t border-gray-700 pt-1 font-medium">
           <span>Total cost</span>
@@ -212,6 +219,7 @@ function useFocusTrap(containerRef: React.RefObject<HTMLElement>, active: boolea
 
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
 
       if (e.shiftKey) {
         if (document.activeElement === first) {
@@ -326,11 +334,7 @@ export function BettingInterface({ market, onBetPlaced }: BettingInterfaceProps)
     <>
       {/* ── Desktop / above 640px: inline card ────────────────────────── */}
       <div className="hidden sm:block bg-gray-800 rounded-xl p-4 w-full">
-        <BetFormBody
-          {...formProps}
-          headingId={headingId}
-          sideGroupId={sideGroupId}
-        />
+        <BetFormBody {...formProps} headingId={headingId} sideGroupId={sideGroupId} />
       </div>
 
       {/* ── Mobile: sticky "Place Bet" trigger bar ─────────────────────── */}
