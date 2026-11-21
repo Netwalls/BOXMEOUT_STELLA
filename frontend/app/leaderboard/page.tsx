@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, Check, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { fetchLeaderboard, LeaderboardEntry, LeaderboardPeriod } from "@/lib/api";
 import { truncateAddress } from "@/lib/stellar";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { CopyButton } from "@/components/CopyButton";
 
 // ─── Period tab config ────────────────────────────────────────────────────────
 
@@ -18,34 +19,17 @@ const PERIODS: { label: string; value: LeaderboardPeriod }[] = [
 // ─── Copy-to-clipboard cell ───────────────────────────────────────────────────
 
 function AddressCell({ address }: { address: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard not available (e.g. non-HTTPS dev environment)
-    }
-  }, [address]);
-
   return (
     <span className="flex items-center gap-1.5">
       <span className="font-mono text-sm text-gray-200">{truncateAddress(address)}</span>
-      <button
-        type="button"
-        onClick={copy}
-        aria-label={copied ? "Copied!" : `Copy address ${address}`}
-        title={copied ? "Copied!" : "Copy address"}
+      <CopyButton
+        value={address}
+        label={`Copy address ${address}`}
+        copiedLabel="Copied!"
+        copiedMessage="Address copied to clipboard"
+        failedMessage="Could not copy address"
         className="text-gray-500 hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
-      >
-        {copied ? (
-          <Check className="h-3.5 w-3.5 text-green-400" aria-hidden="true" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-        )}
-      </button>
+      />
     </span>
   );
 }

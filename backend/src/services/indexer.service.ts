@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import pino from "pino";
-import { SorobanRpc } from "@stellar/stellar-sdk";
 
 import * as marketService from "./market.service";
 import * as betService from "./bet.service";
@@ -13,7 +12,7 @@ import {
   observeSorobanRpc,
 } from "../metrics";
 import { checkpointLedgerForPage } from "./indexer.checkpoint";
-import { recordBetPlaced } from "../metrics";
+import { getRpcServer } from "../lib/soroban";
 
 /** Maximum events returned by one getEvents call. */
 const EVENTS_PAGE_LIMIT = 100;
@@ -195,8 +194,7 @@ export async function startIndexer(): Promise<void> {
   _stopRequested = false;
   _stopPromise = null;
 
-  const rpcUrl = process.env.STELLAR_RPC_URL!;
-  const server = new SorobanRpc.Server(rpcUrl);
+  const server = getRpcServer();
 
   let backoff = 1000; // ms
   const MAX_BACKOFF = 30_000;

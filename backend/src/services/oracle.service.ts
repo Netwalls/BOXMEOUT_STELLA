@@ -1,27 +1,34 @@
-import { Dispute, Market, OracleResult, Outcome, PrismaClient } from "@prisma/client";
+import { Dispute, Market, OracleReport, OracleResult, Outcome, PrismaClient } from "@prisma/client";
 import {
-  SorobanRpc,
   TransactionBuilder,
   Networks,
   Contract,
   Keypair,
   BASE_FEE,
+  Address,
   nativeToScVal,
   xdr,
 } from "@stellar/stellar-sdk";
 import { Queue, Worker, Job } from "bullmq";
 import { logger } from "../logger";
-import { ContractError } from "../errors";
+import { ConflictError, ContractError } from "../errors";
 import { db as prisma } from "../db";
 import { setResolutionQueueForMetrics } from "../metrics";
 import { z } from "zod";
 import { createProviderClient } from "./external-provider.client";
+import { dispatchWebhookEvent } from "./webhook.service";
 const RPC_URL = process.env.STELLAR_RPC_URL!;
 const NETWORK = process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
 const BOXREC_API_URL = process.env.BOXREC_API_URL!;
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+
+/**
+ * B-143 (#1579): agreeing oracle reports needed before an admin may confirm a
+ * result. Default 1 keeps today's single-oracle behaviour.
+ */
+const ORACLE_QUORUM = parseInt(process.env.ORACLE_QUORUM ?? "1", 10);
 
 /**
  * BullMQ queue for on-chain resolve_market() submissions.
@@ -147,17 +154,43 @@ export async function submitFightResult(
   //    verifyOracleAuthorization throws OracleAuthorizationError on failure.
   await verifyOracleAuthorization(market_id, reporter);
 
-  // 3. Persist the unconfirmed result. The unique constraint on marketId means
-  //    a second call for the same market will throw — callers should check
-  //    listPendingResolutions() first if re-entrancy is a concern.
-  const oracleResult = await prisma.oracleResult.create({
-    data: {
+  // 3. Record this oracle's report. One report per oracle per market.
+  await prisma.oracleReport.upsert({
+    where: { marketId_reportedBy: { marketId: market_id, reportedBy: reporter } },
+    create: { marketId: market_id, reportedBy: reporter, outcome, source },
+    update: { outcome, source, reportedAt: new Date() },
+  });
+
+  // 4. Reports must agree. A disagreement is kept on record for an admin to
+  //    see, and no decision is written from it.
+  const reports = await prisma.oracleReport.findMany({
+    where: { marketId: market_id },
+    select: { outcome: true },
+  });
+  const distinctOutcomes = new Set(reports.map((r) => r.outcome));
+  if (distinctOutcomes.size > 1) {
+    logger.warn(
+      { marketId: market_id, outcomes: [...distinctOutcomes] },
+      "submitFightResult: conflicting oracle reports",
+    );
+    throw new ConflictError(`Conflicting oracle reports for market ${market_id}`);
+  }
+
+  // 5. Write the decision row, unless an admin has already confirmed one.
+  const existing = await prisma.oracleResult.findUnique({ where: { marketId: market_id } });
+  if (existing?.confirmed) {
+    throw new ConflictError(`Oracle result for market ${market_id} is already confirmed`);
+  }
+  const oracleResult = await prisma.oracleResult.upsert({
+    where: { marketId: market_id },
+    create: {
       marketId: market_id,
       reportedBy: reporter,
       outcome,
       source,
       confirmed: false, // Explicit: never auto-confirms. Admin must call confirmFightResult().
     },
+    update: { reportedBy: reporter, outcome, source },
   });
 
   logger.info(
@@ -193,6 +226,17 @@ export async function confirmFightResult(
     include: { market: true },
   });
   if (!oracleResult) throw new Error(`OracleResult not found: ${oracle_result_id}`);
+
+  // B-143 (#1579): confirmation needs ORACLE_QUORUM reports agreeing with the decision.
+  const agreeing = await prisma.oracleReport.count({
+    where: { marketId: oracleResult.marketId, outcome: oracleResult.outcome },
+  });
+  if (agreeing < ORACLE_QUORUM) {
+    throw new ConflictError(
+      `Quorum not reached for market ${oracleResult.marketId}: ${agreeing}/${ORACLE_QUORUM} agreeing reports`,
+    );
+  }
+
   logger.info({ oracle_result_id, admin }, "oracle result confirmed");
 
   await enqueueResolution(oracleResult.marketId, oracleResult.outcome);
@@ -242,7 +286,7 @@ export async function processResolutionJob(
   const market = await prisma.market.findUnique({ where: { id: marketId } });
   if (!market) throw new Error(`Market not found: ${marketId}`);
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
 
@@ -277,6 +321,75 @@ export async function processResolutionJob(
     where: { id: marketId },
     data: { status: "Resolved", outcome, resolvedAt: new Date() },
   });
+
+  await dispatchWebhookEvent(
+    "market.resolved",
+    { marketId, outcome },
+    `market.resolved:${marketId}`,
+  );
+}
+
+/** Statuses from which an admin may cancel a market (B-137). */
+export const CANCELLABLE_MARKET_STATUSES: readonly string[] = ["Open", "Locked"];
+
+export function cancelJobId(marketId: string): string {
+  return `cancel_market:${marketId}`;
+}
+
+/**
+ * B-137: Enqueues an on-chain cancel_market() submission. The job id is the
+ * idempotency key, so a repeated admin request never submits twice while a
+ * job is pending, active or completed. A failed job is replaced on retry.
+ */
+export async function enqueueCancellation(marketId: string, reason: string): Promise<void> {
+  const jobId = cancelJobId(marketId);
+  const existing = await resolutionQueue.getJob(jobId);
+  if (existing) {
+    const state = await existing.getState();
+    if (state === "completed" || state === "active" || state === "waiting" || state === "delayed") {
+      logger.info({ marketId, jobId, state }, "enqueueCancellation: already enqueued, skipping duplicate");
+      return;
+    }
+    await existing.remove();
+  }
+
+  await resolutionQueue.add("cancel_market", { marketId, reason, kind: "cancel" }, { jobId });
+  logger.info({ marketId, jobId }, "enqueueCancellation: cancel_market submission enqueued");
+}
+
+/**
+ * B-137: Performs the on-chain cancel_market(admin) call. The database status is
+ * deliberately not written here; the indexer updates it when the event is seen.
+ */
+export async function processCancellationJob(marketId: string): Promise<void> {
+  const market = await prisma.market.findUnique({ where: { id: marketId } });
+  if (!market) throw new Error(`Market not found: ${marketId}`);
+
+  const server = new SorobanRpc.Server(RPC_URL);
+  const keypair = Keypair.fromSecret(ADMIN_SECRET);
+  const account = await server.getAccount(keypair.publicKey());
+
+  const contract = new Contract(market.contractAddress);
+  const adminArg = new Address(keypair.publicKey()).toScVal();
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK,
+  })
+    .addOperation(contract.call("cancel_market", adminArg))
+    .setTimeout(30)
+    .build();
+
+  const prepared = await server.prepareTransaction(tx);
+  prepared.sign(keypair);
+  const sendResult = await server.sendTransaction(prepared);
+
+  if (sendResult.status === "ERROR") {
+    throw new ContractError(
+      `Stellar tx failed: ${JSON.stringify(sendResult.errorResult)}`,
+      sendResult.errorResult,
+    );
+  }
 }
 
 /**
@@ -285,8 +398,12 @@ export async function processResolutionJob(
  */
 export const resolutionWorker = new Worker(
   "oracle-resolution",
-  async (job: Job<{ marketId: string; outcome: Outcome }>) => {
-    await processResolutionJob(job.data.marketId, job.data.outcome);
+  async (job: Job<{ marketId: string; outcome?: Outcome; kind?: string }>) => {
+    if (job.name === "cancel_market") {
+      await processCancellationJob(job.data.marketId);
+      return;
+    }
+    await processResolutionJob(job.data.marketId, job.data.outcome as Outcome);
   },
   { connection: { url: REDIS_URL } },
 );
@@ -404,7 +521,7 @@ export async function raiseDispute(
     data: { marketId: market_id, raisedBy: bettor, reason },
   });
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
   const contract = new Contract(market.contractAddress);
@@ -429,6 +546,17 @@ export async function raiseDispute(
 }
 
 /**
+ * B-143 (#1579): every oracle report recorded for a market, oldest first.
+ * Lets an admin see agreement or conflict before confirming.
+ */
+export async function listMarketOracleReports(market_id: string): Promise<OracleReport[]> {
+  return prisma.oracleReport.findMany({
+    where: { marketId: market_id },
+    orderBy: { reportedAt: "asc" },
+  });
+}
+
+/**
  * Admin resolves a dispute with a final outcome (may override oracle).
  * Calls resolve_dispute() on-chain and updates DB dispute record.
  */
@@ -440,7 +568,7 @@ export async function resolveDispute(
   const dispute = await prisma.dispute.findUniqueOrThrow({ where: { id: dispute_id } });
   const market = await prisma.market.findUniqueOrThrow({ where: { id: dispute.marketId } });
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
   const contract = new Contract(market.contractAddress);
@@ -471,6 +599,12 @@ export async function resolveDispute(
       data: { action: "resolveDispute", actor: admin, target: dispute.marketId, metadata: { disputeId: dispute_id, override_outcome } },
     }),
   ]);
+
+  await dispatchWebhookEvent(
+    "market.resolved",
+    { marketId: dispute.marketId, outcome: override_outcome },
+    `market.resolved:${dispute.marketId}`,
+  );
 }
 
 // ─── Oracle Address Management (Issue #455) ────────────────────────────────

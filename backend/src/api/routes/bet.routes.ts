@@ -6,8 +6,9 @@ import {
   getPayoutEstimateHandler,
   getLeaderboardHandler,
 } from "../controllers/bet.controller";
-import { validate, validateAddressParam } from "../middleware/validate";
-import { payoutEstimateQuery, pagedQuery } from "../schemas/routes.schema";
+import { validateAddressParam } from "../middleware/validate";
+import { exportBetsCsvHandler } from "../controllers/bet-export.controller";
+import { requireOwnAddress, walletAuthMiddleware } from "../middleware/walletAuth.middleware";
 import { fail } from "../response";
 
 const payoutEstimateLimiter = rateLimit({
@@ -26,6 +27,16 @@ const deprecatedLeaderboardAlias = (_req: Request, res: Response, next: NextFunc
   next();
 };
 
+const exportLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    fail(res, 429, "RATE_LIMITED", "Too many requests", { details: { retryAfter: 60 } });
+  },
+});
+
 const router = Router();
 
 // GET /api/bets/leaderboard — deprecated alias of GET /api/leaderboard (#1382)
@@ -37,6 +48,16 @@ router.get(
   payoutEstimateLimiter,
   validate({ query: payoutEstimateQuery }),
   getPayoutEstimateHandler,
+);
+
+// GET /api/bets/:address/export — B-138 streaming CSV, owner-only
+router.get(
+  "/:address/export",
+  validateAddressParam,
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  exportLimiter,
+  exportBetsCsvHandler,
 );
 
 // GET /api/bets/:address/portfolio

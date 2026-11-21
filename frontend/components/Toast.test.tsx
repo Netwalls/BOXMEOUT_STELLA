@@ -116,3 +116,72 @@ describe('Toast', () => {
     expect(handleAction).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Toast announcements and timing (F-153)', () => {
+  const base = { id: 't1', type: 'success' as const, message: 'Bet confirmed' };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('announces info and success as status and errors as alert', () => {
+    const { rerender } = render(<Toast toast={base} onDismiss={() => {}} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Bet confirmed');
+
+    rerender(<Toast toast={{ ...base, type: 'info' }} onDismiss={() => {}} />);
+    expect(screen.getByRole('status')).toBeInTheDocument();
+
+    rerender(<Toast toast={{ ...base, type: 'error' }} onDismiss={() => {}} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Bet confirmed');
+  });
+
+  it('dismisses after 5 seconds when not interacted with', () => {
+    const onDismiss = jest.fn();
+    render(<Toast toast={base} onDismiss={onDismiss} />);
+    act(() => { jest.advanceTimersByTime(4999); });
+    expect(onDismiss).not.toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(1); });
+    expect(onDismiss).toHaveBeenCalledWith('t1');
+  });
+
+  it('pauses while hovered and resumes with the remaining time', () => {
+    const onDismiss = jest.fn();
+    render(<Toast toast={base} onDismiss={onDismiss} />);
+    const region = screen.getByRole('status');
+
+    act(() => { jest.advanceTimersByTime(3000); });
+    fireEvent.mouseEnter(region);
+    act(() => { jest.advanceTimersByTime(10000); });
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    fireEvent.mouseLeave(region);
+    act(() => { jest.advanceTimersByTime(1999); });
+    expect(onDismiss).not.toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(1); });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('pauses while focus is inside and resumes when focus leaves', () => {
+    const onDismiss = jest.fn();
+    render(<Toast toast={base} onDismiss={onDismiss} />);
+    const button = screen.getByRole('button');
+
+    fireEvent.focus(button);
+    act(() => { jest.advanceTimersByTime(60000); });
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    fireEvent.blur(button, { relatedTarget: null });
+    act(() => { jest.advanceTimersByTime(5000); });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a repeat count when collapsed and restarts the timer', () => {
+    const onDismiss = jest.fn();
+    render(<Toast toast={{ ...base, count: 3, updatedAt: 1 }} onDismiss={onDismiss} />);
+    expect(screen.getByText('×3')).toBeInTheDocument();
+  });
+});
