@@ -10,6 +10,18 @@
 //! `PROPTEST_CASES` env var). Betting-only tests default to 256 cases; the
 //! heavier full-lifecycle tests (lock → resolve → claim) default to 64.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{BetSide, Fighter, MarketStatus, Outcome, ProtocolConfig};
 use market::{MarketContract, MarketContractClient};
 use proptest::prelude::ProptestConfig;
@@ -46,7 +58,7 @@ impl MockFactory {
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
-            bet_token: admin,
+            bet_token: env.current_contract_address(),
             resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
@@ -221,6 +233,7 @@ proptest::proptest! {
         assert_eq!(client.get_market_info().status, MarketStatus::Locked);
 
         // Resolve with FighterA winning
+        env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
         client.resolve_market(&oracle, &Outcome::FighterA);
 
         // Claim all winning bets
@@ -319,6 +332,7 @@ proptest::proptest! {
         env.ledger().with_mut(|l| l.timestamp = betting_ends_at);
         client.lock_market(&oracle);
         let outcome = if a_wins { Outcome::FighterA } else { Outcome::FighterB };
+        env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1_000_000);
         client.resolve_market(&oracle, &outcome);
 
         let mut total_payouts = 0i128;

@@ -19,6 +19,7 @@ import type { NextFunction, Request, Response } from "express";
 import type Redis from "ioredis";
 import { redis as sharedRedis } from "../../lib/redis";
 import { logger } from "../../logger";
+import { guardRedis } from "../../lib/redis-guard";
 
 export const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 /**
@@ -129,47 +130,60 @@ export function idempotencyMiddleware(store: IdempotencyStore = sharedRedis) {
     const redisKey = `${KEY_PREFIX}${scopeOf(req)}:${key}`;
     const fingerprint = fingerprintRequest(req);
 
-    let claimed: boolean;
-    try {
-      const claim = await store.set(
-        redisKey,
-        JSON.stringify({ state: "pending", fingerprint } satisfies StoredRecord),
-        "EX",
-        IDEMPOTENCY_IN_PROGRESS_TTL_SECONDS,
-        "NX",
+    // Redis unavailable or timed out: fail open and process without idempotency,
+    // as before this middleware existed. `undefined` marks "store unavailable",
+    // which is distinct from `null` ("key not present") (#1590).
+    const claim = await guardRedis<"OK" | null | undefined>(
+      "idempotency",
+      () =>
+        store.set(
+          redisKey,
+          JSON.stringify({ state: "pending", fingerprint } satisfies StoredRecord),
+          "EX",
+          IDEMPOTENCY_IN_PROGRESS_TTL_SECONDS,
+          "NX",
+        ),
+      undefined,
+    );
+    if (claim === undefined) {
+      logger.warn("idempotency store unavailable; processing without idempotency");
+      next();
+      return;
+    }
+
+    if (claim !== "OK") {
+      const raw = await guardRedis<string | null | undefined>(
+        "idempotency",
+        () => store.get(redisKey),
+        undefined,
       );
-      claimed = claim === "OK";
+      if (raw === undefined) {
+        logger.warn("idempotency store unavailable; processing without idempotency");
+        next();
+        return;
+      }
+      const existing = parseRecord(raw);
 
-      if (!claimed) {
-        const existing = parseRecord(await store.get(redisKey));
-
-        if (existing && existing.fingerprint !== fingerprint) {
-          res.status(422).json({
-            error: "Idempotency-Key was already used with a different request body",
-            code: "IDEMPOTENCY_KEY_MISMATCH",
-          });
-          return;
-        }
-
-        if (existing?.state === "complete") {
-          res
-            .status(existing.statusCode)
-            .set("Idempotent-Replayed", "true")
-            .json(existing.body);
-          return;
-        }
-
-        res.status(409).json({
-          error: "A request with this Idempotency-Key is already in progress",
-          code: "IDEMPOTENCY_IN_PROGRESS",
+      if (existing && existing.fingerprint !== fingerprint) {
+        res.status(422).json({
+          error: "Idempotency-Key was already used with a different request body",
+          code: "IDEMPOTENCY_KEY_MISMATCH",
         });
         return;
       }
-    } catch (err) {
-      // Fail open: if Redis is unreachable the request runs without idempotency,
-      // which matches the behaviour before this middleware existed.
-      logger.warn({ err }, "idempotency store unavailable; processing without idempotency");
-      next();
+
+      if (existing?.state === "complete") {
+        res
+          .status(existing.statusCode)
+          .set("Idempotent-Replayed", "true")
+          .json(existing.body);
+        return;
+      }
+
+      res.status(409).json({
+        error: "A request with this Idempotency-Key is already in progress",
+        code: "IDEMPOTENCY_IN_PROGRESS",
+      });
       return;
     }
 

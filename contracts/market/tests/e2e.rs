@@ -12,6 +12,18 @@
 //!   5. Winners claim their proportional payouts
 //!   6. Assert final balances match expected payouts *exactly*
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation
+    )
+)]
+
 use market::types::{
     BetSide, Fighter, Market, MarketStatus, Outcome, ProtocolConfig, SettledOutcome,
 };
@@ -49,10 +61,42 @@ impl MockFactory {
             max_bet_amount: 100_000_000_000,
             dispute_window_sec: 86_400,
             paused: false,
-            bet_token: admin,
+            bet_token: env.current_contract_address(),
             resolution_timeout_sec: 7 * 24 * 60 * 60,
         }
     }
+}
+
+// ─── Mock Treasury ────────────────────────────────────────────────────────────
+
+/// Accepts escrow calls without moving tokens, so the market's payout and
+/// deposit paths can run inside the test environment.
+#[contract]
+struct MockTreasury;
+
+#[contractimpl]
+impl MockTreasury {
+    pub fn deposit(
+        _env: Env,
+        _from_market: Address,
+        _market_id: Bytes,
+        _bettor: Address,
+        _amount: i128,
+    ) {
+    }
+
+    pub fn deposit_fees(_env: Env, _market_id: Bytes, _amount: i128) {}
+
+    pub fn release_winnings(
+        _env: Env,
+        _from_market: Address,
+        _market_id: Bytes,
+        _recipient: Address,
+        _amount: i128,
+    ) {
+    }
+
+    pub fn sweep_dust(_env: Env, _from_market: Address, _market_id: Bytes, _amount: i128) {}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -98,6 +142,8 @@ fn e2e_create_bet_lock_resolve_claim() {
 
     let oracle = Address::generate(&env);
     let fee_collector = Address::generate(&env);
+    let treasury_id = env.register(MockTreasury, ());
+    let bet_token = Address::generate(&env);
     let market_cid = env.register(MarketContract, ());
     let client = MarketContractClient::new(&env, &market_cid);
 
@@ -183,6 +229,7 @@ fn e2e_create_bet_lock_resolve_claim() {
     assert!(matches!(m.status, MarketStatus::Locked));
 
     // ── 4. Resolve market (FighterA wins) ─────────────────────────────────
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::FighterA);
 
     let m = client.get_market_info();
@@ -236,6 +283,8 @@ fn e2e_draw_both_sides_refunded() {
 
     let oracle = Address::generate(&env);
     let fee_collector = Address::generate(&env);
+    let treasury_id = env.register(MockTreasury, ());
+    let bet_token = Address::generate(&env);
     let market_cid = env.register(MarketContract, ());
     let client = MarketContractClient::new(&env, &market_cid);
 
@@ -279,6 +328,7 @@ fn e2e_draw_both_sides_refunded() {
     });
 
     // Resolve with Draw → status becomes Cancelled
+    env.ledger().with_mut(|l| l.timestamp = scheduled_at);
     client.resolve_market(&oracle, &Outcome::Draw);
 
     let m = client.get_market_info();
@@ -307,6 +357,8 @@ fn e2e_cancelled_market_full_refund() {
 
     let oracle = Address::generate(&env);
     let fee_collector = Address::generate(&env);
+    let treasury_id = env.register(MockTreasury, ());
+    let bet_token = Address::generate(&env);
     let market_cid = env.register(MarketContract, ());
     let client = MarketContractClient::new(&env, &market_cid);
 

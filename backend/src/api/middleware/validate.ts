@@ -22,43 +22,6 @@ export const stellarContractAddress = z
   });
 
 /**
- * Validates request body and/or query against zod schemas.
- * Responds with 400 and VALIDATION_ERROR details on failure; on success the
- * parsed (coerced and defaulted) values replace the raw ones on the request.
- */
-export function validate(schemas: { body?: ZodTypeAny; query?: ZodTypeAny }) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (schemas.body) {
-      const result = schemas.body.safeParse(req.body);
-      if (!result.success) {
-        res.status(400).json({
-          error: "Validation failed",
-          code: "VALIDATION_ERROR",
-          details: result.error.flatten(),
-        });
-        return;
-      }
-      req.body = result.data;
-    }
-
-    if (schemas.query) {
-      const result = schemas.query.safeParse(req.query);
-      if (!result.success) {
-        res.status(400).json({
-          error: "Validation failed",
-          code: "VALIDATION_ERROR",
-          details: result.error.flatten(),
-        });
-        return;
-      }
-      req.query = result.data;
-    }
-
-    next();
-  };
-}
-
-/**
  * Validates a single route param against the given zod schema.
  * Responds with 400 and the schema's error code on failure.
  */

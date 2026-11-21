@@ -58,10 +58,8 @@ pub enum ContractError {
     ResolutionWindowExpired = 31,
     /// A conflicting oracle report already exists
     ConflictingOracleReport = 32,
-    /// This oracle has already reported an outcome for the market
-    AlreadyVoted = 33,
-    /// Quorum config is empty, has duplicate oracles, or threshold is out of range
-    InvalidQuorumConfig = 34,
+    /// resolve_market was called before the fight's scheduled_at
+    ResolutionTooEarly = 33,
 
     // ── Treasury ───────────────────────────────────────────
     /// Caller is not an approved market contract
@@ -82,8 +80,4 @@ pub enum ContractError {
     // ── Reentrancy ─────────────────────────────────────────
     /// A claim or refund transfer is already in progress
     ReentrancyGuard = 60,
-
-    // ── Protocol ───────────────────────────────────────────
-    /// Protocol is paused; new bets are rejected (claims and refunds remain open)
-    ProtocolPaused = 61,
 }

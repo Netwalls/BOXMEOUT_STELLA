@@ -5,14 +5,18 @@ const creator = Keypair.random().publicKey();
 const oracle = Keypair.random().publicKey();
 const contract = StrKey.encodeContract(Buffer.alloc(32, 7));
 
+const DAY = 24 * 60 * 60 * 1000;
+
+// Dates are relative to now so the fixture stays inside the default 365-day horizon.
 function validBody(overrides: Record<string, unknown> = {}) {
+  const now = Date.now();
   return {
     id: "market-1",
     contractAddress: contract,
     fighterA: { name: "A" },
     fighterB: { name: "B" },
-    scheduledAt: "2030-01-01T00:00:00.000Z",
-    bettingEndsAt: "2029-12-31T23:00:00.000Z",
+    scheduledAt: new Date(now + 30 * DAY).toISOString(),
+    bettingEndsAt: new Date(now + 29 * DAY).toISOString(),
     createdBy: creator,
     oracleAddress: oracle,
     ...overrides,

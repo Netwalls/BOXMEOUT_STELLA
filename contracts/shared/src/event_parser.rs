@@ -9,79 +9,118 @@ use crate::types::{BetRecord, ClaimReceipt, Outcome};
 
 // ─── Typed event structs ──────────────────────────────────────────────────────
 
+/// Decoded payload of the `MarketCreatedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct MarketCreatedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Deployed market contract address.
     pub contract_address: Address,
+    /// Identifier of the match.
     pub match_id: String,
 }
 
+/// Decoded payload of the `MarketLockedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct MarketLockedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Time the market was locked (unix seconds).
     pub locked_at: u64,
 }
 
+/// Decoded payload of the `MarketResolvedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct MarketResolvedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Outcome that was declared.
     pub outcome: Outcome,
+    /// Time the outcome was resolved (unix seconds).
     pub resolved_at: u64,
 }
 
+/// Decoded payload of the `BetPlacedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct BetPlacedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// The bet that was placed.
     pub bet: BetRecord,
 }
 
+/// Decoded payload of the `WinningsClaimedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct WinningsClaimedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Receipt for the claim.
     pub receipt: ClaimReceipt,
 }
 
+/// Decoded payload of the `RefundClaimedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct RefundClaimedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Address that placed the bet.
     pub bettor: Address,
+    /// Unique bet identifier.
     pub bet_id: Bytes,
+    /// Amount, in stroops.
     pub amount: i128,
 }
 
+/// Decoded payload of the `MarketCancelledEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct MarketCancelledEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Human-readable reason.
     pub reason: String,
 }
 
+/// Decoded payload of the `MarketDisputedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct MarketDisputedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Human-readable reason.
     pub reason: String,
 }
 
+/// Decoded payload of the `DisputeResolvedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct DisputeResolvedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Outcome after the dispute was resolved.
     pub final_outcome: Outcome,
 }
 
+/// Decoded payload of the `ResolutionDisputedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct ResolutionDisputedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Address that raised the dispute.
     pub disputer: Address,
+    /// Dispute reason bytes.
     pub reason: Bytes,
 }
 
+/// Decoded payload of the `ResolutionFinalizedEvent` contract event.
 #[derive(Clone, Debug)]
 pub struct ResolutionFinalizedEvent {
+    /// Numeric market identifier.
     pub market_id: u64,
+    /// Time the resolution was finalised (unix seconds).
     pub finalized_at: u64,
 }
 
 // ─── Error type ───────────────────────────────────────────────────────────────
 
+/// Reasons an event payload could not be decoded.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ParseError {
     /// Topics or data Vec does not have the expected length
@@ -306,7 +345,7 @@ mod tests {
 
     fn setup() -> (Env, Address) {
         let env = Env::default();
-        let id = env.register_contract(None, Dummy);
+        let id = env.register(Dummy, ());
         (env, id)
     }
 
