@@ -103,20 +103,15 @@ impl MarketContract {
     }
 
     /// Calculate net_pool after deducting protocol fees.
+    /// Delegates to `shared::payout`, which the payout test vectors cover (#1584).
     fn net_pool(market: &Market) -> i128 {
-        market
-            .total_pool
-            .checked_sub(shared::calculate_fee(market.total_pool, market.protocol_fee_bp))
-            .expect("net_pool underflow")
+        shared::payout::net_pool(market.total_pool, market.protocol_fee_bp)
     }
 
     /// Calculate pro-rata payout: (bettor_stake / winning_pool) * net_pool.
+    /// Delegates to `shared::payout` (#1584).
     fn pro_rata_payout(bettor_stake: i128, net: i128, winning_pool: i128) -> i128 {
-        bettor_stake
-            .checked_mul(net)
-            .expect("payout overflow (mult)")
-            .checked_div(winning_pool)
-            .expect("payout division error")
+        shared::payout::pro_rata_payout(bettor_stake, net, winning_pool)
     }
 
     /// Called by MarketFactory immediately after contract deployment.

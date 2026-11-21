@@ -31,6 +31,36 @@ cargo llvm-cov --workspace --html --open                   # browsable HTML repo
 CI fails if any optimised `.wasm` exceeds `MAX_WASM_SIZE_BYTES` (65,536 bytes, the
 Soroban contract code size limit), configured in `.github/workflows/contracts-ci.yml`.
 
+### Reproducible wasm builds
+
+CI builds the contracts with `--locked` inside a pinned toolchain, builds them
+twice and fails if the two sets of hashes differ. On `main` the optimised
+`.wasm` files and a `SHA256SUMS` file are uploaded as the `contracts-wasm`
+workflow artifact; on a tagged release they are attached to the GitHub release.
+
+To rebuild locally and confirm a deployed contract matches the source at a
+given commit:
+
+```bash
+# 1. Check out the exact commit that was deployed
+git checkout <commit-sha>
+
+# 2. Build with the same pinned toolchain and locked dependencies
+cd contracts
+cargo build --locked --target wasm32-unknown-unknown --release
+
+# 3. Hash the optimised wasm and compare with the published SHA256SUMS
+sha256sum target/wasm32-unknown-unknown/release/*.wasm
+
+# 4. Compare against the on-chain wasm hash
+stellar contract fetch --id <CONTRACT_ID> --network <NETWORK> --out onchain.wasm
+sha256sum onchain.wasm
+```
+
+The hash from step 3 must match the entry in the release's `SHA256SUMS` file,
+and the hash from step 4 must match the same value. If they differ, the deployed
+contract was not built from that commit.
+
 ## Contracts
 
 ### Treasury
@@ -68,6 +98,13 @@ Deploys new Market contracts and manages protocol configuration.
 
 ### Shared
 Common types, utilities, and constants used across contracts.
+
+## CLI Cookbook
+
+For verified `stellar contract invoke` examples covering every public entrypoint
+of the factory, market and treasury (including how to pass `Bytes` ids,
+`Address`, enums such as `Outcome`/`BetSide` and `Option` values), see
+[`docs/contracts-cli.md`](../docs/contracts-cli.md).
 
 ## Events Reference
 
@@ -222,31 +259,6 @@ land are listed in [`docs/contracts.md` → Event Topics](../docs/contracts.md#e
 - `"already initialized"` - Initialize called more than once
 - `"amount exceeds balance"` - Withdrawal exceeds available balance
 - `"fee_bps exceeds ceiling"` - Fee rate > 10000 basis points (100%)
-- `"protocol is not paused"` - Emergency drain called while protocol active
-- `"market not open"` - Bet placed on closed market
-- `"betting period has ended"` - Bet placed after betting_ends_at
+- `"protocol is n
 
-## Type Definitions
-
-### MarketStatus
-- `Open` - Bets are being accepted
-- `Locked` - Fight started, no more bets
-- `Resolved` - Winner declared, claims open
-- `Cancelled` - Fight cancelled, full refunds
-- `Disputed` - Result under review, claims frozen
-
-### BetSide
-- `FighterA` - Bet on first fighter
-- `FighterB` - Bet on second fighter
-
-### Outcome
-- `FighterA` - Fighter A wins
-- `FighterB` - Fighter B wins
-- `Draw` - Match ends in draw
-- `NoContest` - DQ or injury ruling
-- `Undetermined` - Not yet resolved (sentinel; rejected by `resolve_market` / `resolve_dispute`)
-
-All shared enums and structs (`MarketStatus`, `BetSide`, `Outcome`, `Fighter`, `Bet`,
-`ClaimReceipt`, `ProtocolConfig`) are defined once in `shared/src/types.rs`. The Market
-contract re-exports them from `market/src/types.rs`, which only defines market-only types
-(the full `Market` state, `SettledOutcome`, `MarketResolved`, `WinningsClaimed`).
+/* … truncated 1101 chars — edit only what you need near the top … */

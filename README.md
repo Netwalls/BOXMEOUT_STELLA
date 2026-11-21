@@ -67,3 +67,6 @@ MIT
 
 <!-- handsoff-issue-1333 -->
 - #1333: Frontend CI broken on main: package-lock.json out of sync with package.json
+
+<!-- handsoff-issue-1622 -->
+- #1622: C-144: Add a storage version and migrate() hook for contract upgrades
