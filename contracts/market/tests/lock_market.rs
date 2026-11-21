@@ -223,6 +223,69 @@ fn oracle_can_lock_after_deadline() {
     assert_eq!(client.get_market_info().status, MarketStatus::Locked);
 }
 
+// ─── Exact-boundary lock tests (C-157) ────────────────────────────────────────
+
+#[test]
+fn lock_without_auth_one_second_before_deadline_fails() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, _oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at - 1);
+
+    // No auths: early lock must be rejected for a non-oracle caller.
+    env.set_auths(&[]);
+
+    let stranger = Address::generate(&env);
+    let result = client.try_lock_market(&stranger);
+    assert!(result.is_err());
+    assert_eq!(client.get_market_info().status, MarketStatus::Open);
+}
+
+#[test]
+fn lock_without_auth_at_exact_deadline_succeeds() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, _oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at);
+    env.set_auths(&[]);
+
+    let stranger = Address::generate(&env);
+    assert!(client.try_lock_market(&stranger).is_ok());
+    assert_eq!(client.get_market_info().status, MarketStatus::Locked);
+}
+
+#[test]
+fn lock_without_auth_one_second_after_deadline_succeeds() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, _oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at + 1);
+    env.set_auths(&[]);
+
+    let stranger = Address::generate(&env);
+    assert!(client.try_lock_market(&stranger).is_ok());
+    assert_eq!(client.get_market_info().status, MarketStatus::Locked);
+}
+
+#[test]
+fn oracle_early_lock_still_requires_auth() {
+    let env = Env::default();
+
+    env.mock_all_auths();
+    let (client, oracle, betting_ends_at) = setup(&env);
+    env.ledger().with_mut(|l| l.timestamp = betting_ends_at - 1);
+
+    // Drop all mocked auths: even the oracle must present a signature early.
+    env.set_auths(&[]);
+
+    let result = client.try_lock_market(&oracle);
+    assert!(result.is_err());
+    assert_eq!(client.get_market_info().status, MarketStatus::Open);
+}
+
 // ─── Double lock ──────────────────────────────────────────────────────────────
 
 #[test]

@@ -6,7 +6,6 @@
 
 use soroban_sdk::contracterror;
 
-/// Typed errors returned by contract entry points.
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ContractError {
@@ -31,14 +30,6 @@ pub enum ContractError {
     InvalidTimestamp = 14,
     /// Contract storage has not been initialized yet
     NotInitialized = 15,
-    /// Protocol is paused; new bets are rejected (claims and refunds stay open)
-    ProtocolPaused = 16,
-    /// Arithmetic overflow or division error while computing a value
-    ArithmeticOverflow = 17,
-    /// Amount must be strictly positive
-    InvalidAmount = 18,
-    /// Configuration value is outside its allowed range
-    InvalidConfig = 19,
 
     // ── Bet Validation ─────────────────────────────────────
     /// Bet amount is below config.min_bet
@@ -67,6 +58,8 @@ pub enum ContractError {
     ResolutionWindowExpired = 31,
     /// A conflicting oracle report already exists
     ConflictingOracleReport = 32,
+    /// resolve_market was called before the fight's scheduled_at
+    ResolutionTooEarly = 33,
 
     // ── Treasury ───────────────────────────────────────────
     /// Caller is not an approved market contract

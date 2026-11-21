@@ -21,9 +21,58 @@ pub fn clamp(val: i128, min_val: i128, max_val: i128) -> i128 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     const MIN: i128 = i128::MIN;
     const MAX: i128 = i128::MAX;
+
+    // Keep CI quick: a fixed, small number of cases per property.
+    const CASES: u32 = 256;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(CASES))]
+
+        #[test]
+        fn prop_abs_diff_never_panics(a in any::<i128>(), b in any::<i128>()) {
+            // Must not panic for any i128 pair (wrapping is defined behaviour).
+            let _ = abs_diff(a, b);
+        }
+
+        #[test]
+        fn prop_abs_diff_symmetric(a in any::<i128>(), b in any::<i128>()) {
+            prop_assert_eq!(abs_diff(a, b), abs_diff(b, a));
+        }
+
+        #[test]
+        fn prop_abs_diff_zero_iff_equal(a in any::<i128>(), b in any::<i128>()) {
+            prop_assert_eq!(abs_diff(a, b) == 0, a == b);
+        }
+
+        #[test]
+        fn prop_clamp_never_panics(val in any::<i128>(), lo in any::<i128>(), hi in any::<i128>()) {
+            let _ = clamp(val, lo, hi);
+        }
+
+        #[test]
+        fn prop_clamp_within_bounds(val in any::<i128>(), lo in any::<i128>(), hi in any::<i128>()) {
+            let out = clamp(val, lo, hi);
+            if lo <= hi {
+                prop_assert!(out >= lo && out <= hi);
+            }
+        }
+
+        #[test]
+        fn prop_clamp_idempotent(val in any::<i128>(), lo in any::<i128>(), hi in any::<i128>()) {
+            let once = clamp(val, lo, hi);
+            prop_assert_eq!(clamp(once, lo, hi), once);
+        }
+
+        #[test]
+        fn prop_clamp_identity_in_range(val in any::<i128>(), lo in any::<i128>(), hi in any::<i128>()) {
+            prop_assume!(lo <= val && val <= hi);
+            prop_assert_eq!(clamp(val, lo, hi), val);
+        }
+    }
 
     #[test]
     fn abs_diff_normal() {

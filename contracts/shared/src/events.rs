@@ -3,12 +3,6 @@
 //! All emitted events are defined here for consistency.
 //! ============================================================
 
-// `Env::events().publish` is deprecated in soroban-sdk 27 in favour of the
-// `#[contractevent]` macro. Migrating changes every event's on-chain topic and
-// data layout, which indexers depend on, so the migration is tracked separately
-// and the deprecation is allowed for this module only.
-#![allow(deprecated)]
-
 use soroban_sdk::{Address, Bytes, Env, String, Symbol, Vec};
 
 use crate::types::{BetRecord, ClaimReceipt, Outcome};

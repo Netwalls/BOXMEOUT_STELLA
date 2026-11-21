@@ -162,6 +162,7 @@ fn finalize(h: &Harness, outcome: Outcome) -> u64 {
         .ledger()
         .with_mut(|li| li.timestamp = BETTING_ENDS_AT + 1);
     h.market.lock_market(&h.oracle);
+    h.env.ledger().with_mut(|li| li.timestamp = SCHEDULED_AT);
     h.market.resolve_market(&h.oracle, &outcome);
 
     let resolved_at = h.market.get_market_info().resolved_at;
