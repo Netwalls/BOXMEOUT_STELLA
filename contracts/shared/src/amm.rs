@@ -26,7 +26,8 @@ pub fn calc_max_trade(reserve: i128, _balance: i128) -> i128 {
     if reserve <= 1 {
         return 0;
     }
-    reserve - 1
+    // `reserve > 1` above, so this cannot underflow; saturating keeps the lint clean.
+    reserve.saturating_sub(1)
 }
 
 /// Calculates claimable LP fees for a position.

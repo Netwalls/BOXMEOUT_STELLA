@@ -1,6 +1,5 @@
 import { Dispute, Market, OracleReport, OracleResult, Outcome, PrismaClient } from "@prisma/client";
 import {
-  SorobanRpc,
   TransactionBuilder,
   Networks,
   Contract,
@@ -15,6 +14,7 @@ import { ConflictError, ContractError } from "../errors";
 import { db as prisma } from "../db";
 import { z } from "zod";
 import { createProviderClient } from "./external-provider.client";
+import { dispatchWebhookEvent } from "./webhook.service";
 const RPC_URL = process.env.STELLAR_RPC_URL!;
 const NETWORK = process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
@@ -282,7 +282,7 @@ export async function processResolutionJob(
   const market = await prisma.market.findUnique({ where: { id: marketId } });
   if (!market) throw new Error(`Market not found: ${marketId}`);
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
 
@@ -317,6 +317,12 @@ export async function processResolutionJob(
     where: { id: marketId },
     data: { status: "Resolved", outcome, resolvedAt: new Date() },
   });
+
+  await dispatchWebhookEvent(
+    "market.resolved",
+    { marketId, outcome },
+    `market.resolved:${marketId}`,
+  );
 }
 
 /**
@@ -444,7 +450,7 @@ export async function raiseDispute(
     data: { marketId: market_id, raisedBy: bettor, reason },
   });
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
   const contract = new Contract(market.contractAddress);
@@ -491,7 +497,7 @@ export async function resolveDispute(
   const dispute = await prisma.dispute.findUniqueOrThrow({ where: { id: dispute_id } });
   const market = await prisma.market.findUniqueOrThrow({ where: { id: dispute.marketId } });
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
   const contract = new Contract(market.contractAddress);
@@ -522,6 +528,12 @@ export async function resolveDispute(
       data: { action: "resolveDispute", actor: admin, target: dispute.marketId, metadata: { disputeId: dispute_id, override_outcome } },
     }),
   ]);
+
+  await dispatchWebhookEvent(
+    "market.resolved",
+    { marketId: dispute.marketId, outcome: override_outcome },
+    `market.resolved:${dispute.marketId}`,
+  );
 }
 
 // ─── Oracle Address Management (Issue #455) ────────────────────────────────

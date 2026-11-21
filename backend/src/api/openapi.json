@@ -893,7 +893,135 @@
         }
       }
     },
-    "/api/v1/users/{address}/positions": {
+      "/api/users/{address}/activity": {
+        "get": {
+          "tags": [
+            "Users"
+          ],
+          "summary": "Unified activity feed for a user address (bets, winnings, refunds, disputes)",
+          "parameters": [
+            {
+              "name": "address",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "cursor",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "maxLength": 512
+              }
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Newest-first page of activity items. meta.nextCursor is null on the last page.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "data",
+                      "meta"
+                    ],
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "id",
+                            "marketId",
+                            "timestamp"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "bet_placed",
+                                "winnings_claimed",
+                                "refund_claimed",
+                                "dispute_raised"
+                              ]
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "marketId": {
+                              "type": "string"
+                            },
+                            "timestamp": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "side": {
+                              "type": "string",
+                              "enum": [
+                                "FighterA",
+                                "FighterB"
+                              ]
+                            },
+                            "amount": {
+                              "type": "string",
+                              "description": "Base units, decimal string"
+                            },
+                            "payout": {
+                              "type": "string",
+                              "description": "Base units, decimal string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "meta": {
+                        "type": "object",
+                        "required": [
+                          "hasMore",
+                          "nextCursor"
+                        ],
+                        "properties": {
+                          "hasMore": {
+                            "type": "boolean"
+                          },
+                          "nextCursor": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Malformed limit (VALIDATION_ERROR) or cursor (INVALID_CURSOR)"
+            }
+          }
+        }
+      },
+    "/api/users/{address}/positions": {
       "get": {
         "tags": [
           "Users"

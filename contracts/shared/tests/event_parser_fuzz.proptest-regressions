@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3ed64c2bf9d9fe20e9fef649727ae991227f0e7ecac0f027248d50f07b44e9e9 # shrinks to seed_idx = 0, op = 2, pos = 0, replacement = Leaf(Void), replacement_data = Leaf(Void)
+cc 18c831497f6bf8ca15f661bba848f307210a91b238ca11b30c1f591ac71bf9b4 # shrinks to seed_idx = 3, op = 0, pos = 0, replacement = Leaf(Void), replacement_data = Leaf(Void)

@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { Keypair } from "@stellar/stellar-sdk";
 import Redis from "ioredis";
 import { fail } from "../response";
+import { requireRedis } from "../../lib/redis-guard";
 
 const CHALLENGE_TTL_MS = Number(process.env.WALLET_AUTH_CHALLENGE_TTL_MS ?? 5 * 60 * 1000);
 const CHALLENGE_PREFIX = "BOXMEOUT-AUTH";
@@ -58,11 +59,11 @@ async function setChallenge(address: string, nonce: string, ttlMs: number): Prom
   }
 
   const key = `${REDIS_KEY_PREFIX}${address}`;
-  // SET key value PX ttl NX — atomic, one-entry-per-address
-  await getRedis().set(key, JSON.stringify({ nonce, expiresAt }), "PX", ttlMs, "NX");
-  // If NX rejected (key existed), overwrite — a fresh challenge always supersedes.
-  // We use a second unconditional SET so callers always get a fresh challenge.
-  await getRedis().set(key, JSON.stringify({ nonce, expiresAt }), "PX", ttlMs);
+  // A fresh challenge always supersedes any earlier one for the same address.
+  // Fails closed: throws RedisUnavailableError (503) if Redis is unavailable (#1590).
+  await requireRedis("wallet_challenge", () =>
+    getRedis().set(key, JSON.stringify({ nonce, expiresAt }), "PX", ttlMs)
+  );
 }
 
 /**
@@ -80,7 +81,7 @@ async function consumeChallenge(address: string): Promise<StoredChallenge | null
 
   const key = `${REDIS_KEY_PREFIX}${address}`;
   // GETDEL atomically reads and removes the key — one-time use guarantee.
-  const raw = await getRedis().getdel(key);
+  const raw = await requireRedis("wallet_challenge", () => getRedis().getdel(key));
   if (!raw) return null;
 
   let entry: StoredChallenge;

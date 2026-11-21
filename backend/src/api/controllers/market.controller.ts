@@ -7,7 +7,7 @@ import * as marketService from "../../services/market.service";
 import * as oracleService from "../../services/oracle.service";
 import { db } from "../../db";
 import { ok, fail } from "../response";
-import { pageMeta, pageQuerySchema } from "../schemas/pagination";
+import { createMarketSchema } from "../schemas/market.schema";
 
 /** Admin identity from the auth context, falling back to a generic label. */
 function adminIdFromRequest(req: Request): string {
@@ -35,17 +35,8 @@ const resolveMarketBodySchema = z.object({
   oracle_result_id: z.coerce.number().int().positive(),
 });
 
-export const createMarketSchema = z.object({
-  id: z.string().min(1),
-  contractAddress: z.string().min(1),
-  fighterA: z.record(z.unknown()),
-  fighterB: z.record(z.unknown()),
-  scheduledAt: z.string().datetime({ message: "scheduledAt must be a valid ISO 8601 datetime" }),
-  bettingEndsAt: z.string().datetime({ message: "bettingEndsAt must be a valid ISO 8601 datetime" }),
-  createdBy: z.string().min(1),
-  oracleAddress: z.string().min(1),
-  txHash: z.string().optional(),
-});
+// Single source of truth for the POST /api/markets body (#1587, B-151).
+export { createMarketSchema };
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 

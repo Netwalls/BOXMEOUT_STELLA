@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import { httpLogger } from "./logger";
 import { config } from "./config";
-import { requestTimeoutMiddleware } from "./lib/timeout";
 import { auditLogMiddleware } from "./api/middleware/audit-log.middleware";
 import { errorHandlerMiddleware } from "./api/middleware/errorHandler.middleware";
 import { notFoundMiddleware } from "./api/middleware/notFound.middleware";
@@ -17,7 +16,7 @@ import authRoutes from "./api/routes/auth.routes";
 import oracleRoutes from "./api/routes/oracle.routes";
 import healthRoutes from "./api/routes/health.routes";
 import docsRoutes from "./api/routes/docs.routes";
-import leaderboardRoutes from "./api/routes/leaderboard.routes";
+import { maintenanceMiddleware } from "./api/middleware/maintenance.middleware";
 
 /** B-141 (#1577): canonical versioned prefix for every resource router. */
 export const API_VERSION_PREFIX = "/api/v1";
@@ -116,6 +115,9 @@ export function createApp(): express.Application {
 
   // B-61: /metrics endpoint (Prometheus scrape target)
   app.use("/", metricsRouter);
+
+  // B-160: read-only maintenance mode. Non-GET requests get 503 while it is on.
+  app.use(maintenanceMiddleware());
 
   app.use("/", healthRoutes);
 
