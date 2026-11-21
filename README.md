@@ -63,5 +63,5 @@ MIT
 <!-- handsoff-issue-1333 -->
 - #1333: Frontend CI broken on main: package-lock.json out of sync with package.json
 
-<!-- handsoff-issue-1627 -->
-- #1627: C-149: Add read-only escrow views to Treasury
+<!-- handsoff-issue-1632 -->
+- #1632: C-154: Deduplicate get_market_info and get_market_data, and add a combined summary view
