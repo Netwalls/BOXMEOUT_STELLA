@@ -17,6 +17,7 @@
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
     "test": "jest",
+    "test:coverage": "jest --ci --coverage",
     "test:e2e": "playwright test",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
@@ -37,6 +38,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@lhci/cli": "^0.14.0",
     "@next/bundle-analyzer": "14.2.0",
     "@playwright/test": "^1.55.0",
     "@storybook/addon-themes": "^8.0.0",

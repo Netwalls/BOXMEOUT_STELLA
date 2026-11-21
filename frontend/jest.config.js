@@ -5,6 +5,26 @@ const createJestConfig = nextJest({ dir: "./" });
 /** @type {import('jest').Config} */
 const config = {
   coverageProvider: "v8",
+  collectCoverageFrom: [
+    "app/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "hooks/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}",
+    "!**/*.stories.{ts,tsx}",
+    "!**/__mocks__/**",
+    "!**/__tests__/**",
+    "!**/*.test.{ts,tsx}",
+    "!**/*.d.ts",
+    "!e2e/**",
+    "!.next/**",
+  ],
+  coverageReporters: ["text", "text-summary", "lcov"],
+  // Floors set just below the measured baseline (see F-143). Raise them as coverage grows.
+  coverageThreshold: {
+    global: { statements: 26, branches: 79, functions: 55, lines: 26 },
+    "./lib/": { statements: 9, branches: 66, functions: 45, lines: 9 },
+    "./hooks/": { statements: 20, branches: 79, functions: 42, lines: 20 },
+  },
   testEnvironment: "jsdom",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   moduleNameMapper: {
