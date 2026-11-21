@@ -1,4 +1,4 @@
-import { Market, MarketStatus, Outcome } from "@prisma/client";
+import { Dispute, Market, MarketStatus, Outcome, Prisma } from "@prisma/client";
 import {
   SorobanRpc,
   TransactionBuilder,
@@ -199,7 +199,11 @@ export async function getAllMarkets(
     where.status = filters.status;
   }
   if (filters?.weightClass) {
-    where.weightClass = filters.weightClass;
+    // B-142 (#1578): weight class lives on Fighter, so match either side of the bout.
+    where.OR = [
+      { fighterAProfile: { weightClass: filters.weightClass } },
+      { fighterBProfile: { weightClass: filters.weightClass } },
+    ];
   }
 
   const page = pagination?.page ?? 1;
@@ -224,6 +228,42 @@ export async function getAllMarkets(
   );
 
   return result;
+}
+
+/** B-144 (#1580): same default and env var as resolution.service.ts (24 h). */
+const DISPUTE_WINDOW_MS = parseInt(process.env.DISPUTE_WINDOW_MS ?? "86400000", 10);
+
+/**
+ * B-144 (#1580): end of the dispute window, measured from bettingEndsAt the
+ * same way resolution.service.ts decides when a market auto-finalises.
+ */
+export function disputeWindowEndsAt(market: Pick<Market, "bettingEndsAt">): Date {
+  return new Date(market.bettingEndsAt.getTime() + DISPUTE_WINDOW_MS);
+}
+
+/**
+ * B-144 (#1580): paginated disputes for one market, newest first.
+ * Returns null for unknown market ids so the route can 404.
+ */
+export async function getMarketDisputes(
+  marketId: string,
+  pagination: Pagination
+): Promise<PaginatedResult<Dispute> | null> {
+  const market = await db.market.findUnique({ where: { id: marketId }, select: { id: true } });
+  if (!market) return null;
+
+  const skip = (pagination.page - 1) * pagination.pageSize;
+  const [data, total] = await Promise.all([
+    db.dispute.findMany({
+      where: { marketId },
+      orderBy: { raisedAt: "desc" },
+      skip,
+      take: pagination.pageSize,
+    }),
+    db.dispute.count({ where: { marketId } }),
+  ]);
+
+  return { data, total, page: pagination.page, pageSize: pagination.pageSize };
 }
 
 /**
@@ -296,6 +336,51 @@ export async function getOddsHistory(
   return Array.from(bucketed.values());
 }
 
+/** B-142 (#1578): fighter fields written to the Fighter table. */
+export interface FighterInput {
+  name: string;
+  record: string;
+  nationality: string;
+  weightClass: string;
+}
+
+/** B-142 (#1578): stable identity for a fighter, derived from the name. */
+export function fighterSlug(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/**
+ * B-142 (#1578): reads a fighter from the market's Json payload. Accepts
+ * `weightClass` or the legacy `weight` key that market-verification uses.
+ */
+export function toFighterInput(raw: object): FighterInput {
+  const f = raw as Record<string, unknown>;
+  const name = typeof f.name === "string" ? f.name.trim() : "";
+  const weightClass =
+    typeof f.weightClass === "string" ? f.weightClass : typeof f.weight === "string" ? f.weight : "";
+  if (!name || !weightClass) {
+    throw new Error("fighter requires a name and a weight class");
+  }
+  return {
+    name,
+    record: typeof f.record === "string" ? f.record : "",
+    nationality: typeof f.nationality === "string" ? f.nationality : "",
+    weightClass,
+  };
+}
+
+/** B-142 (#1578): upserts a Fighter by slug and returns its id. */
+async function upsertFighter(tx: Prisma.TransactionClient, input: FighterInput): Promise<string> {
+  const slug = fighterSlug(input.name);
+  const fighter = await tx.fighter.upsert({
+    where: { slug },
+    update: { record: input.record, nationality: input.nationality, weightClass: input.weightClass },
+    create: { slug, ...input },
+    select: { id: true },
+  });
+  return fighter.id;
+}
+
 /**
  * Creates or updates a market record from an indexed MarketCreated event.
  *
@@ -328,6 +413,9 @@ async function persistMarketRecord(
   marketData: CreateMarketDTO
 ): Promise<Market> {
   return db.$transaction(async (tx) => {
+    const fighterAId = await upsertFighter(tx, toFighterInput(marketData.fighterA));
+    const fighterBId = await upsertFighter(tx, toFighterInput(marketData.fighterB));
+
     // Check for an existing optimistic row matched by txHash (inside txn)
     if (marketData.txHash) {
       const optimistic = await tx.market.findUnique({
@@ -343,6 +431,8 @@ async function persistMarketRecord(
             contractAddress: marketData.contractAddress,
             fighterA: marketData.fighterA,
             fighterB: marketData.fighterB,
+            fighterAId,
+            fighterBId,
             scheduledAt: marketData.scheduledAt,
             bettingEndsAt: marketData.bettingEndsAt,
             createdAt: marketData.createdAt,
@@ -372,6 +462,8 @@ async function persistMarketRecord(
         contractAddress: marketData.contractAddress,
         fighterA: marketData.fighterA,
         fighterB: marketData.fighterB,
+        fighterAId,
+        fighterBId,
         scheduledAt: marketData.scheduledAt,
         bettingEndsAt: marketData.bettingEndsAt,
         createdAt: marketData.createdAt,

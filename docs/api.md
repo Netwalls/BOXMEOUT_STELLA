@@ -4,9 +4,58 @@ This document describes the HTTP API exposed by the backend. The canonical machi
 specification lives in [`backend/src/api/openapi.json`](../backend/src/api/openapi.json) and is
 served at `GET /api/docs` (Swagger UI) and `GET /api/openapi.json`.
 
-All routes are mounted under the `/api` prefix. Every mounted Express route is documented in the
+All routes are mounted under the `/api/v1` prefix. Every mounted Express route is documented in the
 OpenAPI spec, and a test (`backend/src/api/__tests__/openapi.test.ts`) fails if a mounted route is
 missing from the spec.
+
+---
+
+## Versioning (B-141)
+
+Resource routes live under a version prefix so a breaking change to a response shape can ship as a
+new version instead of breaking every deployed client at once.
+
+| Prefix | Status | Notes |
+|---|---|---|
+| `/api/v1` | current | Canonical. New clients use this. |
+| `/api` | deprecated | Alias of `/api/v1`, identical responses. Scheduled for removal on the sunset date. |
+
+`/health`, `/metrics` and `/docs` sit outside the version prefix and are unaffected.
+
+### What counts as breaking
+
+A new version is cut for any of these; everything else ships inside the current version:
+
+- removing or renaming a field in a response
+- changing a field's type, or its units
+- removing an endpoint, or changing its path
+- making a previously optional request field required
+- changing an error `code` for an existing failure case
+
+Additive changes (a new optional field, a new endpoint, a new optional query param) are not
+breaking and land in the current version.
+
+### Deprecation headers
+
+Every response served from the legacy `/api` prefix carries:
+
+| Header | Value |
+|---|---|
+| `Deprecation` | `true` |
+| `Sunset` | the removal date as an HTTP-date, from the `API_SUNSET_DATE` env var |
+| `Link` | `</api/v1/...>; rel="successor-version"` pointing at the replacement path |
+
+Clients should treat `Deprecation: true` as a build-time warning and migrate before `Sunset`.
+The `/api` mount is scheduled for removal after that date; removing it is a separate change.
+
+### Migrating
+
+Prefix the version onto the base URL, nothing else changes:
+
+```diff
+- const res = await fetch(`${API_BASE_URL}/api/markets`);
++ const res = await fetch(`${API_BASE_URL}/api/v1/markets`);
+```
 
 ---
 
@@ -226,9 +275,10 @@ Creates a new market record. Requires wallet-signature auth (creator must prove 
 
 ### `GET /api/markets/:id`
 
-Returns full detail for a single market.
+Returns full detail for a single market. Includes `disputeWindowEndsAt` (B-144 #1580): the
+end of the dispute window, `bettingEndsAt` plus `DISPUTE_WINDOW_MS` (default 24 h).
 
-**Response `200`** — same shape as one item above.
+**Response `200`** — same shape as one item above, plus `disputeWindowEndsAt` (ISO 8601).
 **Response `404`** — `{ "error": "Market not found" }`
 
 ---
@@ -249,6 +299,17 @@ Returns aggregate stats for a market.
   "impliedOddsB": 37.5
 }
 ```
+
+---
+
+### `GET /api/markets/:id/disputes`
+
+Disputes raised against a market, newest first (B-144 #1580). Page rule: `page`, `limit`.
+
+**Response `200`** — `{ "data": Dispute[], "meta": { "total": number, "hasMore": boolean } }`, where
+each `Dispute` is `{ id, marketId, raisedBy, reason, raisedAt, resolvedAt, resolution }`.
+**Response `404`** — market not found.
+**Response `400`** — `VALIDATION_ERROR` if `page` or `limit` is out of range.
 
 ---
 

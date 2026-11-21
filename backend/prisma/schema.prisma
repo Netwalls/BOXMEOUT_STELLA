@@ -67,14 +67,37 @@ model Market {
   txHash          String?
   categoryId      String?
   category        Category?    @relation(fields: [categoryId], references: [id])
+  fighterAId      String?
+  fighterBId      String?
+  fighterAProfile Fighter?     @relation("FighterA", fields: [fighterAId], references: [id])
+  fighterBProfile Fighter?     @relation("FighterB", fields: [fighterBId], references: [id])
   bets            Bet[]
   disputes        Dispute[]
   oracleResult    OracleResult?
+  oracleReports   OracleReport[]
   /// @db.Unsupported("tsvector")
   tsVector        Unsupported("tsvector")?
 
   @@index([categoryId])
+  @@index([fighterAId])
+  @@index([fighterBId])
   @@index([tsVector(ops: raw("tsvector_ops"))], type: Gin)
+}
+
+model Fighter {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  record      String   @default("")
+  nationality String   @default("")
+  weightClass String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  marketsAsA  Market[] @relation("FighterA")
+  marketsAsB  Market[] @relation("FighterB")
+
+  @@index([weightClass])
+  @@index([name])
 }
 
 model Bet {
@@ -117,6 +140,21 @@ model OracleResult {
   source      String
   reportedAt  DateTime @default(now())
   confirmed   Boolean  @default(false)
+}
+
+// B-143 (#1579): every individual oracle report. OracleResult stays the single
+// decision row per market; OracleReport holds the reports it is decided from.
+model OracleReport {
+  id         String   @id @default(uuid())
+  marketId   String
+  market     Market   @relation(fields: [marketId], references: [id])
+  reportedBy String
+  outcome    Outcome
+  source     String
+  reportedAt DateTime @default(now())
+
+  @@unique([marketId, reportedBy])
+  @@index([marketId])
 }
 
 model IndexerState {

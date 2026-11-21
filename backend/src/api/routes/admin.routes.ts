@@ -12,6 +12,9 @@ import {
 import { getAuditLogsHandler } from "../controllers/audit.controller";
 import { getMaintenanceHandler, setMaintenanceHandler } from "../controllers/maintenance.controller";
 import { reconcileMarketHandler } from "../controllers/market-reconciliation.controller";
+import * as oracleService from "../../services/oracle.service";
+import { logger } from "../../logger";
+import { ok, fail } from "../response";
 import {
   getFailedSubmissionsHandler,
   retryFailedSubmissionHandler,
@@ -69,6 +72,16 @@ router.get("/markets/pending", getPendingResolutionsHandler);
 router.post("/markets/dispute/resolve", marketResolutionLimiter, resolveDisputeHandler);
 // #1412: reconcile one market against on-chain state (report-only unless autoRepair).
 router.post("/markets/:id/reconcile", reconcileMarketHandler);
+
+// B-143 (#1579): all oracle reports for a market, so an admin can see agreement or conflict.
+router.get("/markets/:id/oracle-reports", async (req, res) => {
+  try {
+    ok(res, await oracleService.listMarketOracleReports(req.params.id));
+  } catch (err) {
+    logger.error({ err }, "listMarketOracleReports failed");
+    fail(res, 500, "INTERNAL_ERROR", "Internal server error");
+  }
+});
 
 // Oracle address management (Issue #455)
 router.get("/oracles", getAllOraclesHandler);
