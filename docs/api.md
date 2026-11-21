@@ -125,6 +125,31 @@ Cursor-paginated bet history for a wallet, ordered by `(placedAt, id)` descendin
 
 ---
 
+### `GET /api/users/:address/activity`
+
+Unified portfolio activity feed for a wallet (#1588, B-152): bets placed, winnings claimed, refunds claimed and disputes raised, newest first. Each item has a typed `kind`.
+
+- `bet_placed`: `timestamp` is `placedAt`; includes `side`, `amount`.
+- `winnings_claimed`: `timestamp` is `claimedAt`; claimed bet on the winning side; includes `side`, `amount`, `payout`.
+- `refund_claimed`: `timestamp` is `claimedAt`; claimed bet on a cancelled, drawn or no-contest market; includes `side`, `amount`, `payout`.
+- `dispute_raised`: `timestamp` is `raisedAt`; includes `reason`.
+
+**Query params:** `cursor` (opaque; from `meta.nextCursor`), `limit` (default 20, max 100)
+
+**Response `200`**
+```json
+{
+  "data": [
+    { "kind": "bet_placed", "id": "bet-123", "marketId": "m-1", "timestamp": "2026-11-01T12:00:00.000Z", "side": "FighterA", "amount": "1000" }
+  ],
+  "meta": { "hasMore": false, "nextCursor": null }
+}
+```
+
+An empty address returns an empty page. A malformed `cursor` returns `400` with code `INVALID_CURSOR`.
+
+---
+
 ### `GET /api/users/:address/positions`
 
 Paginated open positions for a wallet.
