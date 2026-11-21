@@ -46,7 +46,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={uiFont.variable}>
       <head>
         <ThemeScript />
       </head>
@@ -57,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           (reducedMotion="user" delegates to the media query).
         */}
         <MotionConfigProvider>
+          <ErrorReporter />
           <ErrorBoundary>
             <WalletProvider>
               <ToastProvider>
