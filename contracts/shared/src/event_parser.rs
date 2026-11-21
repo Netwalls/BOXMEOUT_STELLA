@@ -3,7 +3,7 @@
 //! Parse raw Soroban event payloads into typed event structs.
 //! ============================================================
 
-use soroban_sdk::{Address, Bytes, Env, String, TryFromVal, Val, Vec};
+use soroban_sdk::{Address, Bytes, Env, Map, String, Symbol, TryFromVal, Val, Vec};
 
 use crate::types::{BetRecord, ClaimReceipt, Outcome};
 
@@ -144,7 +144,91 @@ fn decode_data<T: TryFromVal<Env, Val>>(env: &Env, data: &Val) -> Result<T, Pars
     T::try_from_val(env, data).map_err(|_| ParseError::InvalidType)
 }
 
+/// Decodes a tuple-encoded data value without relying on soroban's tuple
+/// `TryFromVal`, which unwraps internally and panics when the vector length
+/// does not match. `len` is the expected number of elements; each element is
+/// converted with a fallible `TryFromVal`, so malformed input returns `Err`.
+fn decode_tuple_elems(env: &Env, data: &Val, len: u32) -> Result<Vec<Val>, ParseError> {
+    let elems: Vec<Val> = decode_data(env, data)?;
+    if elems.len() != len {
+        return Err(ParseError::InvalidLength);
+    }
+    Ok(elems)
+}
+
+fn tuple_elem<T: TryFromVal<Env, Val>>(
+    env: &Env,
+    elems: &Vec<Val>,
+    idx: u32,
+) -> Result<T, ParseError> {
+    let val = elems.get(idx).ok_or(ParseError::InvalidLength)?;
+    T::try_from_val(env, &val).map_err(|_| ParseError::InvalidType)
+}
+
 // ─── Parsers ──────────────────────────────────────────────────────────────────
+
+/// Decodes a `#[contracttype]` struct encoded as a map with symbol keys.
+///
+/// The derived `TryFromVal` for structs unwraps internally and panics when the
+/// map has the wrong number of entries, so the length is checked first and each
+/// field is read by key with a fallible conversion.
+fn decode_struct_fields(
+    env: &Env,
+    data: &Val,
+    field_names: &[&str],
+) -> Result<Map<Symbol, Val>, ParseError> {
+    let map: Map<Symbol, Val> = decode_data(env, data)?;
+    if map.len() != field_names.len() as u32 {
+        return Err(ParseError::InvalidLength);
+    }
+    Ok(map)
+}
+
+fn struct_field<T: TryFromVal<Env, Val>>(
+    env: &Env,
+    map: &Map<Symbol, Val>,
+    name: &str,
+) -> Result<T, ParseError> {
+    let val = map
+        .get(Symbol::new(env, name))
+        .ok_or(ParseError::InvalidType)?;
+    T::try_from_val(env, &val).map_err(|_| ParseError::InvalidType)
+}
+
+/// Decodes a `BetRecord` from its map encoding without panicking.
+fn decode_bet_record(env: &Env, data: &Val) -> Result<BetRecord, ParseError> {
+    const FIELDS: [&str; 7] = [
+        "bet_id",
+        "bettor",
+        "market_id",
+        "side",
+        "amount",
+        "placed_at",
+        "claimed",
+    ];
+    let map = decode_struct_fields(env, data, &FIELDS)?;
+    Ok(BetRecord {
+        bet_id: struct_field(env, &map, "bet_id")?,
+        bettor: struct_field(env, &map, "bettor")?,
+        market_id: struct_field(env, &map, "market_id")?,
+        side: struct_field(env, &map, "side")?,
+        amount: struct_field(env, &map, "amount")?,
+        placed_at: struct_field(env, &map, "placed_at")?,
+        claimed: struct_field(env, &map, "claimed")?,
+    })
+}
+
+/// Decodes a `ClaimReceipt` from its map encoding without panicking.
+fn decode_claim_receipt(env: &Env, data: &Val) -> Result<ClaimReceipt, ParseError> {
+    const FIELDS: [&str; 4] = ["bet_id", "bettor", "payout", "claimed_at"];
+    let map = decode_struct_fields(env, data, &FIELDS)?;
+    Ok(ClaimReceipt {
+        bet_id: struct_field(env, &map, "bet_id")?,
+        bettor: struct_field(env, &map, "bettor")?,
+        payout: struct_field(env, &map, "payout")?,
+        claimed_at: struct_field(env, &map, "claimed_at")?,
+    })
+}
 
 /// Parses a raw `market_created` event.
 ///
@@ -156,7 +240,9 @@ pub fn parse_market_created_event(
     data: &Val,
 ) -> Result<MarketCreatedEvent, ParseError> {
     let market_id: u64 = get_topic(env, topics, 1)?;
-    let (contract_address, match_id): (Address, String) = decode_data(env, data)?;
+    let elems = decode_tuple_elems(env, data, 2)?;
+    let contract_address: Address = tuple_elem(env, &elems, 0)?;
+    let match_id: String = tuple_elem(env, &elems, 1)?;
     Ok(MarketCreatedEvent {
         market_id,
         contract_address,
@@ -191,7 +277,9 @@ pub fn parse_market_resolved_event(
     data: &Val,
 ) -> Result<MarketResolvedEvent, ParseError> {
     let market_id: u64 = get_topic(env, topics, 1)?;
-    let (outcome, resolved_at): (Outcome, u64) = decode_data(env, data)?;
+    let elems = decode_tuple_elems(env, data, 2)?;
+    let outcome: Outcome = tuple_elem(env, &elems, 0)?;
+    let resolved_at: u64 = tuple_elem(env, &elems, 1)?;
     Ok(MarketResolvedEvent {
         market_id,
         outcome,
@@ -209,7 +297,7 @@ pub fn parse_bet_placed_event(
     data: &Val,
 ) -> Result<BetPlacedEvent, ParseError> {
     let market_id: u64 = get_topic(env, topics, 1)?;
-    let bet: BetRecord = decode_data(env, data)?;
+    let bet = decode_bet_record(env, data)?;
     Ok(BetPlacedEvent { market_id, bet })
 }
 
@@ -223,7 +311,7 @@ pub fn parse_winnings_claimed_event(
     data: &Val,
 ) -> Result<WinningsClaimedEvent, ParseError> {
     let market_id: u64 = get_topic(env, topics, 1)?;
-    let receipt: ClaimReceipt = decode_data(env, data)?;
+    let receipt = decode_claim_receipt(env, data)?;
     Ok(WinningsClaimedEvent { market_id, receipt })
 }
 
@@ -237,7 +325,10 @@ pub fn parse_refund_claimed_event(
     data: &Val,
 ) -> Result<RefundClaimedEvent, ParseError> {
     let market_id: u64 = get_topic(env, topics, 1)?;
-    let (bettor, bet_id, amount): (Address, Bytes, i128) = decode_data(env, data)?;
+    let elems = decode_tuple_elems(env, data, 3)?;
+    let bettor: Address = tuple_elem(env, &elems, 0)?;
+    let bet_id: Bytes = tuple_elem(env, &elems, 1)?;
+    let amount: i128 = tuple_elem(env, &elems, 2)?;
     Ok(RefundClaimedEvent {
         market_id,
         bettor,
@@ -301,7 +392,9 @@ pub fn parse_resolution_disputed_event(
     data: &Val,
 ) -> Result<ResolutionDisputedEvent, ParseError> {
     let market_id: u64 = get_topic(env, topics, 1)?;
-    let (disputer, reason): (Address, Bytes) = decode_data(env, data)?;
+    let elems = decode_tuple_elems(env, data, 2)?;
+    let disputer: Address = tuple_elem(env, &elems, 0)?;
+    let reason: Bytes = tuple_elem(env, &elems, 1)?;
     Ok(ResolutionDisputedEvent {
         market_id,
         disputer,
