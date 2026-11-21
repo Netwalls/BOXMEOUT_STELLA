@@ -7,6 +7,17 @@ members = [
     "shared",
 ]
 
+# Panic-prone patterns are denied for shipped contract code. A panic aborts the
+# whole invocation, so these must be replaced by `Result`s or `panic_with_error!`.
+# Test code opts out per crate via `#![cfg_attr(test, allow(...))]`.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "warn"
+cast_possible_truncation = "warn"
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true
