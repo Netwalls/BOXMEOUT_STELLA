@@ -37,12 +37,14 @@ import { db } from "../db";
 import { config } from "../config";
 import { logger } from "../logger";
 import { redis } from "../lib/redis";
-import { guardRedis } from "../lib/redis-guard";
+import { withTimeout } from "../lib/timeout";
+import { dispatchWebhookEvent } from "./webhook.service";
 import {
   lockJobSuccess,
   lockJobFailure,
   finalizeJobSuccess,
   finalizeJobFailure,
+  lifecycleLockSkipped,
 } from "../metrics";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -378,6 +380,12 @@ async function autoFinalizeExpiredWindows(): Promise<void> {
           },
         });
 
+        await dispatchWebhookEvent(
+          "market.resolved",
+          { marketId: market.id, outcome: market.oracleResult.outcome },
+          `market.resolved:${market.id}`,
+        );
+
         logger.info(
           { marketId: market.id, outcome: market.oracleResult.outcome },
           "market finalized and resolved"
@@ -417,6 +425,20 @@ return 0
 `;
 
 /**
+ * Extends the lock only if this run still owns it (compare-and-pexpire).
+ * Used while a long run is in progress so the TTL never lapses under it.
+ */
+export const RENEW_LOCK_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("pexpire", KEYS[1], ARGV[2])
+end
+return 0
+`;
+
+/** The lock is renewed this many times per TTL window. */
+const LOCK_RENEW_DIVISOR = 3;
+
+/**
  * Queue that holds the repeatable lifecycle jobs. Job schedulers keep exactly
  * one scheduled job per name in Redis, so registering on every replica is
  * idempotent: each tick produces one job, and any replica's worker may take it.
@@ -429,8 +451,16 @@ let lifecycleWorker: Worker | null = null;
 
 /**
  * Runs `fn` only if no other replica currently holds the lock for `name`.
- * Returns false when the lock is held elsewhere, so an overlapping tick is
- * skipped instead of processing the same markets twice.
+ *
+ * - Acquire: `SET key token NX PX ttl`. Losing replicas return false, bump
+ *   `lifecycle_lock_skipped_total` and do nothing, so an overlapping tick
+ *   never processes the same markets twice.
+ * - Renew: while `fn` runs, the TTL is extended every ttl/3 with a
+ *   compare-and-pexpire, so a run longer than the TTL keeps its lock.
+ * - Release: compare-and-delete in `finally`. A holder whose lock already
+ *   expired and was taken by another replica cannot delete that lock.
+ * - Crash: if the holder dies, no renewals arrive and the TTL expires on its
+ *   own, so another replica can take over.
  */
 export async function runSingleFlight(
   name: string,
@@ -439,17 +469,29 @@ export async function runSingleFlight(
   const key = `lifecycle-lock:${name}`;
   const token = randomUUID();
 
-  // Fail closed: if Redis is unavailable the run is skipped rather than risking
-  // two instances running the same lifecycle step (#1590).
-  const acquired = await guardRedis("lifecycle_lock", () =>
-    redis.set(key, token, "PX", SINGLE_FLIGHT_TTL_MS, "NX"),
-  null);
-  if (acquired !== "OK") return false;
+  const acquired = await redis.set(key, token, "PX", SINGLE_FLIGHT_TTL_MS, "NX");
+  if (acquired !== "OK") {
+    lifecycleLockSkipped.inc({ job: name });
+    return false;
+  }
+
+  const renewal = setInterval(() => {
+    redis
+      .eval(RENEW_LOCK_SCRIPT, 1, key, token, String(SINGLE_FLIGHT_TTL_MS))
+      .then((renewed) => {
+        if (Number(renewed) !== 1) {
+          logger.warn({ job: name }, "lifecycle lock was lost before the run finished");
+        }
+      })
+      .catch((err) => logger.warn({ err, job: name }, "failed to renew lifecycle lock"));
+  }, Math.floor(SINGLE_FLIGHT_TTL_MS / LOCK_RENEW_DIVISOR));
+  renewal.unref();
 
   try {
     await fn();
   } finally {
-    await guardRedis("lifecycle_lock", () => redis.eval(RELEASE_LOCK_SCRIPT, 1, key, token), null);
+    clearInterval(renewal);
+    await redis.eval(RELEASE_LOCK_SCRIPT, 1, key, token);
   }
   return true;
 }

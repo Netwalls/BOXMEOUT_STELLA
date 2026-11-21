@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "GHSA-82x6-q7mm-w9cf",
+      "package": "toml",
+      "reason": "Transitive via @stellar/stellar-sdk 12.x. The backend does not call the SDK's stellar.toml resolution or parse TOML from untrusted input. The fix needs @stellar/stellar-sdk 17 (major upgrade).",
+      "expires": "2026-12-19"
+    },
+    {
+      "id": "GHSA-v5mp-jgw5-2x6j",
+      "package": "toml",
+      "reason": "Transitive via @stellar/stellar-sdk 12.x. The backend does not call the SDK's stellar.toml resolution or parse TOML from untrusted input. The fix needs @stellar/stellar-sdk 17 (major upgrade).",
+      "expires": "2026-12-19"
+    },
+    {
+      "id": "GHSA-4qx8-w7c3-pj3p",
+      "package": "toml",
+      "reason": "Transitive via @stellar/stellar-sdk 12.x. The backend does not call the SDK's stellar.toml resolution or parse TOML from untrusted input. The fix needs @stellar/stellar-sdk 17 (major upgrade).",
+      "expires": "2026-12-19"
+    },
+    {
+      "id": "GHSA-9j65-hcg3-gc64",
+      "package": "toml",
+      "reason": "Transitive via @stellar/stellar-sdk 12.x. The backend does not call the SDK's stellar.toml resolution or parse TOML from untrusted input. The fix needs @stellar/stellar-sdk 17 (major upgrade).",
+      "expires": "2026-12-19"
+    },
+    {
+      "id": "GHSA-9qmh-m7c6-f92p",
+      "package": "toml",
+      "reason": "Transitive via @stellar/stellar-sdk 12.x. The backend does not call the SDK's stellar.toml resolution or parse TOML from untrusted input. The fix needs @stellar/stellar-sdk 17 (major upgrade).",
+      "expires": "2026-12-19"
+    },
+    {
+      "id": "GHSA-h895-cgqg-jf52",
+      "package": "toml",
+      "reason": "Transitive via @stellar/stellar-sdk 12.x. The backend does not call the SDK's stellar.toml resolution or parse TOML from untrusted input. The fix needs @stellar/stellar-sdk 17 (major upgrade).",
+      "expires": "2026-12-19"
+    },
+    {
+      "id": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "reason": "Direct dependency (zod 3.x). The fix is zod 4, a breaking major upgrade. Request JSON bodies are capped at 100kb by express.json in app.ts, which limits the oversized input this advisory describes.",
+      "expires": "2026-12-19"
+    }
+  ]
+}
