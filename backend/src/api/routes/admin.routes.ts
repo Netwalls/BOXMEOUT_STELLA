@@ -69,6 +69,8 @@ const oracleSubmissionLimiter = rateLimitMiddleware({
 // Market management
 router.get("/markets/pending", getPendingResolutionsHandler);
 // Registered before "/markets/:marketId/resolve" so "dispute" is not captured as a market id.
+// B-137: cancel an Open or Locked market (on-chain cancel_market, audited).
+router.post("/markets/cancel", marketResolutionLimiter, cancelMarketHandler);
 router.post("/markets/dispute/resolve", marketResolutionLimiter, resolveDisputeHandler);
 // #1412: reconcile one market against on-chain state (report-only unless autoRepair).
 router.post("/markets/:id/reconcile", reconcileMarketHandler);

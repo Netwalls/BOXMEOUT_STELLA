@@ -152,6 +152,21 @@ drop them only in a later release) so that rolling back the application stays sa
 
 ---
 
+## 5a — Seed sample data (B-139)
+
+For a local database with realistic data, run:
+
+```bash
+cd backend
+npm run db:seed
+```
+
+The seed creates two categories, one oracle, one market in each status (Open,
+Locked, Resolved, Cancelled, Disputed), bets on both sides, one resolved market
+with claimed payouts and one disputed market. It is idempotent, so running it
+twice is safe. It refuses to run when `NODE_ENV=production`. It is an optional
+step after migrations.
+
 ## 6 — Start the server
 
 ```bash
