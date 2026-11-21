@@ -3,7 +3,7 @@
   "info": {
     "title": "BOXMEOUT API",
     "version": "0.1.0",
-    "description": "REST API for the BOXMEOUT decentralized boxing prediction market on Stellar."
+    "description": "REST API for the BOXMEOUT decentralized boxing prediction market on Stellar.\n\nB-141 (#1577): all resource paths are served under the versioned /api/v1 prefix. The unversioned /api prefix is still served as a deprecated alias of /api/v1 and responds with `Deprecation: true`, a `Sunset` HTTP-date and a `Link: <...>; rel=\"successor-version\"` header. It is scheduled for removal on the sunset date, so clients must migrate to /api/v1."
   },
   "servers": [
     {
@@ -464,7 +464,7 @@
         }
       }
     },
-    "/api/markets": {
+    "/api/v1/markets": {
       "get": {
         "tags": [
           "Markets"
@@ -645,7 +645,7 @@
         }
       }
     },
-    "/api/auth/challenge": {
+    "/api/v1/auth/challenge": {
       "post": {
         "tags": [
           "Auth"
@@ -702,7 +702,7 @@
         }
       }
     },
-    "/api/users/{address}": {
+    "/api/v1/users/{address}": {
       "get": {
         "tags": [
           "Users"
@@ -836,7 +836,7 @@
         }
       }
     },
-    "/api/users/{address}/bets": {
+    "/api/v1/users/{address}/bets": {
       "get": {
         "tags": [
           "Users"
@@ -893,6 +893,134 @@
         }
       }
     },
+      "/api/users/{address}/activity": {
+        "get": {
+          "tags": [
+            "Users"
+          ],
+          "summary": "Unified activity feed for a user address (bets, winnings, refunds, disputes)",
+          "parameters": [
+            {
+              "name": "address",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "cursor",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "maxLength": 512
+              }
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Newest-first page of activity items. meta.nextCursor is null on the last page.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "data",
+                      "meta"
+                    ],
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "id",
+                            "marketId",
+                            "timestamp"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "bet_placed",
+                                "winnings_claimed",
+                                "refund_claimed",
+                                "dispute_raised"
+                              ]
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "marketId": {
+                              "type": "string"
+                            },
+                            "timestamp": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "side": {
+                              "type": "string",
+                              "enum": [
+                                "FighterA",
+                                "FighterB"
+                              ]
+                            },
+                            "amount": {
+                              "type": "string",
+                              "description": "Base units, decimal string"
+                            },
+                            "payout": {
+                              "type": "string",
+                              "description": "Base units, decimal string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "meta": {
+                        "type": "object",
+                        "required": [
+                          "hasMore",
+                          "nextCursor"
+                        ],
+                        "properties": {
+                          "hasMore": {
+                            "type": "boolean"
+                          },
+                          "nextCursor": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Malformed limit (VALIDATION_ERROR) or cursor (INVALID_CURSOR)"
+            }
+          }
+        }
+      },
     "/api/users/{address}/positions": {
       "get": {
         "tags": [
@@ -950,7 +1078,60 @@
         }
       }
     },
-    "/api/markets/search": {
+    "/api/v1/markets/{id}/disputes": {
+      "get": {
+        "tags": ["Markets"],
+        "summary": "List disputes for a market",
+        "description": "B-144 (#1580): disputes raised against a market, newest first. Returns 404 for an unknown market id.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "marketId", "raisedBy", "reason", "raisedAt"],
+                        "properties": {
+                          "id": { "type": "string" },
+                          "marketId": { "type": "string" },
+                          "raisedBy": { "type": "string", "description": "Stellar address of the disputing bettor" },
+                          "reason": { "type": "string" },
+                          "raisedAt": { "type": "string", "format": "date-time" },
+                          "resolvedAt": { "type": "string", "format": "date-time", "nullable": true },
+                          "resolution": { "type": "string", "nullable": true }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": ["total", "hasMore"],
+                      "properties": {
+                        "total": { "type": "integer" },
+                        "hasMore": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Market not found" },
+          "400": { "description": "VALIDATION_ERROR (page or limit out of range)" }
+        }
+      }
+    },
+    "/api/v1/markets/search": {
       "get": {
         "tags": [
           "Markets",
@@ -1006,7 +1187,7 @@
         }
       }
     },
-    "/api/search": {
+    "/api/v1/search": {
       "get": {
         "tags": [
           "Search"
@@ -1074,7 +1255,7 @@
         }
       }
     },
-    "/api/stats": {
+    "/api/v1/stats": {
       "get": {
         "tags": [
           "Stats"
@@ -1102,7 +1283,7 @@
         }
       }
     },
-    "/api/auth/verify": {
+    "/api/v1/auth/verify": {
       "post": {
         "tags": [
           "Oracle"
@@ -1168,7 +1349,7 @@
         }
       }
     },
-    "/api/leaderboard": {
+    "/api/v1/leaderboard": {
       "get": {
         "tags": ["Leaderboard"],
         "summary": "Top bettors ranked by realised profit",
@@ -1214,7 +1395,7 @@
         }
       }
     },
-    "/api/oracle/results": {
+    "/api/v1/oracle/results": {
       "get": {
         "tags": [
           "Oracle"
@@ -1257,7 +1438,7 @@
         }
       }
     },
-    "/api/users/me": {
+    "/api/v1/users/me": {
       "get": {
         "tags": [
           "Admin"
@@ -1300,7 +1481,7 @@
         }
       }
     },
-    "/api/admin/markets/{marketId}/resolve": {
+    "/api/v1/admin/markets/{marketId}/resolve": {
       "post": {
         "tags": [
           "Admin"
@@ -1410,7 +1591,7 @@
         }
       }
     },
-    "/api/admin/markets/resolve": {
+    "/api/v1/admin/markets/resolve": {
       "post": {
         "tags": [
           "Admin"
@@ -1478,36 +1659,7 @@
         }
       }
     },
-    "/api/admin/markets/cancel": {
-      "post": {
-        "tags": ["Admin"],
-        "summary": "Cancel an Open or Locked market (B-137)",
-        "security": [{ "AdminKey": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["marketId", "reason"],
-                "properties": {
-                  "marketId": { "type": "string" },
-                  "reason": { "type": "string" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": { "description": "Cancellation queued" },
-          "400": { "description": "Validation error" },
-          "401": { "description": "Missing or invalid admin key" },
-          "404": { "description": "Market not found" },
-          "409": { "description": "Market is not Open or Locked" }
-        }
-      }
-    },
-    "/api/admin/markets/dispute/resolve": {
+    "/api/v1/admin/markets/dispute/resolve": {
       "post": {
         "tags": [
           "Admin"
@@ -1579,7 +1731,7 @@
         }
       }
     },
-    "/api/admin/oracles": {
+    "/api/v1/admin/oracles": {
       "get": {
         "tags": [
           "Admin"
@@ -1708,7 +1860,7 @@
         }
       }
     },
-    "/api/admin/oracles/{id}": {
+    "/api/v1/admin/oracles/{id}": {
       "patch": {
         "tags": [
           "Admin"
@@ -1839,7 +1991,7 @@
         }
       }
     },
-    "/api/admin/audit-logs": {
+    "/api/v1/admin/audit-logs": {
       "get": {
         "tags": [
           "Admin"

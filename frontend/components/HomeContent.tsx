@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, Suspense } from "react";
+import { useCallback, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useMarkets } from "@/hooks/useMarkets";
-import { MarketFilterBar, STATUS_TABS, StatusTab } from "@/components/MarketFilterBar";
+import { MarketFilterBar, STATUS_TABS, StatusTab, SortOption } from "@/components/MarketFilterBar";
 import { MarketList } from "@/components/MarketList";
 import { MarketStatus } from "@/lib/api";
 
@@ -23,6 +23,7 @@ function HomeInner(): JSX.Element {
 
   const statusTab = parseStatusTab(searchParams.get("status"));
   const weightClass = searchParams.get("weightClass") ?? "";
+  const [sort, setSort] = useState<SortOption>("newest");
 
   // Build API filters — only pass status when it's not "All"
   const filters = useMemo(
@@ -65,14 +66,21 @@ function HomeInner(): JSX.Element {
           BOXMEOUT
         </h1>
         <p className="text-gray-400 text-lg max-w-xl mx-auto mb-6">
-          Decentralized prediction markets for boxing. Place XLM bets on-chain — no middlemen, no custody.
+          Decentralized prediction markets for boxing. Place XLM bets on-chain — no middlemen, no
+          custody.
         </p>
         {/* Create Market CTA */}
         <Link
           href="/create"
           className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-amber-500 text-black font-semibold hover:bg-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Create Market
@@ -84,6 +92,8 @@ function HomeInner(): JSX.Element {
         statusTab={statusTab}
         weightClass={weightClass}
         weightClasses={weightClasses}
+        sort={sort}
+        onSortChange={setSort}
         onStatusChange={(s) => updateURL(s, weightClass)}
         onWeightClassChange={(wc) => updateURL(statusTab, wc)}
       />

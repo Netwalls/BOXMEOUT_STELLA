@@ -1,14 +1,11 @@
 import type { Transaction, xdr } from "@stellar/stellar-sdk";
 import { ContractErrorException, parseContractErrorCode } from "./errors";
-import {
-  NETWORK_PASSPHRASE,
-  SOROBAN_RPC_URL,
-  STELLAR_NETWORK,
-} from "./config";
+import { NETWORK_PASSPHRASE, SOROBAN_RPC_URL, STELLAR_NETWORK } from "./config";
 
 // The SDK is large; load it only when a transaction is actually built or decoded
 // so pages that just read the network constants below don't ship it.
-const loadSdk = (): Promise<typeof import("@stellar/stellar-sdk")> => import("@stellar/stellar-sdk");
+const loadSdk = (): Promise<typeof import("@stellar/stellar-sdk")> =>
+  import("@stellar/stellar-sdk");
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 
@@ -51,7 +48,8 @@ export { SOROBAN_RPC_URL };
 export const TX_TIMEOUT_SECONDS = 120;
 
 /** User-facing message for a transaction that expired before it was submitted. */
-export const TX_EXPIRED_MESSAGE = "This transaction expired before it was submitted. Please try again.";
+export const TX_EXPIRED_MESSAGE =
+  "This transaction expired before it was submitted. Please try again.";
 
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
 
@@ -116,10 +114,13 @@ export function stellarExpertContractUrl(contractId: string): string {
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
+/** A contract argument: an already-encoded ScVal, or a native value encoded by `toScVal`. */
+export type SorobanArg = xdr.ScVal | string | number | bigint | boolean;
+
 export interface SorobanInvokeParams {
   contractId: string;
   method: string;
-  args: xdr.ScVal[];
+  args: SorobanArg[];
   signerAddress: string;
 }
 
@@ -206,12 +207,15 @@ type StellarSdk = typeof import("@stellar/stellar-sdk");
  * Converts a contract call argument into an ScVal. Values that are already
  * ScVals (for example a u64 built with an explicit type) pass through unchanged.
  */
-function toScVal(sdk: StellarSdk, arg: unknown): xdr.ScVal {
+function toScVal(sdk: StellarSdk, arg: SorobanArg): xdr.ScVal {
   if (arg instanceof sdk.xdr.ScVal) return arg;
-  if (typeof arg === "string" && (sdk.StrKey.isValidEd25519PublicKey(arg) || sdk.StrKey.isValidContract(arg))) {
+  if (
+    typeof arg === "string" &&
+    (sdk.StrKey.isValidEd25519PublicKey(arg) || sdk.StrKey.isValidContract(arg))
+  ) {
     return sdk.Address.fromString(arg).toScVal();
   }
-  return sdk.nativeToScVal(arg as any);
+  return sdk.nativeToScVal(arg);
 }
 
 /**
@@ -230,9 +234,7 @@ export async function toU64ScVal(value: bigint): Promise<xdr.ScVal> {
  * Fetches the current account sequence number from Horizon.
  * Simulates the transaction via Soroban RPC to populate the auth footprint.
  */
-export async function buildSorobanInvocation(
-  params: SorobanInvokeParams
-): Promise<string> {
+export async function buildSorobanInvocation(params: SorobanInvokeParams): Promise<string> {
   const sdk = await loadSdk();
   const { Contract, SorobanRpc, StrKey, TransactionBuilder } = sdk;
 
@@ -260,19 +262,9 @@ export async function buildSorobanInvocation(
   const simResult = await server.simulateTransaction(tx);
 
   if (SorobanRpc.Api.isSimulationSuccess(simResult)) {
-    const fee = simResult.minResourceFee;
-    const preparedTx = SorobanRpc.assembleTransaction(tx, simResult);
-
-    const withFee = new TransactionBuilder(account, {
-      networkPassphrase: NETWORK_PASSPHRASE,
-      fee: fee,
-    });
-
-    withFee.addOperation(preparedTx.operations[0]);
-    withFee.setTimeout(TX_TIMEOUT_SECONDS);
-
+    // assembleTransaction applies the simulated resource fee and footprint.
     // Left unsigned: the connected wallet signs the XDR returned here.
-    return withFee.build().toXDR();
+    return SorobanRpc.assembleTransaction(tx, simResult).build().toXDR();
   }
 
   throw decodeContractError(new Error(simulationErrorText(simResult)));
@@ -315,10 +307,7 @@ export async function submitTransaction(
   const { SorobanRpc, TransactionBuilder } = await loadSdk();
   const server = new SorobanRpc.Server(SOROBAN_RPC_URL, rpcServerOptions());
 
-  const transaction = TransactionBuilder.fromXDR(
-    signedXdr,
-    NETWORK_PASSPHRASE
-  ) as Transaction;
+  const transaction = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE) as Transaction;
 
   const hash = transaction.hash();
   const txHash = hash.toString("hex");
@@ -366,13 +355,13 @@ export async function submitTransaction(
 
   for (;;) {
     try {
-      result = await server.getTransaction(hash);
+      result = await server.getTransaction(hash.toString("hex"));
     } catch {
       // A transient RPC error (network blip) must not abort the wait; keep polling until the timeout.
       result = undefined;
     }
 
-    if (result && result.status !== "PENDING" && result.status !== "NOT_FOUND") {
+    if (result && result.status !== "NOT_FOUND") {
       break;
     }
 

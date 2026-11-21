@@ -49,6 +49,13 @@ pub enum DataKey {
     DustSwept,
 }
 
+// ─── CONTRACT METADATA ────────────────────────────────────────────────────────
+// Read by `stellar contract inspect` and by operators checking which build is
+// deployed (C-122). `version` is taken from the crate version at build time.
+soroban_sdk::contractmeta!(key = "name", val = "BOXMEOUT Market");
+soroban_sdk::contractmeta!(key = "version", val = env!("CARGO_PKG_VERSION"));
+soroban_sdk::contractmeta!(key = "source", val = "https://github.com/Netwalls/BOXMEOUT_STELLA");
+
 #[contract]
 pub struct MarketContract;
 
@@ -96,20 +103,15 @@ impl MarketContract {
     }
 
     /// Calculate net_pool after deducting protocol fees.
+    /// Delegates to `shared::payout`, which the payout test vectors cover (#1584).
     fn net_pool(market: &Market) -> i128 {
-        market
-            .total_pool
-            .checked_sub(shared::calculate_fee(market.total_pool, market.protocol_fee_bp))
-            .expect("net_pool underflow")
+        shared::payout::net_pool(market.total_pool, market.protocol_fee_bp)
     }
 
     /// Calculate pro-rata payout: (bettor_stake / winning_pool) * net_pool.
+    /// Delegates to `shared::payout` (#1584).
     fn pro_rata_payout(bettor_stake: i128, net: i128, winning_pool: i128) -> i128 {
-        bettor_stake
-            .checked_mul(net)
-            .expect("payout overflow (mult)")
-            .checked_div(winning_pool)
-            .expect("payout division error")
+        shared::payout::pro_rata_payout(bettor_stake, net, winning_pool)
     }
 
     /// Called by MarketFactory immediately after contract deployment.
@@ -504,6 +506,7 @@ impl MarketContract {
     /// - `ContractError::NotInitialized` if the market has not been initialized.
     /// - `ContractError::InvalidMarketStatus` if the market status is not `Locked`.
     /// - `ContractError::OracleNotWhitelisted` if the caller is not the authorized oracle.
+    /// - `ContractError::ResolutionTooEarly` if the ledger time is before `scheduled_at`.
     pub fn resolve_market(env: Env, oracle: Address, outcome: Outcome) -> Result<(), ContractError> {
         oracle.require_auth();
 
@@ -522,6 +525,13 @@ impl MarketContract {
 
         if market.oracle_address != oracle {
             return Err(ContractError::OracleNotWhitelisted);
+        }
+
+        // A lock can happen early (see lock_market), but a result cannot be
+        // recorded before the fight is scheduled to start. Exactly at
+        // scheduled_at is allowed.
+        if env.ledger().timestamp() < market.scheduled_at {
+            return Err(ContractError::ResolutionTooEarly);
         }
 
         // Set resolved_at timestamp for dispute window enforcement
@@ -1129,6 +1139,14 @@ impl MarketContract {
         Ok(())
     }
 
+    /// Returns the crate version this market contract was built from (C-122).
+    ///
+    /// Read-only. Lets operators, the indexer and the frontend confirm the
+    /// deployed build, including after `upgrade_market_wasm`.
+    pub fn version(env: Env) -> String {
+        String::from_str(&env, env!("CARGO_PKG_VERSION"))
+    }
+
     /// Returns the full [`Market`] struct for this contract.
     ///
     /// Read-only — does not modify state.
@@ -1361,6 +1379,8 @@ mod tests {
 
     const NONCE: u64 = 7;
     const BETTING_ENDS_AT: u64 = 1_000;
+    /// Matches the `scheduled_at` passed to `initialize` in `setup()`.
+    const SCHEDULED_AT: u64 = 2_000;
 
     // ─── Mocks ────────────────────────────────────────────────────────────────
 
@@ -1438,7 +1458,7 @@ mod tests {
             &market_id,
             &fighter(&env, "Alpha"),
             &fighter(&env, "Beta"),
-            &2_000u64,
+            &SCHEDULED_AT,
             &BETTING_ENDS_AT,
             &oracle,
             &factory,
@@ -1472,6 +1492,7 @@ mod tests {
         let bet_id = ctx.client.place_bet(&bettor, &BetSide::FighterA, &500);
         set_time(&ctx.env, BETTING_ENDS_AT);
         ctx.client.lock_market(&ctx.oracle);
+        set_time(&ctx.env, SCHEDULED_AT);
         ctx.client.resolve_market(&ctx.oracle, &outcome);
         (ctx, bettor, bet_id)
     }
@@ -1521,6 +1542,57 @@ mod tests {
         let ev = parse_market_locked_event(&ctx.env, &topics, &data).unwrap();
         assert_eq!(ev.market_id, NONCE);
         assert_eq!(ev.locked_at, 400);
+    }
+
+    /// Locks the market early and returns the context, with the ledger at `BETTING_ENDS_AT`.
+    /// Early locking is allowed by the oracle, so resolution timing is the only gate tested.
+    fn locked_ctx() -> Ctx {
+        let ctx = setup();
+        set_time(&ctx.env, BETTING_ENDS_AT);
+        ctx.client.lock_market(&ctx.oracle);
+        ctx
+    }
+
+    #[test]
+    fn test_version_returns_crate_version() {
+        let ctx = setup();
+        assert_eq!(
+            ctx.client.version(),
+            soroban_sdk::String::from_str(&ctx.env, env!("CARGO_PKG_VERSION"))
+        );
+    }
+
+    #[test]
+    fn test_resolve_market_rejects_before_scheduled_at() {
+        let ctx = locked_ctx();
+        set_time(&ctx.env, SCHEDULED_AT - 1);
+        let res = ctx.client.try_resolve_market(&ctx.oracle, &Outcome::FighterA);
+        assert_eq!(res, Err(Ok(ContractError::ResolutionTooEarly)));
+    }
+
+    #[test]
+    fn test_resolve_market_rejects_when_locked_early_and_still_before_scheduled_at() {
+        // Regression for C-121: an oracle that locks at betting close must not be
+        // able to resolve before the fight starts.
+        let ctx = locked_ctx();
+        let res = ctx.client.try_resolve_market(&ctx.oracle, &Outcome::FighterB);
+        assert_eq!(res, Err(Ok(ContractError::ResolutionTooEarly)));
+    }
+
+    #[test]
+    fn test_resolve_market_allows_exactly_at_scheduled_at() {
+        let ctx = locked_ctx();
+        set_time(&ctx.env, SCHEDULED_AT);
+        let res = ctx.client.try_resolve_market(&ctx.oracle, &Outcome::FighterA);
+        assert!(res.is_ok(), "resolve at scheduled_at should succeed, got {:?}", res);
+    }
+
+    #[test]
+    fn test_resolve_market_allows_after_scheduled_at() {
+        let ctx = locked_ctx();
+        set_time(&ctx.env, SCHEDULED_AT + 1);
+        let res = ctx.client.try_resolve_market(&ctx.oracle, &Outcome::FighterA);
+        assert!(res.is_ok(), "resolve after scheduled_at should succeed, got {:?}", res);
     }
 
     #[test]

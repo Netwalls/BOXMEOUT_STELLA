@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, ReactNode } from 'react';
 import { Toast as ToastComponent, ToastType } from '@/components/Toast';
 
 // Internal toast item stored in state
@@ -14,7 +14,14 @@ export interface ToastItem {
     label: string;
     onClick: () => void;
   };
+  count?: number;
+  updatedAt?: number;
 }
+
+/** Most toasts visible at once; the oldest is dropped when a new one would exceed this. */
+export const MAX_VISIBLE_TOASTS = 4;
+/** Identical message+type within this window collapses into one toast with a count. */
+export const DEDUPE_WINDOW_MS = 4000;
 
 export type ToastOptions = {
   title?: string;
@@ -68,12 +75,32 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       href = extraHref;
     }
 
-    setToasts((prev) => [...prev, { id, message, type, title, href, action }]);
+    const now = Date.now();
+    setToasts((prev) => {
+      const duplicate = prev.find(
+        (t) =>
+          t.message === message &&
+          t.type === type &&
+          t.title === title &&
+          t.href === href &&
+          now - (t.updatedAt ?? 0) < DEDUPE_WINDOW_MS
+      );
+      if (duplicate) {
+        return prev.map((t) =>
+          t.id === duplicate.id
+            ? { ...t, action: action ?? t.action, count: (t.count ?? 1) + 1, updatedAt: now }
+            : t
+        );
+      }
+      const next = [...prev, { id, message, type, title, href, action, count: 1, updatedAt: now }];
+      return next.slice(-MAX_VISIBLE_TOASTS);
+    });
   };
 
-  const removeToast = (id: string) => {
+  // Stable identity so toasts do not restart their dismiss timers on every render.
+  const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
