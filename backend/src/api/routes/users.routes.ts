@@ -37,4 +37,44 @@ router.get("/:address/activity", getUserActivityHandler);
 // GET /api/users/:address/positions — paginated open positions (#1088)
 router.get("/:address/positions", validate({ params: addressParams, query: pagedQuery }), getUserPositionsHandler);
 
+// GET /api/users/:address/notifications — owner-only, cursor-paginated (#1569 B-133)
+router.get(
+  "/:address/notifications",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  getNotificationsHandler
+);
+
+// POST /api/users/:address/notifications/read — owner-only; body { ids? } (#1569 B-133)
+router.post(
+  "/:address/notifications/read",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  markNotificationsReadHandler
+);
+
+// GET /api/users/:address/watchlist — owner-only (#1570 B-134)
+router.get(
+  "/:address/watchlist",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  getWatchlistHandler
+);
+
+// PUT /api/users/:address/watchlist/:marketId — owner-only, idempotent, capped (#1570 B-134)
+router.put(
+  "/:address/watchlist/:marketId",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  putWatchlistHandler
+);
+
+// DELETE /api/users/:address/watchlist/:marketId — owner-only, idempotent (#1570 B-134)
+router.delete(
+  "/:address/watchlist/:marketId",
+  walletAuthMiddleware({ whitelist: [] }),
+  requireOwnAddress,
+  deleteWatchlistHandler
+);
+
 export default router;

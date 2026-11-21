@@ -27,6 +27,19 @@ const searchRateLimiter = rateLimitMiddleware({
   keyPrefix: "markets:search",
 });
 
+/**
+ * POST /api/markets: the creator in the body must be the wallet that signed the
+ * request (#1225 B-47). Runs after walletAuthMiddleware, which sets walletAddress.
+ */
+function enforceCreatorBinding(req: Request, res: Response, next: NextFunction): void {
+  const wallet = (req as Request & { walletAddress?: string }).walletAddress;
+  if (!wallet || req.body?.createdBy !== wallet) {
+    fail(res, 403, "FORBIDDEN", "createdBy must match the signing wallet");
+    return;
+  }
+  next();
+}
+
 const router = Router();
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
@@ -101,6 +114,10 @@ router.get("/:id/stream", (req: Request, res: Response) => {
   req.on("close", cleanup);
   res.on("close", cleanup);
 });
+
+// GET /api/markets/trending?window=1h|24h|7d&limit= — must come before /:id so it
+// is not read as a market id (#1572 B-136)
+router.get("/trending", getTrendingMarketsHandler);
 
 // GET /api/markets/:id
 router.get("/:id", cacheControl({ maxAge: 5, staleWhileRevalidate: 30 }), getMarketByIdHandler);

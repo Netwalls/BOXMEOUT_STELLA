@@ -3,6 +3,7 @@ import pino from "pino";
 
 import * as marketService from "./market.service";
 import * as betService from "./bet.service";
+import * as notificationService from "./notification.service";
 import { markBetClaimed } from "./bet.service";
 import { publishMarketEvent } from "../events/marketEvents";
 import {
@@ -414,6 +415,21 @@ async function handleEvent(event: SorobanEvent, tx: PrismaClient): Promise<void>
       break;
     default:
       logger.warn({ canonicalType }, "Unhandled canonical event type");
+  }
+
+  // B-133 (#1569): notify every bettor of a resolved, cancelled or disputed
+  // market. Runs in the same transaction as the event, so it commits with it.
+  const notificationType = notificationService.toNotificationType(canonicalType);
+  if (notificationType) {
+    const marketId = extractMarketId(event.body);
+    if (marketId) {
+      await notificationService.fanOutMarketNotifications(tx, {
+        type: notificationType,
+        marketId,
+        txHash: event.txHash,
+        payload: { marketId, ledger: event.ledger },
+      });
+    }
   }
 
   publishMarketEvent(canonicalType, event.body);

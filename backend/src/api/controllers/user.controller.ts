@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as userService from "../../services/user.service";
 import { cursorMeta, cursorQuerySchema } from "../schemas/pagination";
 import { ok, fail } from "../response";
+import { cursorQuerySchema } from "../schemas/pagination";
 
 /**
  * GET /api/users/:address

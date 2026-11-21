@@ -409,7 +409,76 @@
             "format": "date-time"
           }
         }
+      },
+
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MarketResolved",
+              "MarketCancelled",
+              "DisputeRaised",
+              "DisputeResolved"
+            ]
+          },
+          "marketId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+
+      "PlatformStats": {
+        "type": "object",
+        "required": [
+          "totalVolume",
+          "totalPaidOut",
+          "totalMarkets",
+          "openMarkets",
+          "uniqueBettors"
+        ],
+        "properties": {
+          "totalVolume": {
+            "type": "string",
+            "description": "Sum of market pools, stroops as a decimal string",
+            "example": "800000000"
+          },
+          "totalPaidOut": {
+            "type": "string",
+            "description": "Sum of bet payouts, stroops as a decimal string",
+            "example": "300000000"
+          },
+          "totalMarkets": {
+            "type": "integer",
+            "example": 12
+          },
+          "openMarkets": {
+            "type": "integer",
+            "example": 3
+          },
+          "uniqueBettors": {
+            "type": "integer",
+            "example": 40
+          }
+        }
       }
+
     }
   },
   "paths": {
@@ -2084,6 +2153,505 @@
           }
         }
       }
+    },
+
+    "/api/users/{address}/notifications": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List notifications for the wallet owner (#1569)",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-address",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Notification"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature missing or invalid"
+          },
+          "403": {
+            "description": "Signer does not own the address"
+          },
+          "400": {
+            "description": "Validation failed"
+          }
+        }
+      }
+    },
+    "/api/users/{address}/notifications/read": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Mark notifications read (owner only, #1569)",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-address",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Count of rows updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "updated": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature missing or invalid"
+          },
+          "403": {
+            "description": "Signer does not own the address"
+          },
+          "400": {
+            "description": "Validation failed"
+          }
+        }
+      }
+    },
+
+    "/api/users/{address}/watchlist": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List watched markets (owner only, #1570)",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-address",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Watchlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "marketId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature missing or invalid"
+          },
+          "403": {
+            "description": "Signer does not own the address"
+          }
+        }
+      }
+    },
+    "/api/users/{address}/watchlist/{marketId}": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Watch a market (owner only, idempotent, capped at 200, #1570)",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "marketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-address",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "marketId": {
+                          "type": "string"
+                        },
+                        "watched": {
+                          "type": "boolean"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature missing or invalid"
+          },
+          "403": {
+            "description": "Signer does not own the address"
+          },
+          "404": {
+            "description": "Market not found"
+          },
+          "422": {
+            "description": "WATCHLIST_LIMIT_REACHED: 200 watched markets already"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Unwatch a market (owner only, idempotent, #1570)",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "marketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-address",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-wallet-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "marketId": {
+                          "type": "string"
+                        },
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wallet signature missing or invalid"
+          },
+          "403": {
+            "description": "Signer does not own the address"
+          }
+        }
+      }
+    },
+
+    "/api/markets/trending": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Open markets ranked by recent stake (#1572)",
+        "parameters": [
+          {
+            "name": "window",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1h",
+                "24h",
+                "7d"
+              ],
+              "default": "24h"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked markets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/Market"
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "windowVolume"
+                            ],
+                            "properties": {
+                              "windowVolume": {
+                                "type": "string",
+                                "description": "Summed stake in the window, stroops as a decimal string"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "window": {
+                          "type": "string"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed"
+          }
+        }
+      }
     }
+
   }
 }

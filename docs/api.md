@@ -219,6 +219,54 @@ Paginated open positions for a wallet.
 
 ---
 
+### `GET /api/users/:address/notifications` (#1569)
+
+Market notifications for the wallet: resolved, cancelled and disputed markets the wallet has bet on. Owner-only: requires `x-wallet-address` and `x-wallet-signature` for the same address. Newest first, cursor-paginated.
+
+**Query params:** `unread=true|false`, `cursor` (the `nextCursor` from the previous page), `limit` (1–100, default 20)
+
+**Response `200`** — `data` is an array of `{ id, type, marketId, payload, readAt, createdAt }`; `meta.nextCursor` is `null` on the last page.
+
+**Errors:** `401 WALLET_AUTH_REQUIRED` / `CHALLENGE_EXPIRED` / `INVALID_SIGNATURE`, `403 FORBIDDEN` when the signer is not the address, `400 VALIDATION_ERROR`.
+
+---
+
+### `POST /api/users/:address/notifications/read` (#1569)
+
+Marks notifications read. Owner-only, same auth as above. Body: `{ "ids": ["..."] }` marks those rows; omit `ids` to mark every unread notification.
+
+**Response `200`** — `{ "data": { "updated": <count> } }`
+
+**Retention:** notifications older than `NOTIFICATION_RETENTION_DAYS` (default 90) are pruned by `pruneNotificationsOlderThan`.
+
+---
+
+### `GET /api/users/:address/watchlist` (#1570)
+
+Markets on the wallet's watchlist. Owner-only (`x-wallet-address` and `x-wallet-signature` for the same address). Newest first.
+
+**Response `200`** — `data` is an array of `{ marketId, createdAt }`.
+
+---
+
+### `PUT /api/users/:address/watchlist/:marketId` (#1570)
+
+Adds a market to the watchlist. Owner-only and idempotent: `data.created` is `false` when the market was already watched.
+
+**Response `200`** — `{ "data": { "marketId", "watched": true, "created": true|false } }`
+
+**Errors:** `404 NOT_FOUND` for an unknown market; `422 WATCHLIST_LIMIT_REACHED` when the wallet already has 200 watched markets.
+
+---
+
+### `DELETE /api/users/:address/watchlist/:marketId` (#1570)
+
+Removes a market from the watchlist. Owner-only and idempotent.
+
+**Response `200`** — `{ "data": { "marketId", "removed": true|false } }`
+
+---
+
 ## Markets
 
 ### `GET /api/markets`
@@ -283,6 +331,18 @@ Creates a new market record. Requires wallet-signature auth (creator must prove 
 **Response `201`** — `{ "data": { ...market } }`
 **Response `400`** — `{ "error": "Validation failed", "code": "VALIDATION_ERROR", "details": {...} }`
 **Response `401`** — `{ "error": "Wallet signature required", "code": "WALLET_AUTH_REQUIRED" }`
+
+---
+
+### `GET /api/markets/trending` (#1572)
+
+Open markets ranked by stake placed in a recent window. Declared before `/:id`, so `trending` is never read as a market id.
+
+**Query params:** `window=1h|24h|7d` (default `24h`), `limit` (default 10, capped at 50)
+
+**Response `200`** — `data` is an array of market objects, each with `windowVolume` (the summed stake in the window, as a decimal string). `meta` is `{ window, limit }`. Results are cached for 15 seconds.
+
+**Errors:** `400 VALIDATION_ERROR` for an unknown `window` or a non-numeric `limit`.
 
 ---
 
@@ -390,6 +450,13 @@ Oracle record management (list, create, update, delete) is admin-only and lives 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | GET | `/api/stats` | Aggregate platform statistics. |
+
+### `GET /api/stats` (#1571)
+
+Platform-wide totals: `totalVolume` (sum of market pools), `totalPaidOut` (sum of bet payouts), `totalMarkets`, `openMarkets` and `uniqueBettors`. BigInt amounts are decimal strings. Results are cached in Redis for 30 seconds.
+
+**Response `200`** — `{ "data": { "totalVolume", "totalPaidOut", "totalMarkets", "openMarkets", "uniqueBettors" } }`
+
 | GET | `/api/stats/leaderboard` | Top users by volume or profit. Query: `period?`, `limit?`. |
 
 ## Leaderboard
