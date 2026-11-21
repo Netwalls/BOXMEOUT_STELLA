@@ -16,6 +16,13 @@ import {
   getFailedSubmissionsHandler,
   retryFailedSubmissionHandler,
 } from "../controllers/oracleSubmission.controller";
+import {
+  createWebhookHandler,
+  deleteWebhookHandler,
+  listWebhookDeliveriesHandler,
+  listWebhooksHandler,
+  updateWebhookHandler,
+} from "../controllers/webhook.controller";
 import { rateLimitMiddleware } from "../middleware/rateLimit.middleware";
 import { adminAuth } from "../middleware/adminAuth";
 import { auditLogMiddleware } from "../middleware/audit-log.middleware";
@@ -34,6 +41,8 @@ const marketResolutionLimiter = rateLimitMiddleware({
   windowMs: 60 * 1000,
   max: 10,
   keyPrefix: "admin:markets:write",
+  // #1583: admin writes must not lose their limit during a Redis outage.
+  failMode: "closed",
 });
 
 // Oracle CRUD is lower-stakes admin bookkeeping — looser limit.
@@ -41,6 +50,8 @@ const oracleWriteLimiter = rateLimitMiddleware({
   windowMs: 60 * 1000,
   max: 30,
   keyPrefix: "admin:oracles:write",
+  // #1583: admin writes must not lose their limit during a Redis outage.
+  failMode: "closed",
 });
 
 // #1257: Oracle result submission retry/idempotency admin surface.
@@ -48,6 +59,8 @@ const oracleSubmissionLimiter = rateLimitMiddleware({
   windowMs: 60 * 1000,
   max: 30,
   keyPrefix: "admin:oracle-submissions:write",
+  // #1583: admin writes must not lose their limit during a Redis outage.
+  failMode: "closed",
 });
 
 // Market management
@@ -70,6 +83,13 @@ router.post(
   oracleSubmissionLimiter,
   retryFailedSubmissionHandler,
 );
+
+// Outbound webhook endpoints (#1581). Secrets are shown once, on create.
+router.get("/webhooks", listWebhooksHandler);
+router.post("/webhooks", oracleWriteLimiter, createWebhookHandler);
+router.patch("/webhooks/:id", oracleWriteLimiter, updateWebhookHandler);
+router.delete("/webhooks/:id", oracleWriteLimiter, deleteWebhookHandler);
+router.get("/webhooks/:id/deliveries", listWebhookDeliveriesHandler);
 
 // Audit logging (Issue #456, #1258)
 // Supports ?actor=<id>&action=<action> filtering.

@@ -115,6 +115,13 @@ const configSchema = z.object({
    */
   EVENT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 
+  /**
+   * #1583: Behaviour when the rate limiter cannot reach Redis.
+   * "open" (default) lets requests through; "closed" answers 503. Write routes
+   * always fail closed, whatever this is set to.
+   */
+  RATE_LIMIT_FAIL_MODE: z.enum(["open", "closed"]).default("open"),
+
   /** Base URL for the external fight data provider (BoxRec or equivalent) */
   BOXREC_API_URL: z.string().url().optional(),
 

@@ -4,6 +4,7 @@ import {
   getUserHandler,
   updateUserHandler,
   getUserBetsHandler,
+  getUserActivityHandler,
 } from "../controllers/user.controller";
 import { requireOwnAddress, walletAuthMiddleware } from "../middleware/walletAuth.middleware";
 
@@ -23,6 +24,9 @@ router.put(
 
 // GET /api/users/:address/bets      — cursor-paginated bet history (#1088, #1244)
 router.get("/:address/bets", getUserBetsHandler);
+
+// GET /api/users/:address/activity  — unified bets/claims/refunds/disputes feed (#1588 B-152)
+router.get("/:address/activity", getUserActivityHandler);
 
 // GET /api/users/:address/positions — paginated open positions (#1088)
 router.get("/:address/positions", getUserPositionsHandler);

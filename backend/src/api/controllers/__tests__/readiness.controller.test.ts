@@ -13,6 +13,14 @@
 import { readinessHandler } from "../readiness.controller";
 import type { Request, Response } from "express";
 
+// The production helper wraps bodies in { data }. These tests assert on the
+// readiness document itself, so the helper is a pass-through here.
+jest.mock("../../response", () => ({
+  ok: (res: Response, data: unknown, options: { status?: number } = {}) =>
+    res.status(options.status ?? 200).json(data),
+  fail: jest.fn(),
+}));
+
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 // Mock db
@@ -126,7 +134,7 @@ describe("B-60: GET /ready", () => {
     expect(body.checks.rpc.status).toBe("ok");
   });
 
-  it("returns 503 with redis error when Redis is unavailable", async () => {
+  it("reports Redis as degraded with HTTP 200 when Redis is unavailable (#1590)", async () => {
     mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
     mockConnect.mockRejectedValue(new Error("ECONNREFUSED"));
     mockPing.mockResolvedValue("PONG");
@@ -135,12 +143,25 @@ describe("B-60: GET /ready", () => {
     const { res, status, json } = makeRes();
     await readinessHandler(req, res);
 
-    expect(status).toHaveBeenCalledWith(503);
+    expect(status).toHaveBeenCalledWith(200);
     const body = json.mock.calls[0][0];
-    expect(body.status).toBe("not_ready");
+    expect(body.status).toBe("degraded");
     expect(body.checks.db.status).toBe("ok");
-    expect(body.checks.redis.status).toBe("error");
+    expect(body.checks.redis.status).toBe("degraded");
     expect(body.checks.rpc.status).toBe("ok");
+  });
+
+  it("still returns 503 when Redis is degraded and the database is down (#1590)", async () => {
+    mockQueryRaw.mockRejectedValue(new Error("db down"));
+    mockConnect.mockRejectedValue(new Error("ECONNREFUSED"));
+    mockPing.mockResolvedValue("PONG");
+    mockGetHealth.mockResolvedValue({ status: "healthy" });
+
+    const { res, status, json } = makeRes();
+    await readinessHandler(req, res);
+
+    expect(status).toHaveBeenCalledWith(503);
+    expect(json.mock.calls[0][0].status).toBe("not_ready");
   });
 
   it("returns 503 with rpc error when Soroban RPC is unavailable", async () => {
@@ -172,7 +193,7 @@ describe("B-60: GET /ready", () => {
     const body = json.mock.calls[0][0];
     expect(body.status).toBe("not_ready");
     expect(body.checks.db.status).toBe("error");
-    expect(body.checks.redis.status).toBe("error");
+    expect(body.checks.redis.status).toBe("degraded");
     expect(body.checks.rpc.status).toBe("error");
   });
 

@@ -16,8 +16,13 @@
  * state. Maintenance does not make the service "not ready", since reads still work.
  *
  * Returns 200 with { status: "ok", checks: { ... } } when all pass.
- * Returns 503 with { status: "not_ready", checks: { ... } } if any fail,
- * including per-dependency status and (in non-production) the error message.
+ * Redis is non-essential: features that use it fall back (see
+ * docs/redis-failure-modes.md), so a Redis failure is reported as
+ * `redis.status = "degraded"` and the overall status becomes "degraded" with
+ * HTTP 200. The instance stays in rotation (#1590).
+ * Returns 503 with { status: "not_ready", checks: { ... } } if db, RPC or the
+ * indexer fails, including per-dependency status and (in non-production) the
+ * error message.
  */
 
 import type { Request, Response } from "express";
@@ -26,13 +31,14 @@ import { db } from "../../db";
 import { getRpcServer } from "../../lib/soroban";
 import { getMaintenanceState } from "../../services/maintenance.service";
 import { ok } from "../response";
+import { redisErrorsTotal } from "../../metrics";
 
 const CHECK_TIMEOUT_MS = 5_000;
 
 /** Default maximum indexer lag, in ledgers (about 10 minutes at ~5 s per ledger). */
 const DEFAULT_MAX_INDEXER_LAG_LEDGERS = 120;
 
-type CheckStatus = "ok" | "error";
+type CheckStatus = "ok" | "degraded" | "error";
 
 interface DependencyResult {
   status: CheckStatus;
@@ -85,7 +91,8 @@ async function checkRedis(): Promise<DependencyResult> {
     );
     return { status: "ok" };
   } catch (err) {
-    return { status: "error", error: errorMessage(err) };
+    redisErrorsTotal.inc({ feature: "readiness" });
+    return { status: "degraded", error: errorMessage(err) };
   } finally {
     if (client) {
       client.disconnect();
@@ -155,12 +162,11 @@ export async function readinessHandler(req: Request, res: Response): Promise<voi
     indexer: indexerResult,
   };
 
-  const allOk = Object.values(checks).every((c) => c.status === "ok");
-  const maintenance = await getMaintenanceState().catch(() => null);
-
-  if (allOk) {
-    ok(res, { status: "ok", checks, maintenance });
-  } else {
-    ok(res, { status: "not_ready", checks, maintenance }, { status: 503 });
+  const coreOk = [checks.db, checks.rpc, checks.indexer].every((c) => c.status === "ok");
+  if (!coreOk) {
+    ok(res, { status: "not_ready", checks }, { status: 503 });
+    return;
   }
+
+  ok(res, { status: checks.redis.status === "ok" ? "ok" : "degraded", checks });
 }

@@ -14,7 +14,8 @@ import { ContractError } from "../errors";
 import { db as prisma } from "../db";
 import { z } from "zod";
 import { createProviderClient } from "./external-provider.client";
-import { getRpcServer } from "../lib/soroban";
+import { dispatchWebhookEvent } from "./webhook.service";
+const RPC_URL = process.env.STELLAR_RPC_URL!;
 const NETWORK = process.env.STELLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY!;
 const BOXREC_API_URL = process.env.BOXREC_API_URL!;
@@ -273,6 +274,12 @@ export async function processResolutionJob(
     where: { id: marketId },
     data: { status: "Resolved", outcome, resolvedAt: new Date() },
   });
+
+  await dispatchWebhookEvent(
+    "market.resolved",
+    { marketId, outcome },
+    `market.resolved:${marketId}`,
+  );
 }
 
 /**
@@ -467,6 +474,12 @@ export async function resolveDispute(
       data: { action: "resolveDispute", actor: admin, target: dispute.marketId, metadata: { disputeId: dispute_id, override_outcome } },
     }),
   ]);
+
+  await dispatchWebhookEvent(
+    "market.resolved",
+    { marketId: dispute.marketId, outcome: override_outcome },
+    `market.resolved:${dispute.marketId}`,
+  );
 }
 
 // ─── Oracle Address Management (Issue #455) ────────────────────────────────
