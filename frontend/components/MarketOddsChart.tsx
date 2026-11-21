@@ -37,6 +37,14 @@ export function MarketOddsChart({ historicalOdds }: MarketOddsChartProps): JSX.E
 
   const open = historicalOdds[0];
   const latest = historicalOdds[historicalOdds.length - 1];
+  // Unreachable once the empty check above has run; kept so the indexed reads are narrowed.
+  if (!open || !latest) {
+    return (
+      <div className="flex items-center justify-center h-48 bg-gray-800 rounded-xl text-gray-500 text-sm">
+        No odds data yet
+      </div>
+    );
+  }
   const summary =
     `Current odds: Fighter A ${latest.oddsA}%, Fighter B ${latest.oddsB}%. ` +
     `Change since open: Fighter A ${formatChange(latest.oddsA - open.oddsA)}, ` +
@@ -89,9 +97,15 @@ export function MarketOddsChart({ historicalOdds }: MarketOddsChartProps): JSX.E
           <caption className="sr-only">Odds history</caption>
           <thead>
             <tr>
-              <th scope="col" className="text-left">Time</th>
-              <th scope="col" className="text-right">Fighter A</th>
-              <th scope="col" className="text-right">Fighter B</th>
+              <th scope="col" className="text-left">
+                Time
+              </th>
+              <th scope="col" className="text-right">
+                Fighter A
+              </th>
+              <th scope="col" className="text-right">
+                Fighter B
+              </th>
             </tr>
           </thead>
           <tbody>

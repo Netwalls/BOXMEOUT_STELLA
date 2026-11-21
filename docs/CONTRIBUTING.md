@@ -15,7 +15,8 @@ This guide covers everything you need to pick an issue, write code, and get your
 6. [Commit Messages](#commit-messages)
 7. [Pull Request Process](#pull-request-process)
 8. [Testing Requirements](#testing-requirements)
-9. [Labels Explained](#labels-explained)
+9. [Contract Compatibility Policy](#contract-compatibility-policy)
+10. [Labels Explained](#labels-explained)
 
 ---
 
@@ -251,6 +252,94 @@ Test files live next to the code they test:
 - `backend/src/services/market.service.ts` → `market.service.test.ts` in the same folder
 - `frontend/hooks/useMarkets.ts` → `useMarkets.test.ts` in the same folder
 
+## Dependency Updates (Dependabot)
+
+Dependabot is configured in `.github/dependabot.yml` and opens weekly update PRs (Mondays, UTC) for:
+
+| Ecosystem | Directory | Label | Commit prefix |
+|---|---|---|---|
+| `npm` | `/frontend` | `frontend` | `chore(frontend)` |
+| `npm` | `/backend` | `backend` | `chore(backend)` |
+| `cargo` | `/contracts` | `smart-contract` | `chore(contracts)` |
+| `github-actions` | `/` | `devops` | `ci` |
+
+Minor and patch updates are grouped into one PR per ecosystem. Major updates open as individual PRs so they can be reviewed on their own. Each ecosystem has at most 5 open Dependabot PRs at a time.
+
+When reviewing a Dependabot PR, check the CI result for the matching workspace before merging.
+
+## Git Hooks and Formatting
+
+Pre-commit hooks run [lint-staged](https://github.com/lint-staged/lint-staged) through [husky](https://typicode.github.io/husky/). Hooks are configured at the repo root (`package.json`, `.husky/pre-commit`) and only touch staged files:
+
+| Staged files | Commands |
+|---|---|
+| `frontend/**/*.{ts,tsx,js,jsx,mjs,cjs}` | `eslint --fix`, then `prettier --write` |
+| `backend/**/*.ts` | `eslint --fix`, then `prettier --write` |
+| `frontend/**/*.{json,css}`, `backend/**/*.json` | `prettier --write` |
+
+Install once from the repo root with `npm install`. The `prepare` script wires up husky. It is skipped when `CI` is set, and it does not fail when there is no `.git` directory (for example, a zip download). It works the same in Git Bash and PowerShell, because Git for Windows runs hooks through `sh`.
+
+Run formatting by hand from `frontend/` or `backend/`:
+
+```bash
+npm run format        # rewrite files with Prettier
+npm run format:check  # report files that differ from Prettier output
+```
+
+Prettier settings live in `frontend/.prettierrc`. Ignored paths are in each package's `.prettierignore`.
+
+---
+
+## Contract Compatibility Policy
+
+Contract releases are tracked in [`contracts/CHANGELOG.md`](../contracts/CHANGELOG.md),
+which follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+### Changelog requirement
+
+Every PR that changes a contract's **entrypoints, events, errors, or storage layout**
+MUST add an entry under `## [Unreleased]` in `contracts/CHANGELOG.md`.
+The PR template includes a checkbox for this; leave it unchecked only if your PR
+touches none of those surfaces.
+
+### What counts as breaking
+
+A change is **breaking** if it can break an existing consumer (backend indexer,
+frontend, or an already-deployed contract instance):
+
+- **Entrypoints** — renaming or removing a function, changing its parameter list,
+  parameter types, or return type; changing auth requirements.
+- **Events** — renaming an event, changing its topic symbols, or changing the
+  payload shape/order of fields.
+- **Errors** — removing or renumbering an error variant, or changing the condition
+  under which an existing error is raised.
+- **Storage** — changing a storage key, the type stored under a key, or the layout
+  of a stored struct/enum (including adding/removing/reordering fields).
+
+Additive, backwards-compatible changes (new entrypoint, new event, new error
+variant appended at the end, new optional field with a default) are **non-breaking**
+but still require a changelog entry.
+
+### How breaking changes are announced
+
+1. **Version bump** — bump the contract crate version following semver:
+   MAJOR for breaking, MINOR for additive, PATCH for fixes. Tag the release as
+   `contracts-vX.Y.Z`.
+2. **Migration notes** — the changelog entry MUST include a `### Migration` note
+   describing what consumers must change (renamed calls, new event fields, storage
+   migration steps).
+3. **Event version** — when an event payload changes, bump the event's version
+   field (or add a `vN` suffix to the topic) so indexers can distinguish old and
+   new payloads.
+
+### How consumers are notified
+
+- The changelog entry and release tag are the source of truth.
+- Maintainers post a summary in the `#contracts` channel and open tracking issues
+  in `/backend` and `/frontend` for any breaking change before the release is cut.
+- Consumers should pin to a tagged contract version and watch releases for
+  `contracts-v*` tags.
+
 ---
 
 ## Labels Explained
@@ -259,24 +348,3 @@ Test files live next to the code they test:
 |---|---|
 | `good first issue` | Self-contained, no deep system knowledge needed. Start here. |
 | `intermediate` | Requires understanding of the surrounding module. |
-| `advanced` | Cross-cutting concern, security-sensitive, or complex logic. |
-| `smart-contract` | Work is in `/contracts` |
-| `backend` | Work is in `/backend` |
-| `frontend` | Work is in `/frontend` |
-| `indexer` | Relates to the blockchain event indexer |
-| `api` | Relates to the REST API layer |
-| `hooks` | Relates to React hooks in `/frontend/hooks` |
-| `components` | Relates to React components in `/frontend/components` |
-| `security` | Security-sensitive — requires extra review care |
-| `testing` | Writing or improving tests |
-| `docs` | Documentation only |
-| `oracle` | Relates to fight result submission and oracle trust |
-| `devops` | CI, deployment scripts, environment config |
-| `database` | Prisma schema or migration related |
-
----
-
-## Questions?
-
-Open a [GitHub Discussion](../../discussions) or ask in the issue thread.
-Do not DM maintainers — public threads help everyone.

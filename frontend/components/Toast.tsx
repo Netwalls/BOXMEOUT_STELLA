@@ -1,9 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { CheckCircle, XCircle, AlertCircle, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
-
+import { motion } from "framer-motion";
 import Link from "next/link";
 
 export type ToastType = "success" | "error" | "info";
