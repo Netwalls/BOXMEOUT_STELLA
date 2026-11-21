@@ -126,6 +126,29 @@ const configSchema = z.object({
   BOXREC_API_URL: z.string().url().optional(),
 
   /**
+   * B-160: Env override for maintenance (read-only) mode. When true, every
+   * non-GET request gets 503 whatever the Redis flag says. Accepts 1/true/yes/on.
+   */
+  MAINTENANCE_MODE: z
+    .string()
+    .default("false")
+    .transform((val) => ["1", "true", "yes", "on"].includes(val.trim().toLowerCase())),
+
+  /**
+   * B-159: Optional comma-separated hostnames that profile avatar URLs may use.
+   * Empty means any https host is accepted. Example: "cdn.boxmeout.app,images.example.com"
+   */
+  AVATAR_HOST_ALLOWLIST: z
+    .string()
+    .default("")
+    .transform((val) =>
+      val
+        .split(",")
+        .map((h) => h.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+
+  /**
    * Comma-separated list of allowed CORS origins.
    * Example: "http://localhost:3000,https://boxmeout.app"
    * Defaults to localhost:3000 in development.

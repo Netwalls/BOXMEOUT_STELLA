@@ -24,15 +24,29 @@ export async function getUserHandler(req: Request, res: Response): Promise<void>
   }
 }
 
+/** B-159: profile body rules, with the avatar host allowlist taken from config. */
+const updateUserSchema = buildUpdateUserSchema({
+  avatarHostAllowlist: config.AVATAR_HOST_ALLOWLIST,
+});
+
 /**
  * PUT /api/users/:address
- * Body: { displayName?, avatarUrl? }
+ * Body: { displayName?, avatarUrl? } (unknown keys are rejected).
  * Requires wallet-signature auth matching :address.
+ * Invalid input returns 400 VALIDATION_ERROR and never reaches the service.
  */
 export async function updateUserHandler(req: Request, res: Response): Promise<void> {
+  const parsed = updateUserSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    fail(res, 400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid profile", {
+      details: parsed.error.flatten(),
+    });
+    return;
+  }
+
   try {
     const { address } = req.params;
-    const { displayName, avatarUrl } = req.body;
+    const { displayName, avatarUrl } = parsed.data;
 
     const user = await userService.updateUser(address, { displayName, avatarUrl });
     ok(res, user);

@@ -12,6 +12,9 @@
  * Each check runs with an individual timeout (5 s by default) so a hung
  * dependency does not stall the entire probe indefinitely.
  *
+ * B-160: the response also includes `maintenance`, the current read-only mode
+ * state. Maintenance does not make the service "not ready", since reads still work.
+ *
  * Returns 200 with { status: "ok", checks: { ... } } when all pass.
  * Redis is non-essential: features that use it fall back (see
  * docs/redis-failure-modes.md), so a Redis failure is reported as
@@ -24,8 +27,9 @@
 
 import type { Request, Response } from "express";
 import Redis from "ioredis";
-import { SorobanRpc } from "@stellar/stellar-sdk";
 import { db } from "../../db";
+import { getRpcServer } from "../../lib/soroban";
+import { getMaintenanceState } from "../../services/maintenance.service";
 import { ok } from "../response";
 import { redisErrorsTotal } from "../../metrics";
 
@@ -98,9 +102,7 @@ async function checkRedis(): Promise<DependencyResult> {
 
 async function checkRpc(): Promise<DependencyResult> {
   try {
-    const rpcUrl = process.env.STELLAR_RPC_URL ?? "";
-    if (!rpcUrl) throw new Error("STELLAR_RPC_URL not configured");
-    const server = new SorobanRpc.Server(rpcUrl);
+    const server = getRpcServer();
     await withTimeout(server.getHealth(), CHECK_TIMEOUT_MS, "rpc");
     return { status: "ok" };
   } catch (err) {
@@ -110,9 +112,7 @@ async function checkRpc(): Promise<DependencyResult> {
 
 async function checkIndexer(): Promise<DependencyResult> {
   try {
-    const rpcUrl = process.env.STELLAR_RPC_URL ?? "";
-    if (!rpcUrl) throw new Error("STELLAR_RPC_URL not configured");
-    const server = new SorobanRpc.Server(rpcUrl);
+    const server = getRpcServer();
     const [state, latest] = await withTimeout(
       Promise.all([
         db.indexerState.findUnique({ where: { id: 1 } }),

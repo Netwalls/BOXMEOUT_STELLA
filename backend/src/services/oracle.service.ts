@@ -1,6 +1,5 @@
 import { Dispute, Market, OracleResult, Outcome, PrismaClient } from "@prisma/client";
 import {
-  SorobanRpc,
   TransactionBuilder,
   Networks,
   Contract,
@@ -240,7 +239,7 @@ export async function processResolutionJob(
   const market = await prisma.market.findUnique({ where: { id: marketId } });
   if (!market) throw new Error(`Market not found: ${marketId}`);
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
 
@@ -408,7 +407,7 @@ export async function raiseDispute(
     data: { marketId: market_id, raisedBy: bettor, reason },
   });
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
   const contract = new Contract(market.contractAddress);
@@ -444,7 +443,7 @@ export async function resolveDispute(
   const dispute = await prisma.dispute.findUniqueOrThrow({ where: { id: dispute_id } });
   const market = await prisma.market.findUniqueOrThrow({ where: { id: dispute.marketId } });
 
-  const server = new SorobanRpc.Server(RPC_URL);
+  const server = getRpcServer();
   const keypair = Keypair.fromSecret(ADMIN_SECRET);
   const account = await server.getAccount(keypair.publicKey());
   const contract = new Contract(market.contractAddress);

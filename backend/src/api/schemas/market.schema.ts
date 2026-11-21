@@ -98,3 +98,12 @@ export const marketSearchQuerySchema = pageQuerySchema.extend({
     .min(1, "q is required")
     .max(100, "q must be at most 100 characters"),
 });
+
+/** B-158: autocomplete query. q is trimmed and must be 2-100 characters. */
+export const marketSuggestQuerySchema = z.object({
+  q: z
+    .string({ required_error: "q is required" })
+    .trim()
+    .min(2, "q must be at least 2 characters")
+    .max(100, "q must be at most 100 characters"),
+});
