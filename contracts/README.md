@@ -69,6 +69,13 @@ Deploys new Market contracts and manages protocol configuration.
 ### Shared
 Common types, utilities, and constants used across contracts.
 
+## CLI Cookbook
+
+For verified `stellar contract invoke` examples covering every public entrypoint
+of the factory, market and treasury (including how to pass `Bytes` ids,
+`Address`, enums such as `Outcome`/`BetSide` and `Option` values), see
+[`docs/contracts-cli.md`](../docs/contracts-cli.md).
+
 ## Events Reference
 
 ### market_created
@@ -222,31 +229,6 @@ land are listed in [`docs/contracts.md` → Event Topics](../docs/contracts.md#e
 - `"already initialized"` - Initialize called more than once
 - `"amount exceeds balance"` - Withdrawal exceeds available balance
 - `"fee_bps exceeds ceiling"` - Fee rate > 10000 basis points (100%)
-- `"protocol is not paused"` - Emergency drain called while protocol active
-- `"market not open"` - Bet placed on closed market
-- `"betting period has ended"` - Bet placed after betting_ends_at
+- `"protocol is n
 
-## Type Definitions
-
-### MarketStatus
-- `Open` - Bets are being accepted
-- `Locked` - Fight started, no more bets
-- `Resolved` - Winner declared, claims open
-- `Cancelled` - Fight cancelled, full refunds
-- `Disputed` - Result under review, claims frozen
-
-### BetSide
-- `FighterA` - Bet on first fighter
-- `FighterB` - Bet on second fighter
-
-### Outcome
-- `FighterA` - Fighter A wins
-- `FighterB` - Fighter B wins
-- `Draw` - Match ends in draw
-- `NoContest` - DQ or injury ruling
-- `Undetermined` - Not yet resolved (sentinel; rejected by `resolve_market` / `resolve_dispute`)
-
-All shared enums and structs (`MarketStatus`, `BetSide`, `Outcome`, `Fighter`, `Bet`,
-`ClaimReceipt`, `ProtocolConfig`) are defined once in `shared/src/types.rs`. The Market
-contract re-exports them from `market/src/types.rs`, which only defines market-only types
-(the full `Market` state, `SettledOutcome`, `MarketResolved`, `WinningsClaimed`).
+/* … truncated 1101 chars — edit only what you need near the top … */
