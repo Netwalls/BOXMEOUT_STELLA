@@ -67,7 +67,6 @@ export function MarketDetailClient({
   const { addToast } = useToast();
   const [justPlaced, setJustPlaced] = useState<Bet[]>([]);
   const [showDispute, setShowDispute] = useState(false);
-  const [copiedContract, setCopiedContract] = useState(false);
 
   // Use live polled data once available, fall back to SSR initial data
   const m = market ?? initialMarket;
@@ -95,18 +94,6 @@ export function MarketDetailClient({
   const oddsA = total === BigInt(0) ? 50 : Number((poolA * BigInt(100)) / total);
   const oddsB = 100 - oddsA;
 
-  const handleCopyContract = useCallback(async () => {
-    if (!contractAddress) return;
-    try {
-      await navigator.clipboard.writeText(contractAddress);
-      setCopiedContract(true);
-      addToast("Contract address copied to clipboard!", "success");
-      setTimeout(() => setCopiedContract(false), 2000);
-    } catch {
-      addToast("Could not copy contract address.", "error");
-    }
-  }, [contractAddress, addToast]);
-
   const handleShare = useCallback(async () => {
     const url = window.location.href;
     const title = `${m.fighterA.name} vs ${m.fighterB.name}`;
@@ -122,12 +109,9 @@ export function MarketDetailClient({
     }
 
     // Fallback: copy link to clipboard
-    try {
-      await navigator.clipboard.writeText(url);
-      addToast("Link copied to clipboard!", "success");
-    } catch {
-      addToast("Could not copy link.", "error");
-    }
+    const copied = await copyToClipboard(url);
+    if (copied) addToast("Link copied to clipboard!", "success");
+    else addToast("Could not copy link.", "error");
   }, [m.fighterA.name, m.fighterB.name, addToast]);
 
   return (
@@ -153,43 +137,7 @@ export function MarketDetailClient({
                 copiedContract ? "Contract address copied" : "Copy contract address to clipboard"
               }
               className="p-1 text-gray-400 hover:text-white transition-colors rounded hover:bg-gray-800"
-              title={copiedContract ? "Copied" : "Copy address"}
-            >
-              {copiedContract ? (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-3.5 w-3.5 text-green-400"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                  />
-                </svg>
-              )}
-            </button>
-            <span className="sr-only" role="status" aria-live="polite">
-              {copiedContract ? "Copied contract address to clipboard" : ""}
-            </span>
+            />
             <a
               href={stellarExpertContractUrl(contractAddress)}
               target="_blank"
@@ -246,14 +194,17 @@ export function MarketDetailClient({
         <code className="font-mono text-gray-300" title={m.contractAddress}>
           {m.contractAddress.slice(0, 6)}…{m.contractAddress.slice(-6)}
         </code>
-        <button
-          type="button"
-          onClick={handleCopyContract}
-          aria-label="Copy contract address"
+        <CopyButton
+          value={m.contractAddress}
+          label="Copy contract address"
+          copiedLabel="Contract address copied"
+          copiedMessage="Copied contract address to clipboard"
+          failedMessage="Could not copy contract address"
+          onResult={handleContractCopyResult}
           className="rounded border border-gray-600 px-2 py-0.5 text-gray-300 hover:border-gray-400 hover:text-white transition-colors"
         >
           Copy
-        </button>
+        </CopyButton>
         <a
           href={stellarExpertContractUrl(m.contractAddress)}
           target="_blank"

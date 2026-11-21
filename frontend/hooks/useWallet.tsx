@@ -62,7 +62,6 @@ export interface UseWalletResult {
   connect: () => Promise<void>;
   disconnect: () => void;
   signTransaction: (xdr: string) => Promise<string>;
-  signMessage: (message: string) => Promise<string>;
 }
 
 const WalletContext = createContext<UseWalletResult | null>(null);
@@ -195,9 +194,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       signTransaction,
-      signMessage,
     };
-  }, [state, connect, disconnect, signTransaction, signMessage]);
+  }, [state, connect, disconnect, signTransaction]);
 
   return createElement(WalletContext.Provider, { value }, children);
 }

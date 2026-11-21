@@ -29,3 +29,23 @@ test("edge case: does not update state after unmount", async () => {
   await act(async () => { resolve({ ok: true, json: () => Promise.resolve([SNAPSHOT]) }); });
   // No React setState-on-unmounted error = test passes
 });
+
+describe("range and initialSnapshots options", () => {
+  const RECENT: OddsSnapshot = { ...SNAPSHOT, timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString() };
+  const OLD: OddsSnapshot = { ...SNAPSHOT, timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() };
+
+  test("filters the fetched snapshots to the requested range", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([OLD, RECENT]) });
+    const { result } = renderHook(() => useMarketOddsHistory("mkt-1", { range: "24H" }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.snapshots).toEqual([RECENT]);
+  });
+
+  test("skips the network request when initialSnapshots are supplied", async () => {
+    global.fetch = jest.fn();
+    const { result } = renderHook(() => useMarketOddsHistory("mkt-1", { initialSnapshots: [RECENT] }));
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.snapshots).toEqual([RECENT]);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
