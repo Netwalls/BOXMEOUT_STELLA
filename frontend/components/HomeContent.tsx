@@ -120,10 +120,10 @@ function HomeInner(): JSX.Element {
 
 export function HomeContent(): JSX.Element {
   return (
-    <main className="container mx-auto px-4 py-8 min-h-screen">
+    <div className="container mx-auto px-4 py-8 min-h-screen">
       <Suspense fallback={null}>
         <HomeInner />
       </Suspense>
-    </main>
+    </div>
   );
 }

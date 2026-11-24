@@ -2,7 +2,7 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export default function HomeLoading(): JSX.Element {
   return (
-    <main className="container mx-auto px-4 py-8 min-h-screen">
+    <div className="container mx-auto px-4 py-8 min-h-screen">
       {/* Hero placeholder */}
       <div className="mb-10 text-center space-y-3 flex flex-col items-center animate-pulse">
         <div className="h-10 w-48 bg-gray-700 rounded" />
@@ -19,6 +19,6 @@ export default function HomeLoading(): JSX.Element {
 
       {/* Market cards grid */}
       <LoadingSkeleton variant="card" count={6} />
-    </main>
+    </div>
   );
 }
